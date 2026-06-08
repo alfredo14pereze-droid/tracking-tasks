@@ -548,7 +548,7 @@ function renderProjects(){
   const el = document.getElementById('projectsList');
   el.innerHTML = '';
   projects.forEach(p=>{
-    const n = tasks.filter(t=>t.project_id===p.id && t.status!=='done').length;
+    const n = tasks.filter(t=>t.category===p.id && t.status!=='done').length;
     const div = document.createElement('div');
     div.className = 'nav-item'+(currentView===`project_${p.id}`?' active':'');
     div.dataset.view = `project_${p.id}`;
@@ -570,7 +570,7 @@ function getFilteredTasks(){
   else if(currentView==='done') list = list.filter(t=>t.status==='done');
   else if(currentView.startsWith('project_')){
     const pid = currentView.replace('project_','');
-    list = list.filter(t=>t.project_id===pid && t.status!=='done');
+    list = list.filter(t=>t.category===pid && t.status!=='done');
   } else {
     list = list.filter(t=>t.status!=='done');
   }
@@ -619,7 +619,7 @@ function renderContent(){
 }
 
 function taskCardHTML(t){
-  const p = projects.find(p=>p.id===t.project_id);
+  const p = projects.find(p=>p.id===t.category);
   const subs = subtasks.filter(s=>s.task_id===t.id);
   const doneSubs = subs.filter(s=>s.done).length;
   const today = new Date().toISOString().split('T')[0];
@@ -654,12 +654,12 @@ function taskCardHTML(t){
 function renderKanban(el){
   const cols = [{key:'todo',label:'Por hacer',color:'var(--text3)'},{key:'in_progress',label:'En progreso',color:'var(--amber)'},{key:'done',label:'Completado',color:'var(--green)'}];
   let allTasks = [...tasks];
-  if(currentView.startsWith('project_')){const pid=currentView.replace('project_','');allTasks=allTasks.filter(t=>t.project_id===pid);}
+  if(currentView.startsWith('project_')){const pid=currentView.replace('project_','');allTasks=allTasks.filter(t=>t.category===pid);}
   let html = '<div class="kanban">';
   cols.forEach(c=>{
     const colTasks = allTasks.filter(t=>t.status===c.key);
     const cards = colTasks.map(t=>{
-      const p=projects.find(p=>p.id===t.project_id);
+      const p=projects.find(p=>p.id===t.category);
       return `<div class="kanban-card" onclick="openTaskModal('${t.id}')">
         <div class="task-title">${t.title}</div>
         <div class="task-meta" style="margin-top:6px">${p?`<span class="task-project-tag" style="background:${p.color}20;color:${p.color};padding:2px 6px;border-radius:10px;font-size:10px">${p.name}</span>`:''}
@@ -762,7 +762,7 @@ function openTaskModal(id=null){
     document.getElementById('taskTime').value=t.due_time?t.due_time.slice(0,5):'';
     document.getElementById('taskEndDate').value=t.end_date||'';
     document.getElementById('endDateRow').style.display = (t.recurrence) ? 'block' : 'none';
-    document.getElementById('taskProject').value=t.project_id||'';
+    document.getElementById('taskProject').value=t.category||'';
     document.getElementById('taskEst').value=t.estimated_minutes||'';
     setPriority(t.priority||'medium');
     setRecur(t.recurrence||'');
@@ -848,7 +848,7 @@ async function saveTask(){
     due_date:due||null,
     due_time:time||null,
     end_date:endDate||null,
-    project_id:proj||null,
+    category:proj||null,
     tags:currentTags,
     estimated_minutes:est?parseInt(est):null,
     is_recurring:!!currentRecur,
@@ -880,8 +880,9 @@ async function saveTask(){
       }
     } catch(e){
       // If error mentions end_date column, retry without it
-      if(e.message.includes('end_date') || e.message.includes('column')){
-        const {end_date,...safe}=b;
+      if(e.message.includes('end_date') || e.message.includes('category') || e.message.includes('column')){
+        const {end_date, category, ...safe}=b;
+        // keep category as a tag-like workaround if needed
         return await attempt(safe);
       }
       throw e;
