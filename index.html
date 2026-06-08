@@ -372,14 +372,19 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
           <input type="time" class="form-input" id="taskTime">
         </div>
       </div>
-      <div class="form-row" id="endDateRow" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Fecha fin <span style="color:var(--text3);font-weight:400">(periodo de recurrencia)</span></label>
-          <input type="date" class="form-input" id="taskEndDate">
+      <div class="form-group">
+        <label class="form-label">Recurrencia</label>
+        <div class="recur-options" id="recurOptions">
+          <button class="recur-btn active" data-r="">No repetir</button>
+          <button class="recur-btn" data-r="daily">Diario</button>
+          <button class="recur-btn" data-r="weekly">Semanal</button>
+          <button class="recur-btn" data-r="weekdays">Lunes–Viernes</button>
+          <button class="recur-btn" data-r="monthly">Mensual</button>
         </div>
-        <div class="form-group" style="display:flex;align-items:flex-end">
-          <p style="font-size:12px;color:var(--text3);padding-bottom:10px;line-height:1.5">La tarea se repetirá desde la fecha inicio hasta la fecha fin según la frecuencia elegida.</p>
-        </div>
+      </div>
+      <div class="form-group" id="endDateRow" style="display:none">
+        <label class="form-label">Fecha fin <span style="color:var(--text3);font-weight:400">— hasta cuándo se repite</span></label>
+        <input type="date" class="form-input" id="taskEndDate">
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -401,16 +406,6 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
         <label class="form-label">Etiquetas (Enter para añadir)</label>
         <div class="tags-input" id="tagsContainer">
           <input type="text" id="tagInput" placeholder="Añadir etiqueta...">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Recurrencia</label>
-        <div class="recur-options" id="recurOptions">
-          <button class="recur-btn active" data-r="">No repetir</button>
-          <button class="recur-btn" data-r="daily">Diario</button>
-          <button class="recur-btn" data-r="weekly">Semanal</button>
-          <button class="recur-btn" data-r="weekdays">Lunes–Viernes</button>
-          <button class="recur-btn" data-r="monthly">Mensual</button>
         </div>
       </div>
       <div class="form-group">
@@ -766,7 +761,7 @@ function openTaskModal(id=null){
     document.getElementById('taskDue').value=t.due_date||'';
     document.getElementById('taskTime').value=t.due_time?t.due_time.slice(0,5):'';
     document.getElementById('taskEndDate').value=t.end_date||'';
-    document.getElementById('endDateRow').style.display = (t.recurrence) ? 'grid' : 'none';
+    document.getElementById('endDateRow').style.display = (t.recurrence) ? 'block' : 'none';
     document.getElementById('taskProject').value=t.project_id||'';
     document.getElementById('taskEst').value=t.estimated_minutes||'';
     setPriority(t.priority||'medium');
@@ -812,7 +807,7 @@ document.getElementById('recurOptions').addEventListener('click',e=>{
   const b=e.target.closest('.recur-btn');
   if(b){
     setRecur(b.dataset.r);
-    document.getElementById('endDateRow').style.display = b.dataset.r ? 'grid' : 'none';
+    document.getElementById('endDateRow').style.display = b.dataset.r ? 'block' : 'none';
   }
 });
 
@@ -847,35 +842,61 @@ async function saveTask(){
   const proj=document.getElementById('taskProject').value;
   const est=document.getElementById('taskEst').value;
   const body={
-    title, description:document.getElementById('taskDesc').value||null,
-    priority:currentPriority, due_date:due||null, due_time:time||null,
+    title,
+    description:document.getElementById('taskDesc').value||null,
+    priority:currentPriority,
+    due_date:due||null,
+    due_time:time||null,
     end_date:endDate||null,
-    project_id:proj||null, tags:currentTags, estimated_minutes:est?parseInt(est):null,
-    is_recurring:!!currentRecur, recurrence:currentRecur||null,
+    project_id:proj||null,
+    tags:currentTags,
+    estimated_minutes:est?parseInt(est):null,
+    is_recurring:!!currentRecur,
+    recurrence:currentRecur||null,
     position:tasks.length
   };
-  if(editingTaskId){
-    await dbPatch('tasks',body,`?id=eq.${editingTaskId}`);
-    const i=tasks.findIndex(t=>t.id===editingTaskId);
-    tasks[i]={...tasks[i],...body};
-    showToast('✏️ Tarea actualizada','success');
-  } else {
-    const res=await dbPost('tasks',body);
-    tasks.push(res[0]);
-    // save subtasks
-    const subs=[...pendingSubtasks];
-    for(const s of subs){
-      const r=await dbPost('subtasks',{task_id:res[0].id,title:s.title,done:false,position:s.pos});
-      subtasks.push(r[0]);
+
+  // Helper: attempt POST/PATCH, retry without end_date if column missing
+  async function attempt(b){
+    try{
+      if(editingTaskId){
+        await dbPatch('tasks',b,`?id=eq.${editingTaskId}`);
+        const i=tasks.findIndex(t=>t.id===editingTaskId);
+        tasks[i]={...tasks[i],...b};
+      } else {
+        const res=await dbPost('tasks',b);
+        tasks.push(res[0]);
+        const subs=[...pendingSubtasks];
+        for(const s of subs){
+          const r=await dbPost('subtasks',{task_id:res[0].id,title:s.title,done:false,position:s.pos});
+          subtasks.push(r[0]);
+        }
+        pendingSubtasks=[];
+        document.getElementById('gcalBtn').style.display='flex';
+        editingTaskId=res[0].id;
+        renderAll(); updateStreak();
+        showToast('✅ Tarea creada','success');
+        return 'new';
+      }
+    } catch(e){
+      // If error mentions end_date column, retry without it
+      if(e.message.includes('end_date') || e.message.includes('column')){
+        const {end_date,...safe}=b;
+        return await attempt(safe);
+      }
+      throw e;
     }
-    pendingSubtasks=[];
-    showToast('✅ Tarea creada','success');
-    document.getElementById('gcalBtn').style.display='flex';
-    editingTaskId = res[0].id;
-    renderAll(); updateStreak();
-    return; // keep modal open so user can add to GCal
   }
-  closeTaskModal(); renderAll(); updateStreak();
+
+  try{
+    const result = await attempt(body);
+    if(result==='new') return; // keep modal open for GCal
+    showToast('✏️ Tarea actualizada','success');
+    closeTaskModal(); renderAll(); updateStreak();
+  } catch(e){
+    showToast('❌ Error: '+e.message,'error');
+    console.error('saveTask error:',e);
+  }
 }
 
 // Subtasks
