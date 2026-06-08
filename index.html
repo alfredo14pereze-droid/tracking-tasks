@@ -274,10 +274,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
     </div>
   </nav>
 
-  <div class="sidebar-section" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;padding-right:12px">
-    Proyectos
-    <button onclick="openProjectModal()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:0">+</button>
-  </div>
+  <div class="sidebar-section" style="margin-top:16px">Categorías</div>
   <div class="sidebar-projects" id="projectsList"></div>
 
   <div class="sidebar-bottom">
@@ -367,7 +364,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Fecha límite</label>
+          <label class="form-label">Fecha inicio</label>
           <input type="date" class="form-input" id="taskDue">
         </div>
         <div class="form-group">
@@ -375,11 +372,24 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
           <input type="time" class="form-input" id="taskTime">
         </div>
       </div>
+      <div class="form-row" id="endDateRow" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Fecha fin <span style="color:var(--text3);font-weight:400">(periodo de recurrencia)</span></label>
+          <input type="date" class="form-input" id="taskEndDate">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end">
+          <p style="font-size:12px;color:var(--text3);padding-bottom:10px;line-height:1.5">La tarea se repetirá desde la fecha inicio hasta la fecha fin según la frecuencia elegida.</p>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Proyecto</label>
+          <label class="form-label">Categoría</label>
           <select class="form-input form-select" id="taskProject">
-            <option value="">Sin proyecto</option>
+            <option value="">Sin categoría</option>
+            <option value="trabajo">💼 Trabajo</option>
+            <option value="personal">🙋 Personal</option>
+            <option value="fitness">💪 Fitness</option>
+            <option value="proyectos">🚀 Proyectos</option>
           </select>
         </div>
         <div class="form-group">
@@ -414,33 +424,63 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeTaskModal()">Cancelar</button>
+      <button class="btn btn-ghost" id="gcalBtn" onclick="addToGCal()" style="display:none;gap:6px">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Añadir a Google Calendar
+      </button>
       <button class="btn btn-primary" onclick="saveTask()">Guardar tarea</button>
     </div>
   </div>
 </div>
 
-<!-- PROJECT MODAL -->
-<div class="modal-overlay" id="projectModal">
-  <div class="modal" style="max-width:380px">
+<!-- GCAL MODAL -->
+<div class="modal-overlay" id="gcalModal">
+  <div class="modal" style="max-width:420px">
     <div class="modal-header">
-      <h3 class="modal-title">Nuevo proyecto</h3>
-      <button class="modal-close" onclick="closeProjectModal()">
+      <h3 class="modal-title">📅 Añadir a Google Calendar</h3>
+      <button class="modal-close" onclick="closeGCalModal()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">Nombre del proyecto</label>
-        <input type="text" class="form-input" id="projectName" placeholder="ej. Trabajo, Personal, Gym...">
+        <label class="form-label">Título del evento</label>
+        <input type="text" class="form-input" id="gcalTitle" placeholder="Nombre del evento">
       </div>
-      <div class="form-group">
-        <label class="form-label">Color</label>
-        <div class="color-swatches" id="colorSwatches"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input type="date" class="form-input" id="gcalDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hora inicio</label>
+          <input type="time" class="form-input" id="gcalStart">
+        </div>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Duración (minutos)</label>
+          <input type="number" class="form-input" id="gcalDur" value="60" min="15" step="15">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Recordatorio</label>
+          <select class="form-input form-select" id="gcalReminder">
+            <option value="0">Sin recordatorio</option>
+            <option value="10" selected>10 min antes</option>
+            <option value="30">30 min antes</option>
+            <option value="60">1 hora antes</option>
+            <option value="1440">1 día antes</option>
+          </select>
+        </div>
+      </div>
+      <div id="gcalStatus" style="font-size:13px;color:var(--text2);margin-top:4px;min-height:20px"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeProjectModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveProject()">Crear proyecto</button>
+      <button class="btn btn-ghost" onclick="closeGCalModal()">Cancelar</button>
+      <button class="btn btn-primary" id="gcalSaveBtn" onclick="confirmAddToGCal()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        Agregar evento
+      </button>
     </div>
   </div>
 </div>
@@ -456,10 +496,8 @@ const H = {'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorizatio
 // State
 let tasks = [], projects = [], subtasks = [];
 let currentView = 'today', currentLayout = 'list', currentFilter = 'all', searchQ = '';
-let editingTaskId = null, currentTags = [], currentPriority = 'medium', currentRecur = '', selectedColor = '#7c6af7';
+let editingTaskId = null, currentTags = [], currentPriority = 'medium', currentRecur = '';
 let undoStack = [];
-
-const COLORS = ['#7c6af7','#f87171','#fbbf24','#4ade80','#60a5fa','#f472b6','#34d399','#fb923c','#a78bfa','#94a3b8'];
 
 // API helpers
 async function api(method, table, body, query=''){
@@ -477,6 +515,8 @@ const dbDelete = (t,q) => api('DELETE',t,null,q);
 // Init
 async function init(){
   try{
+    // Ensure end_date column exists (safe no-op if already added)
+    await fetch(`${SUPABASE_URL}/rest/v1/rpc/add_end_date_if_missing`,{method:'POST',headers:H}).catch(()=>{});
     await loadProjects();
     await loadTasks();
     await loadSubtasks();
@@ -488,7 +528,12 @@ async function init(){
   }
 }
 
-async function loadProjects(){ projects = await dbGet('projects','?order=created_at.asc') || []; }
+async function loadProjects(){ projects = [
+  {id:'trabajo',   name:'💼 Trabajo',   color:'#60a5fa'},
+  {id:'personal',  name:'🙋 Personal',  color:'#f472b6'},
+  {id:'fitness',   name:'💪 Fitness',   color:'#4ade80'},
+  {id:'proyectos', name:'🚀 Proyectos', color:'#f59e0b'},
+]; }
 async function loadTasks(){ tasks = await dbGet('tasks','?order=position.asc,created_at.desc') || []; }
 async function loadSubtasks(){ subtasks = await dbGet('subtasks','?order=position.asc') || []; }
 
@@ -516,10 +561,6 @@ function renderProjects(){
     div.onclick = () => setView(`project_${p.id}`, p.name);
     el.appendChild(div);
   });
-  // populate select in modal
-  const sel = document.getElementById('taskProject');
-  sel.innerHTML = '<option value="">Sin proyecto</option>';
-  projects.forEach(p=>{ sel.innerHTML+=`<option value="${p.id}">${p.name}</option>`; });
 }
 
 function getFilteredTasks(){
@@ -530,7 +571,7 @@ function getFilteredTasks(){
     if(!t.due_date) return true;
     return t.due_date <= today;
   });
-  else if(currentView==='upcoming') list = list.filter(t=>t.status!=='done' && t.due_date && t.due_date > today);
+  else if(currentView==='upcoming') list = list.filter(t=>t.status!=='done' && ((t.end_date && t.end_date > today) || (!t.end_date && t.due_date && t.due_date > today)));
   else if(currentView==='done') list = list.filter(t=>t.status==='done');
   else if(currentView.startsWith('project_')){
     const pid = currentView.replace('project_','');
@@ -590,8 +631,9 @@ function taskCardHTML(t){
   let dueHTML='';
   if(t.due_date){
     const cls = t.due_date<today?'overdue':t.due_date===today?'today':'';
-    const label = t.due_date===today?'Hoy':t.due_date<today?'Vencida':formatDate(t.due_date);
-    dueHTML=`<span class="task-due ${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${label}${t.due_time?' '+t.due_time.slice(0,5):''}</span>`;
+    const startLabel = t.due_date===today?'Hoy':t.due_date<today?'Vencida':formatDate(t.due_date);
+    const endLabel = t.end_date ? ` → ${formatDate(t.end_date)}` : '';
+    dueHTML=`<span class="task-due ${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${startLabel}${t.due_time?' '+t.due_time.slice(0,5):''}${endLabel}</span>`;
   }
   const tagsHTML = (t.tags||[]).map(tag=>`<span class="task-tag">${tag}</span>`).join('');
   const projHTML = p?`<span class="task-project-tag" style="background:${p.color}20;color:${p.color}">${p.name}</span>`:'';
@@ -723,6 +765,8 @@ function openTaskModal(id=null){
     document.getElementById('taskDesc').value=t.description||'';
     document.getElementById('taskDue').value=t.due_date||'';
     document.getElementById('taskTime').value=t.due_time?t.due_time.slice(0,5):'';
+    document.getElementById('taskEndDate').value=t.end_date||'';
+    document.getElementById('endDateRow').style.display = (t.recurrence) ? 'grid' : 'none';
     document.getElementById('taskProject').value=t.project_id||'';
     document.getElementById('taskEst').value=t.estimated_minutes||'';
     setPriority(t.priority||'medium');
@@ -730,16 +774,20 @@ function openTaskModal(id=null){
     currentTags=[...(t.tags||[])];
     renderTags();
     renderSubtasksList(id);
+    document.getElementById('gcalBtn').style.display='flex';
   } else {
     document.getElementById('taskTitle').value='';
     document.getElementById('taskDesc').value='';
     document.getElementById('taskDue').value='';
     document.getElementById('taskTime').value='';
+    document.getElementById('taskEndDate').value='';
+    document.getElementById('endDateRow').style.display='none';
     document.getElementById('taskProject').value='';
     document.getElementById('taskEst').value='';
     setPriority('medium'); setRecur('');
     currentTags=[]; renderTags();
     document.getElementById('subtasksList').innerHTML='';
+    document.getElementById('gcalBtn').style.display='none';
   }
   modal.classList.add('open');
   setTimeout(()=>document.getElementById('taskTitle').focus(),100);
@@ -762,7 +810,10 @@ function setRecur(r){
 }
 document.getElementById('recurOptions').addEventListener('click',e=>{
   const b=e.target.closest('.recur-btn');
-  if(b) setRecur(b.dataset.r);
+  if(b){
+    setRecur(b.dataset.r);
+    document.getElementById('endDateRow').style.display = b.dataset.r ? 'grid' : 'none';
+  }
 });
 
 function renderTags(){
@@ -792,11 +843,13 @@ async function saveTask(){
   if(!title){ showToast('El título es requerido','error'); return; }
   const due=document.getElementById('taskDue').value;
   const time=document.getElementById('taskTime').value;
+  const endDate=document.getElementById('taskEndDate').value;
   const proj=document.getElementById('taskProject').value;
   const est=document.getElementById('taskEst').value;
   const body={
     title, description:document.getElementById('taskDesc').value||null,
     priority:currentPriority, due_date:due||null, due_time:time||null,
+    end_date:endDate||null,
     project_id:proj||null, tags:currentTags, estimated_minutes:est?parseInt(est):null,
     is_recurring:!!currentRecur, recurrence:currentRecur||null,
     position:tasks.length
@@ -817,6 +870,10 @@ async function saveTask(){
     }
     pendingSubtasks=[];
     showToast('✅ Tarea creada','success');
+    document.getElementById('gcalBtn').style.display='flex';
+    editingTaskId = res[0].id;
+    renderAll(); updateStreak();
+    return; // keep modal open so user can add to GCal
   }
   closeTaskModal(); renderAll(); updateStreak();
 }
@@ -869,27 +926,88 @@ async function delSubtask(id){
 
 document.getElementById('subtaskInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addSubtask(); } });
 
-// Projects
-function openProjectModal(){
-  document.getElementById('projectName').value='';
-  selectedColor='#7c6af7';
-  const sw=document.getElementById('colorSwatches');
-  sw.innerHTML=COLORS.map(c=>`<div class="color-swatch${c===selectedColor?' active':''}" style="background:${c}" data-c="${c}" onclick="selectColor('${c}')"></div>`).join('');
-  document.getElementById('projectModal').classList.add('open');
+// Google Calendar Integration
+function addToGCal(){
+  const title = document.getElementById('taskTitle').value.trim() || 'Tarea';
+  const due   = document.getElementById('taskDue').value;
+  const time  = document.getElementById('taskTime').value;
+  const est   = document.getElementById('taskEst').value;
+  const desc  = document.getElementById('taskDesc').value;
+  document.getElementById('gcalTitle').value = title;
+  document.getElementById('gcalDate').value  = due || new Date().toISOString().split('T')[0];
+  document.getElementById('gcalStart').value = time || '09:00';
+  document.getElementById('gcalDur').value   = est || '60';
+  document.getElementById('gcalStatus').textContent = '';
+  document.getElementById('gcalSaveBtn').disabled = false;
+  document.getElementById('gcalSaveBtn').textContent = 'Agregar evento';
+  document.getElementById('gcalModal').classList.add('open');
 }
-function closeProjectModal(){ document.getElementById('projectModal').classList.remove('open'); }
-function selectColor(c){
-  selectedColor=c;
-  document.querySelectorAll('.color-swatch').forEach(s=>s.classList.toggle('active',s.dataset.c===c));
+function closeGCalModal(){ document.getElementById('gcalModal').classList.remove('open'); }
+
+async function confirmAddToGCal(){
+  const title    = document.getElementById('gcalTitle').value.trim();
+  const date     = document.getElementById('gcalDate').value;
+  const startT   = document.getElementById('gcalStart').value;
+  const dur      = parseInt(document.getElementById('gcalDur').value)||60;
+  const reminder = parseInt(document.getElementById('gcalReminder').value);
+  const desc     = document.getElementById('taskDesc').value||'';
+  if(!title||!date||!startT){ showToast('Completa título, fecha y hora','error'); return; }
+
+  const btn = document.getElementById('gcalSaveBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite"></span> Creando...';
+  document.getElementById('gcalStatus').textContent = '';
+
+  // Build ISO timestamps at UTC-6 (Torreón)
+  const [h,m]  = startT.split(':').map(Number);
+  const start  = new Date(`${date}T${startT}:00`);
+  const end    = new Date(start.getTime() + dur*60000);
+  const fmt    = d => d.toISOString().replace('.000Z','') + '-06:00';
+
+  try {
+    const payload = {
+      summary:   title,
+      startTime: fmt(start),
+      endTime:   fmt(end),
+      timeZone:  'America/Monterrey',
+      description: desc || undefined,
+    };
+    if(reminder>0) payload.overrideReminders=[{method:'popup',minutes:reminder}];
+
+    // Call Claude API to create the Calendar event via MCP
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        mcp_servers:[{type:'url',url:'https://calendarmcp.googleapis.com/mcp/v1',name:'gcal'}],
+        messages:[{role:'user',content:`Create a Google Calendar event with these exact details:
+- Summary: ${payload.summary}
+- Start: ${payload.startTime}
+- End: ${payload.endTime}
+- TimeZone: America/Monterrey
+${payload.description?'- Description: '+payload.description:''}
+${reminder>0?'- Reminder: popup '+reminder+' minutes before':''}
+Use the create_event tool. Return only "OK" after creating it.`}]
+      })
+    });
+    const data = await res.json();
+    const ok = data.content && data.content.some(b=>b.type==='text'&&b.text.toLowerCase().includes('ok') || b.type==='mcp_tool_result');
+    if(ok||data.content){
+      closeGCalModal();
+      showToast('📅 Evento agregado a Google Calendar','success');
+    } else {
+      throw new Error('Respuesta inesperada');
+    }
+  } catch(e){
+    document.getElementById('gcalStatus').textContent = '⚠️ Error: '+e.message;
+    btn.disabled=false;
+    btn.innerHTML='Agregar evento';
+  }
 }
-async function saveProject(){
-  const name=document.getElementById('projectName').value.trim();
-  if(!name){ showToast('El nombre es requerido','error'); return; }
-  const r=await dbPost('projects',{name,color:selectedColor});
-  projects.push(r[0]);
-  closeProjectModal(); renderProjects();
-  showToast('📁 Proyecto creado','success');
-}
+
+document.getElementById('gcalModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeGCalModal(); });
 
 // Navigation
 function setView(view, label){
@@ -930,13 +1048,11 @@ document.getElementById('mobileToggle').onclick=()=>document.getElementById('sid
 document.getElementById('sidebarOverlay').onclick=closeSidebar;
 function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('open'); }
 
-// Close modals on overlay click
 document.getElementById('taskModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeTaskModal(); });
-document.getElementById('projectModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeProjectModal(); });
 
 // Keyboard
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ closeTaskModal(); closeProjectModal(); }
+  if(e.key==='Escape'){ closeTaskModal(); closeGCalModal(); }
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){ e.preventDefault(); openTaskModal(); }
   if((e.metaKey||e.ctrlKey)&&e.key==='z'){ e.preventDefault(); undoDelete(); }
 });
@@ -957,6 +1073,9 @@ async function checkRecurring(){
   const today=new Date().toISOString().split('T')[0];
   const recurring=tasks.filter(t=>t.is_recurring&&t.recurrence);
   for(const t of recurring){
+    // Skip if today is outside the allowed period
+    if(t.due_date && today < t.due_date) continue;
+    if(t.end_date && today > t.end_date) continue;
     const exists=tasks.find(x=>x.title===t.title&&x.due_date===today&&x.id!==t.id);
     if(!exists&&shouldRecurToday(t)){
       const {id,created_at,completed_at,...rest}=t;
