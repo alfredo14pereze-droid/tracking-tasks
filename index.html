@@ -870,27 +870,8 @@ document.getElementById('recurOptions').addEventListener('click',e=>{
   }
 });
 
-function renderTags(){
-  const c=document.getElementById('tagsContainer');
-  const inp=document.getElementById('tagInput');
-  c.innerHTML='';
-  currentTags.forEach((tag,i)=>{
-    const span=document.createElement('span');
-    span.className='tag-chip';
-    span.innerHTML=`${tag}<button onclick="removeTag(${i})">×</button>`;
-    c.appendChild(span);
-  });
-  c.appendChild(inp);
-  inp.focus();
-}
-function removeTag(i){ currentTags.splice(i,1); renderTags(); }
-document.getElementById('tagInput').addEventListener('keydown',e=>{
-  if((e.key==='Enter'||e.key===',')&&e.target.value.trim()){
-    e.preventDefault();
-    currentTags.push(e.target.value.trim());
-    e.target.value=''; renderTags();
-  }
-});
+function renderTags(){ /* tags removed */ }
+function removeTag(i){ }
 
 async function saveTask(){
   const title=document.getElementById('taskTitle').value.trim();
