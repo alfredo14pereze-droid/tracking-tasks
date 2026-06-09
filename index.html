@@ -106,6 +106,11 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .task-card:hover{border-color:var(--border2);background:var(--bg3)}
 .task-card.done{opacity:0.5}
 .task-card.done .task-title{text-decoration:line-through;color:var(--text2)}
+.task-card.in_progress{border-color:rgba(251,191,36,0.3)}
+.status-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+.status-badge.in_progress{background:var(--amber-bg);color:var(--amber)}
+.task-check.in_progress{background:var(--amber-bg);border-color:var(--amber)}
+.task-check.in_progress svg{opacity:0}
 .task-card .priority-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:12px 0 0 12px}
 .priority-bar.high{background:var(--red)}
 .priority-bar.medium{background:var(--amber)}
@@ -563,6 +568,7 @@ function getFilteredTasks(){
   let list = [...tasks];
   if(currentView==='today') list = list.filter(t=>{
     if(t.status==='done') return false;
+    if(t.status==='in_progress') return true; // always show in progress
     if(!t.due_date) return true;
     return t.due_date <= today;
   });
@@ -616,6 +622,7 @@ function renderContent(){
   });
   el.querySelectorAll('.btn-edit').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();openTaskModal(el.dataset.id);}; });
   el.querySelectorAll('.btn-delete').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();deleteTask(el.dataset.id);}; });
+  el.querySelectorAll('.btn-progress').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();markInProgress(el.dataset.id);}; });
 }
 
 function taskCardHTML(t){
@@ -635,16 +642,18 @@ function taskCardHTML(t){
   const subHTML = subs.length?`<span class="subtask-progress"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>${doneSubs}/${subs.length}</span>`:'';
   const recurHTML = t.is_recurring?`<span class="task-tag">🔄 ${t.recurrence}</span>`:'';
   const estHTML = t.estimated_minutes?`<span class="task-due"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${t.estimated_minutes}m</span>`:'';
-  return `<div class="task-card ${t.status==='done'?'done':''}" data-id="${t.id}">
+  const statusBadge = t.status==='in_progress' ? `<span class="status-badge in_progress">⏳ En progreso</span>` : '';
+  return `<div class="task-card ${t.status==='done'?'done':t.status==='in_progress'?'in_progress':''}" data-id="${t.id}">
     <div class="priority-bar ${t.priority}"></div>
-    <div class="task-check ${t.status==='done'?'checked':''}" data-id="${t.id}">
+    <div class="task-check ${t.status==='done'?'checked':t.status==='in_progress'?'in_progress':''}" data-id="${t.id}">
       <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
     <div class="task-body">
       <div class="task-title">${t.title}</div>
-      <div class="task-meta">${projHTML}${tagsHTML}${dueHTML}${subHTML}${recurHTML}${estHTML}</div>
+      <div class="task-meta">${projHTML}${statusBadge}${tagsHTML}${dueHTML}${subHTML}${recurHTML}${estHTML}</div>
     </div>
     <div class="task-actions">
+      <button class="task-action-btn btn-progress" data-id="${t.id}" title="Marcar en progreso" style="${t.status==='done'?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
       <button class="task-action-btn btn-edit" data-id="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
       <button class="task-action-btn danger btn-delete" data-id="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
     </div>
@@ -720,12 +729,55 @@ function formatDate(s){
 async function toggleTask(id){
   const t=tasks.find(t=>t.id===id);
   if(!t) return;
-  const newStatus = t.status==='done'?'todo':'done';
-  const completed_at = newStatus==='done'?new Date().toISOString():null;
+  // cycle: todo/in_progress → done → todo
+  const newStatus = (t.status==='todo'||t.status==='in_progress') ? 'done' : 'todo';
+  const completed_at = newStatus==='done' ? new Date().toISOString() : null;
   await dbPatch('tasks',{status:newStatus,completed_at},`?id=eq.${id}`);
   t.status=newStatus; t.completed_at=completed_at;
+  // If recurring and just completed, spawn tomorrow's instance
+  if(newStatus==='done' && t.is_recurring && t.recurrence){
+    await spawnNextRecurring(t);
+  }
   renderAll(); updateStreak();
   showToast(newStatus==='done'?'✅ Tarea completada':'↩️ Tarea reabierta','success');
+}
+
+async function markInProgress(id){
+  const t=tasks.find(t=>t.id===id);
+  if(!t||t.status==='done') return;
+  const newStatus = t.status==='in_progress' ? 'todo' : 'in_progress';
+  await dbPatch('tasks',{status:newStatus},`?id=eq.${id}`);
+  t.status=newStatus;
+  renderAll();
+  showToast(newStatus==='in_progress'?'⏳ Marcada en progreso':'↩️ De vuelta a pendiente','info');
+}
+
+async function spawnNextRecurring(t){
+  // Find the next occurrence date based on recurrence type
+  const today = new Date().toISOString().split('T')[0];
+  let next = new Date(today+'T12:00:00');
+  if(t.recurrence==='daily'||t.recurrence==='weekdays'){
+    next.setDate(next.getDate()+1);
+    if(t.recurrence==='weekdays'){
+      while(next.getDay()===0||next.getDay()===6) next.setDate(next.getDate()+1);
+    }
+  } else if(t.recurrence==='weekly'){
+    next.setDate(next.getDate()+7);
+  } else if(t.recurrence==='monthly'){
+    next.setMonth(next.getMonth()+1);
+  }
+  const nextStr = next.toISOString().split('T')[0];
+  // Don't spawn if past end_date
+  if(t.end_date && nextStr > t.end_date) return;
+  // Don't spawn if already exists
+  const exists = tasks.find(x=>x.title===t.title&&x.due_date===nextStr&&x.id!==t.id);
+  if(exists) return;
+  const {id,created_at,completed_at,...rest}=t;
+  const body={...rest,status:'todo',due_date:nextStr,completed_at:null};
+  try{
+    const r=await dbPost('tasks',body);
+    tasks.push(r[0]);
+  } catch(e){ console.error('spawnNextRecurring:',e); }
 }
 
 async function deleteTask(id){
@@ -967,66 +1019,31 @@ function addToGCal(){
 function closeGCalModal(){ document.getElementById('gcalModal').classList.remove('open'); }
 
 async function confirmAddToGCal(){
-  const title    = document.getElementById('gcalTitle').value.trim();
-  const date     = document.getElementById('gcalDate').value;
-  const startT   = document.getElementById('gcalStart').value;
-  const dur      = parseInt(document.getElementById('gcalDur').value)||60;
-  const reminder = parseInt(document.getElementById('gcalReminder').value);
-  const desc     = document.getElementById('taskDesc').value||'';
+  const title  = document.getElementById('gcalTitle').value.trim();
+  const date   = document.getElementById('gcalDate').value;
+  const startT = document.getElementById('gcalStart').value;
+  const dur    = parseInt(document.getElementById('gcalDur').value)||60;
+  const desc   = document.getElementById('taskDesc').value||'';
   if(!title||!date||!startT){ showToast('Completa título, fecha y hora','error'); return; }
 
-  const btn = document.getElementById('gcalSaveBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite"></span> Creando...';
-  document.getElementById('gcalStatus').textContent = '';
+  // Build dates as YYYYMMDDTHHmmss (local time, no Z — Google handles timezone via ctz)
+  const startDt = date.replace(/-/g,'') + 'T' + startT.replace(':','') + '00';
+  const endDate = new Date(date+'T'+startT+':00');
+  endDate.setMinutes(endDate.getMinutes()+dur);
+  const pad = n=>String(n).padStart(2,'0');
+  const endDt = `${endDate.getFullYear()}${pad(endDate.getMonth()+1)}${pad(endDate.getDate())}T${pad(endDate.getHours())}${pad(endDate.getMinutes())}00`;
 
-  // Build ISO timestamps at UTC-6 (Torreón)
-  const [h,m]  = startT.split(':').map(Number);
-  const start  = new Date(`${date}T${startT}:00`);
-  const end    = new Date(start.getTime() + dur*60000);
-  const fmt    = d => d.toISOString().replace('.000Z','') + '-06:00';
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text:   title,
+    dates:  `${startDt}/${endDt}`,
+    ctz:    'America/Monterrey',
+    details: desc,
+  });
 
-  try {
-    const payload = {
-      summary:   title,
-      startTime: fmt(start),
-      endTime:   fmt(end),
-      timeZone:  'America/Monterrey',
-      description: desc || undefined,
-    };
-    if(reminder>0) payload.overrideReminders=[{method:'popup',minutes:reminder}];
-
-    // Call Claude API to create the Calendar event via MCP
-    const res = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        mcp_servers:[{type:'url',url:'https://calendarmcp.googleapis.com/mcp/v1',name:'gcal'}],
-        messages:[{role:'user',content:`Create a Google Calendar event with these exact details:
-- Summary: ${payload.summary}
-- Start: ${payload.startTime}
-- End: ${payload.endTime}
-- TimeZone: America/Monterrey
-${payload.description?'- Description: '+payload.description:''}
-${reminder>0?'- Reminder: popup '+reminder+' minutes before':''}
-Use the create_event tool. Return only "OK" after creating it.`}]
-      })
-    });
-    const data = await res.json();
-    const ok = data.content && data.content.some(b=>b.type==='text'&&b.text.toLowerCase().includes('ok') || b.type==='mcp_tool_result');
-    if(ok||data.content){
-      closeGCalModal();
-      showToast('📅 Evento agregado a Google Calendar','success');
-    } else {
-      throw new Error('Respuesta inesperada');
-    }
-  } catch(e){
-    document.getElementById('gcalStatus').textContent = '⚠️ Error: '+e.message;
-    btn.disabled=false;
-    btn.innerHTML='Agregar evento';
-  }
+  window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank');
+  closeGCalModal();
+  showToast('📅 Abriendo Google Calendar...','success');
 }
 
 document.getElementById('gcalModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeGCalModal(); });
@@ -1090,32 +1107,50 @@ function showToast(msg, type='info'){
   setTimeout(()=>{ t.style.animation='fadeOut .3s ease forwards'; setTimeout(()=>t.remove(),300); },3500);
 }
 
-// Recurring tasks check - create today's instance if needed
+// Recurring tasks — ensure today + next 7 days are spawned
 async function checkRecurring(){
-  const today=new Date().toISOString().split('T')[0];
-  const recurring=tasks.filter(t=>t.is_recurring&&t.recurrence);
+  const today = new Date().toISOString().split('T')[0];
+  const recurring = tasks.filter(t=>t.is_recurring && t.recurrence && t.status!=='done');
   for(const t of recurring){
-    // Skip if today is outside the allowed period
-    if(t.due_date && today < t.due_date) continue;
-    if(t.end_date && today > t.end_date) continue;
-    const exists=tasks.find(x=>x.title===t.title&&x.due_date===today&&x.id!==t.id);
-    if(!exists&&shouldRecurToday(t)){
-      const {id,created_at,completed_at,...rest}=t;
-      const body={...rest,status:'todo',due_date:today,completed_at:null};
-      const r=await dbPost('tasks',body);
-      tasks.push(r[0]);
+    // Generate up to 7 days ahead
+    for(let i=0; i<=7; i++){
+      const d = new Date(today+'T12:00:00');
+      d.setDate(d.getDate()+i);
+      const dateStr = d.toISOString().split('T')[0];
+      if(t.due_date && dateStr < t.due_date) continue;
+      if(t.end_date && dateStr > t.end_date) continue;
+      if(!shouldRecurOnDate(t, d)) continue;
+      const exists = tasks.find(x=>x.title===t.title && x.due_date===dateStr && x.id!==t.id);
+      if(!exists){
+        const {id,created_at,completed_at,...rest}=t;
+        const body={...rest,status:'todo',due_date:dateStr,completed_at:null};
+        try{
+          const r=await dbPost('tasks',body);
+          tasks.push(r[0]);
+        } catch(e){ console.error('checkRecurring:',e); }
+      }
     }
   }
+  renderAll();
 }
 
-function shouldRecurToday(t){
-  const d=new Date(); const day=d.getDay();
+function shouldRecurOnDate(t, d){
+  const day = d.getDay();
+  const dateStr = d.toISOString().split('T')[0];
   if(t.recurrence==='daily') return true;
-  if(t.recurrence==='weekly'&&t.due_date){const orig=new Date(t.due_date+'T12:00:00');return orig.getDay()===day;}
-  if(t.recurrence==='weekdays') return day>=1&&day<=5;
-  if(t.recurrence==='monthly'&&t.due_date){const orig=new Date(t.due_date+'T12:00:00');return orig.getDate()===d.getDate();}
+  if(t.recurrence==='weekdays') return day>=1 && day<=5;
+  if(t.recurrence==='weekly' && t.due_date){
+    const orig=new Date(t.due_date+'T12:00:00');
+    return orig.getDay()===day;
+  }
+  if(t.recurrence==='monthly' && t.due_date){
+    const orig=new Date(t.due_date+'T12:00:00');
+    return orig.getDate()===d.getDate();
+  }
   return false;
 }
+
+function shouldRecurToday(t){ return shouldRecurOnDate(t, new Date()); }
 
 // Start
 init().then(()=>checkRecurring());
