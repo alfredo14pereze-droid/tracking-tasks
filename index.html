@@ -563,20 +563,19 @@ function renderProjects(){
 }
 
 function getFilteredTasks(){
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDate();
+  const tomorrow = localDateOffset(1);
   let list = [...tasks];
   if(currentView==='today') list = list.filter(t=>{
-    if(t.status==='done') return false;
-    if(t.status==='in_progress') return true; // always show in progress
+    if(t.status==='in_progress') return true;
+    if(t.status==='done') return t.completed_at && localDate(new Date(t.completed_at))===today;
     if(!t.due_date) return true;
     return t.due_date <= today;
   });
-  else if(currentView==='upcoming') list = list.filter(t=>t.status!=='done' && ((t.end_date && t.end_date > today) || (!t.end_date && t.due_date && t.due_date > today)));
   else if(currentView==='tomorrow'){
-    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    list = list.filter(t=>t.status!=='done' && t.due_date===tomorrowStr);
+    list = list.filter(t=>t.status!=='done' && t.due_date===tomorrow);
   }
+  else if(currentView==='upcoming') list = list.filter(t=>t.status!=='done' && ((t.end_date && t.end_date > today) || (!t.end_date && t.due_date && t.due_date > today)));
   else if(currentView==='done') list = list.filter(t=>t.status==='done');
   else if(currentView.startsWith('project_')){
     const pid = currentView.replace('project_','');
@@ -597,10 +596,11 @@ function renderContent(){
   if(!list.length){ el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No hay tareas aquí</p></div>`; return; }
 
   const groups = {};
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDate();
   list.forEach(t=>{
     let g = 'Sin fecha';
-    if(t.due_date){
+    if(t.status==='done') g = '✅ Completadas hoy';
+    else if(t.due_date){
       if(t.due_date < today) g = '⚠️ Vencidas';
       else if(t.due_date === today) g = '📅 Hoy';
       else g = '📆 Próximas';
@@ -609,7 +609,7 @@ function renderContent(){
     groups[g].push(t);
   });
 
-  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','Sin fecha'];
+  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','Sin fecha','✅ Completadas hoy'];
   let html = '<div class="tasks-list">';
   order.forEach(g=>{
     if(!groups[g]) return;
@@ -633,7 +633,7 @@ function taskCardHTML(t){
   const p = projects.find(p=>p.id===t.category);
   const subs = subtasks.filter(s=>s.task_id===t.id);
   const doneSubs = subs.filter(s=>s.done).length;
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDate();
   let dueHTML='';
   if(t.due_date){
     const cls = t.due_date<today?'overdue':t.due_date===today?'today':'';
@@ -696,7 +696,7 @@ function updateProgress(list){
     document.getElementById('progressSection').style.display='none'; return;
   }
   document.getElementById('progressSection').style.display='block';
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDate();
   const todayAll = tasks.filter(t=>!t.due_date||t.due_date<=today);
   const done = todayAll.filter(t=>t.status==='done').length;
   const total = todayAll.length;
@@ -707,24 +707,31 @@ function updateProgress(list){
 }
 
 function updateCounts(){
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const today = localDate();
+  const tomorrow = localDateOffset(1);
   document.getElementById('countToday').textContent = tasks.filter(t=>t.status!=='done'&&(!t.due_date||t.due_date<=today)).length;
   document.getElementById('countAll').textContent = tasks.filter(t=>t.status!=='done').length;
-  document.getElementById('countTomorrow').textContent = tasks.filter(t=>t.status!=='done'&&t.due_date===tomorrowStr).length;
+  document.getElementById('countTomorrow').textContent = tasks.filter(t=>t.status!=='done'&&t.due_date===tomorrow).length;
 }
 
 function updateStreak(){
-  // Simple streak: count consecutive days with completed tasks
-  const completedDays = new Set(tasks.filter(t=>t.completed_at).map(t=>t.completed_at.split('T')[0]));
+  const completedDays = new Set(tasks.filter(t=>t.completed_at).map(t=>localDate(new Date(t.completed_at))));
   let streak=0, d=new Date();
   while(true){
-    const s=d.toISOString().split('T')[0];
+    const s=localDate(d);
     if(completedDays.has(s)){streak++;d.setDate(d.getDate()-1);}
     else break;
   }
   document.getElementById('streakNum').textContent=streak;
+}
+
+function localDate(d){
+  // Returns YYYY-MM-DD in local timezone, not UTC
+  const dt = d || new Date();
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+function localDateOffset(days){
+  const d = new Date(); d.setDate(d.getDate()+days); return localDate(d);
 }
 
 function formatDate(s){
@@ -761,8 +768,9 @@ async function markInProgress(id){
 
 async function spawnNextRecurring(t){
   // Find the next occurrence date based on recurrence type
-  const today = new Date().toISOString().split('T')[0];
-  let next = new Date(today+'T12:00:00');
+  const today = localDate();
+  let next = new Date();
+  next.setHours(12,0,0,0);
   if(t.recurrence==='daily'||t.recurrence==='weekdays'){
     next.setDate(next.getDate()+1);
     if(t.recurrence==='weekdays'){
@@ -773,7 +781,7 @@ async function spawnNextRecurring(t){
   } else if(t.recurrence==='monthly'){
     next.setMonth(next.getMonth()+1);
   }
-  const nextStr = next.toISOString().split('T')[0];
+  const nextStr = localDate(next);
   // Don't spawn if past end_date
   if(t.end_date && nextStr > t.end_date) return;
   // Don't spawn if already exists
@@ -996,7 +1004,7 @@ function addToGCal(){
   const est   = document.getElementById('taskEst').value;
   const desc  = document.getElementById('taskDesc').value;
   document.getElementById('gcalTitle').value = title;
-  document.getElementById('gcalDate').value  = due || new Date().toISOString().split('T')[0];
+  document.getElementById('gcalDate').value  = due || localDate();
   document.getElementById('gcalStart').value = time || '09:00';
   document.getElementById('gcalDur').value   = est || '60';
   document.getElementById('gcalStatus').textContent = '';
@@ -1097,14 +1105,12 @@ function showToast(msg, type='info'){
 
 // Recurring tasks — ensure today + next 7 days are spawned
 async function checkRecurring(){
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDate();
   const recurring = tasks.filter(t=>t.is_recurring && t.recurrence && t.status!=='done');
   for(const t of recurring){
-    // Generate up to 7 days ahead
     for(let i=0; i<=7; i++){
-      const d = new Date(today+'T12:00:00');
-      d.setDate(d.getDate()+i);
-      const dateStr = d.toISOString().split('T')[0];
+      const d = new Date(); d.setDate(d.getDate()+i);
+      const dateStr = localDate(d);
       if(t.due_date && dateStr < t.due_date) continue;
       if(t.end_date && dateStr > t.end_date) continue;
       if(!shouldRecurOnDate(t, d)) continue;
@@ -1124,7 +1130,7 @@ async function checkRecurring(){
 
 function shouldRecurOnDate(t, d){
   const day = d.getDay();
-  const dateStr = d.toISOString().split('T')[0];
+  const dateStr = localDate(d);
   if(t.recurrence==='daily') return true;
   if(t.recurrence==='weekdays') return day>=1 && day<=5;
   if(t.recurrence==='weekly' && t.due_date){
