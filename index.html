@@ -1328,10 +1328,11 @@ async function checkRecurring(){
     for(let i=0; i<=7; i++){
       const d = new Date(); d.setDate(d.getDate()+i);
       const dateStr = localDate(d);
+      if(dateStr === t.due_date) continue; // esta fecha ya ES la propia tarea t — no crear una copia de sí misma
       if(t.due_date && dateStr < t.due_date) continue;
       if(t.end_date && dateStr > t.end_date) continue;
       if(!shouldRecurOnDate(t, d)) continue;
-      const exists = tasks.find(x=>x.title===t.title && x.due_date===dateStr && x.id!==t.id);
+      const exists = tasks.find(x=>x.title===t.title && x.due_date===dateStr);
       if(!exists){
         const {id,created_at,completed_at,...rest}=t;
         const body={...rest,status:'todo',due_date:dateStr,completed_at:null};
