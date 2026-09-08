@@ -151,6 +151,32 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .kanban-card:hover{border-color:var(--border2)}
 .kanban-card .task-title{font-size:13px}
 
+/* Goals */
+.goals-board{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+.goal-col{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:12px}
+.goal-col-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.goal-col-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700}
+.goal-col-hint{font-size:12px;color:var(--text3);margin-top:2px}
+.goal-col-count{font-size:11px;color:var(--text2);background:var(--bg4);padding:2px 8px;border-radius:20px;flex-shrink:0}
+.goal-list{display:flex;flex-direction:column;gap:6px;min-height:8px}
+.goal-empty{font-size:12px;color:var(--text3);padding:8px 0;text-align:center}
+.goal-item{display:flex;align-items:flex-start;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;transition:all .15s}
+.goal-item:hover{border-color:var(--border2)}
+.goal-item.done{opacity:0.5}
+.goal-item.done .goal-title{text-decoration:line-through;color:var(--text2)}
+.goal-check{width:18px;height:18px;border-radius:6px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer}
+.goal-check:hover{border-color:var(--accent)}
+.goal-check.checked{background:var(--accent);border-color:var(--accent)}
+.goal-check.checked svg{opacity:1}
+.goal-check svg{width:11px;height:11px;fill:white;opacity:0}
+.goal-title{flex:1;font-size:13px;line-height:1.4;color:var(--text);word-break:break-word}
+.goal-delete{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px;flex-shrink:0;opacity:0;transition:opacity .15s;display:flex}
+.goal-item:hover .goal-delete{opacity:1}
+.goal-delete:hover{color:var(--red)}
+.goal-add-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:13px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
+.goal-add-input:focus{border-color:var(--accent)}
+.goal-add-input::placeholder{color:var(--text3)}
+
 /* Empty */
 .empty{text-align:center;padding:60px 20px;color:var(--text3)}
 .empty svg{width:40px;height:40px;margin:0 auto 12px;display:block;opacity:0.3}
@@ -297,6 +323,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
   .mobile-toggle{display:flex}
   .sidebar-overlay.open{display:block}
   .kanban{grid-template-columns:1fr}
+  .goals-board{grid-template-columns:1fr}
   .topbar{padding:16px 16px 0}
   .progress-section{padding:12px 16px}
   .filter-bar{padding:0 16px 12px}
@@ -363,6 +390,14 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
     <div class="nav-item" data-view="done">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
       Completadas
+    </div>
+  </nav>
+
+  <div class="sidebar-section" style="margin-top:16px">Objetivos</div>
+  <nav id="goalsNav">
+    <div class="nav-item" data-view="goals">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      Mis objetivos
     </div>
   </nav>
 
@@ -575,7 +610,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const H = {'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=representation'};
 
 // State
-let tasks = [], projects = [], subtasks = [];
+let tasks = [], projects = [], subtasks = [], goals = [];
 let currentView = 'today', currentLayout = 'list', currentFilter = 'all', searchQ = '';
 let editingTaskId = null, currentTags = [], currentPriority = 'medium', currentRecur = '';
 let undoStack = [];
@@ -601,6 +636,7 @@ async function init(){
     await loadProjects();
     await loadTasks();
     await loadSubtasks();
+    await loadGoals();
     renderAll();
     updateStreak();
     setDate();
@@ -617,6 +653,10 @@ async function loadProjects(){ projects = [
 ]; }
 async function loadTasks(){ tasks = await dbGet('tasks','?order=position.asc,created_at.desc') || []; }
 async function loadSubtasks(){ subtasks = await dbGet('subtasks','?order=position.asc') || []; }
+async function loadGoals(){
+  try{ goals = await dbGet('goals','?order=position.asc,created_at.desc') || []; }
+  catch(e){ goals = []; } // tabla "goals" aún no creada en Supabase — no debe tumbar el resto de la app
+}
 
 function setDate(){
   const d = new Date();
@@ -674,11 +714,14 @@ function getFilteredTasks(){
 
 function renderContent(){
   const el = document.getElementById('content');
+  const filterBar = document.querySelector('.filter-bar');
 
   // Special full-page views
-  if(currentView==='calendar'){ renderCalendarView(el); updateProgress([]); return; }
-  if(currentView==='stats')   { renderStatsView(el);    updateProgress([]); return; }
-  if(currentView==='missed')  { renderMissedView(el);   updateProgress([]); return; }
+  if(currentView==='calendar'){ filterBar.style.display='none'; renderCalendarView(el); updateProgress([]); return; }
+  if(currentView==='stats')   { filterBar.style.display='none'; renderStatsView(el);    updateProgress([]); return; }
+  if(currentView==='missed')  { filterBar.style.display='none'; renderMissedView(el);   updateProgress([]); return; }
+  if(currentView==='goals')   { filterBar.style.display='none'; renderGoalsView(el);     updateProgress([]); return; }
+  filterBar.style.display='flex';
 
   const list = getFilteredTasks();
   updateProgress(list);
@@ -752,6 +795,83 @@ function taskCardHTML(t){
       <button class="task-action-btn danger btn-delete" data-id="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
     </div>
   </div>`;
+}
+
+function renderGoalsView(el){
+  const cols = [
+    {key:'week',  label:'📅 Esta semana', hint:'Lo que quieres avanzar en los próximos 7 días'},
+    {key:'month', label:'🗓️ Este mes',    hint:'Metas para las próximas semanas'},
+    {key:'year',  label:'🎯 Este año',    hint:'Los objetivos grandes, a largo plazo'},
+  ];
+  let html = '<div class="goals-board">';
+  cols.forEach(c=>{
+    const items = goals.filter(g=>g.period===c.key).sort((a,b)=>(a.status==='done')-(b.status==='done'));
+    const activeCount = items.filter(g=>g.status!=='done').length;
+    html += `<div class="goal-col">
+      <div class="goal-col-header">
+        <div>
+          <div class="goal-col-title">${c.label}</div>
+          <div class="goal-col-hint">${c.hint}</div>
+        </div>
+        <span class="goal-col-count">${activeCount}</span>
+      </div>
+      <div class="goal-list">
+        ${items.length ? items.map(goalItemHTML).join('') : '<div class="goal-empty">Sin objetivos todavía</div>'}
+      </div>
+      <input type="text" class="goal-add-input" data-period="${c.key}" placeholder="+ Añadir objetivo y Enter...">
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+
+  el.querySelectorAll('.goal-add-input').forEach(inp=>{
+    inp.addEventListener('keydown', e=>{
+      if(e.key==='Enter' && inp.value.trim()){
+        addGoal(inp.dataset.period, inp.value.trim());
+        inp.value='';
+      }
+    });
+  });
+  el.querySelectorAll('.goal-check').forEach(chk=>{ chk.onclick=()=>toggleGoal(chk.dataset.id); });
+  el.querySelectorAll('.goal-delete').forEach(btn=>{ btn.onclick=()=>deleteGoal(btn.dataset.id); });
+}
+
+function goalItemHTML(g){
+  return `<div class="goal-item ${g.status==='done'?'done':''}">
+    <div class="goal-check ${g.status==='done'?'checked':''}" data-id="${g.id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="goal-title">${g.title}</div>
+    <button class="goal-delete" data-id="${g.id}" title="Eliminar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    </button>
+  </div>`;
+}
+
+async function addGoal(period, title){
+  try{
+    const [g] = await dbPost('goals', {title, period, status:'active'});
+    goals.unshift(g);
+    renderGoalsView(document.getElementById('content'));
+    showToast('🎯 Objetivo añadido','success');
+  }catch(e){ showToast('Error al guardar el objetivo','error'); }
+}
+
+async function toggleGoal(id){
+  const g = goals.find(x=>x.id===id);
+  if(!g) return;
+  g.status = g.status==='done' ? 'active' : 'done';
+  g.completed_at = g.status==='done' ? new Date().toISOString() : null;
+  renderGoalsView(document.getElementById('content'));
+  try{ await dbPatch('goals', {status:g.status, completed_at:g.completed_at}, `?id=eq.${id}`); }
+  catch(e){ showToast('Error al actualizar el objetivo','error'); }
+}
+
+async function deleteGoal(id){
+  goals = goals.filter(g=>g.id!==id);
+  renderGoalsView(document.getElementById('content'));
+  try{ await dbDelete('goals', `?id=eq.${id}`); }
+  catch(e){ showToast('Error al eliminar el objetivo','error'); }
 }
 
 function renderKanban(el){
@@ -1141,11 +1261,15 @@ document.getElementById('gcalModal').addEventListener('click',e=>{ if(e.target==
 function setView(view, label){
   currentView=view;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
-  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas'}[view]||view);
+  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos'}[view]||view);
   renderContent();
   if(window.innerWidth<768) closeSidebar();
 }
 document.getElementById('mainNav').addEventListener('click',e=>{
+  const item=e.target.closest('.nav-item');
+  if(item) setView(item.dataset.view);
+});
+document.getElementById('goalsNav').addEventListener('click',e=>{
   const item=e.target.closest('.nav-item');
   if(item) setView(item.dataset.view);
 });
