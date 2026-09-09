@@ -107,10 +107,15 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .task-card.done{opacity:0.5}
 .task-card.done .task-title{text-decoration:line-through;color:var(--text2)}
 .task-card.in_progress{border-color:rgba(251,191,36,0.3)}
+.task-card.missed{opacity:0.6;border-color:rgba(248,113,113,0.3)}
+.task-card.missed .task-title{color:var(--text2)}
 .status-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
 .status-badge.in_progress{background:var(--amber-bg);color:var(--amber)}
+.status-badge.missed{background:var(--red-bg);color:var(--red)}
 .task-check.in_progress{background:var(--amber-bg);border-color:var(--amber)}
 .task-check.in_progress svg{opacity:0}
+.task-check.missed{border-color:var(--red)}
+.task-action-btn.btn-tomorrow:hover{background:var(--blue-bg);color:var(--blue)}
 .task-card .priority-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:12px 0 0 12px}
 .priority-bar.high{background:var(--red)}
 .priority-bar.medium{background:var(--amber)}
@@ -164,6 +169,9 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .goal-item:hover{border-color:var(--border2)}
 .goal-item.done{opacity:0.5}
 .goal-item.done .goal-title{text-decoration:line-through;color:var(--text2)}
+.goal-item.overdue{border-color:rgba(248,113,113,0.4);background:var(--red-bg)}
+.goal-item.overdue .goal-title{color:var(--red)}
+.goal-overdue-tag{font-size:10px;font-weight:600;color:var(--red);background:rgba(248,113,113,0.15);padding:1px 6px;border-radius:10px;margin-left:6px;white-space:nowrap}
 .goal-check{width:18px;height:18px;border-radius:6px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer}
 .goal-check:hover{border-color:var(--accent)}
 .goal-check.checked{background:var(--accent);border-color:var(--accent)}
@@ -264,6 +272,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .cal-task-pill.medium{background:var(--amber-bg);color:var(--amber)}
 .cal-task-pill.low{background:var(--green-bg);color:var(--green)}
 .cal-task-pill.done{background:var(--bg4);color:var(--text3);text-decoration:line-through}
+.cal-task-pill.missed{background:var(--red-bg);color:var(--red);text-decoration:line-through}
 .cal-more{font-size:10px;color:var(--text3);margin-top:2px}
 .cal-week-row{display:grid;grid-template-columns:60px 1fr;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px}
 .cal-week-label{background:var(--bg3);padding:12px 8px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px}
@@ -674,7 +683,7 @@ function renderProjects(){
   const el = document.getElementById('projectsList');
   el.innerHTML = '';
   projects.forEach(p=>{
-    const n = tasks.filter(t=>t.category===p.id && t.status!=='done').length;
+    const n = tasks.filter(t=>t.category===p.id && t.status!=='done' && t.status!=='missed').length;
     const div = document.createElement('div');
     div.className = 'nav-item'+(currentView===`project_${p.id}`?' active':'');
     div.dataset.view = `project_${p.id}`;
@@ -690,7 +699,7 @@ function getFilteredTasks(){
   let list = [...tasks];
   if(currentView==='today') list = list.filter(t=>{
     if(t.status==='in_progress') return true;
-    if(t.status==='done') return t.completed_at && localDate(new Date(t.completed_at))===today;
+    if(t.status==='done'||t.status==='missed') return t.completed_at && localDate(new Date(t.completed_at))===today;
     if(!t.due_date) return true;
     return t.due_date <= today;
   });
@@ -699,7 +708,7 @@ function getFilteredTasks(){
   }
   else if(currentView==='upcoming') list = list.filter(t=>t.status!=='done' && ((t.end_date && t.end_date > today) || (!t.end_date && t.due_date && t.due_date > today)));
   else if(currentView==='missed'){
-    list = list.filter(t=>t.status!=='done' && t.due_date && t.due_date < today);
+    list = list.filter(t=>t.status!=='done' && t.status!=='missed' && t.due_date && t.due_date < today);
   }
   else if(currentView.startsWith('project_')){
     const pid = currentView.replace('project_','');
@@ -733,6 +742,7 @@ function renderContent(){
   list.forEach(t=>{
     let g = 'Sin fecha';
     if(t.status==='done') g = '✅ Completadas hoy';
+    else if(t.status==='missed') g = '❌ No completadas';
     else if(t.due_date){
       if(t.due_date < today) g = '⚠️ Vencidas';
       else if(t.due_date === today) g = '📅 Hoy';
@@ -742,7 +752,7 @@ function renderContent(){
     groups[g].push(t);
   });
 
-  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','Sin fecha','✅ Completadas hoy'];
+  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','Sin fecha','❌ No completadas','✅ Completadas hoy'];
   let html = '<div class="tasks-list">';
   order.forEach(g=>{
     if(!groups[g]) return;
@@ -760,6 +770,8 @@ function renderContent(){
   el.querySelectorAll('.btn-edit').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();openTaskModal(el.dataset.id);}; });
   el.querySelectorAll('.btn-delete').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();deleteTask(el.dataset.id);}; });
   el.querySelectorAll('.btn-progress').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();markInProgress(el.dataset.id);}; });
+  el.querySelectorAll('.btn-missed').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();markMissed(el.dataset.id);}; });
+  el.querySelectorAll('.btn-tomorrow').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();moveToTomorrow(el.dataset.id);}; });
 }
 
 function taskCardHTML(t){
@@ -779,10 +791,11 @@ function taskCardHTML(t){
   const subHTML = subs.length?`<span class="subtask-progress"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>${doneSubs}/${subs.length}</span>`:'';
   const recurHTML = t.is_recurring?`<span class="task-tag">🔄 ${t.recurrence}</span>`:'';
   const estHTML = t.estimated_minutes?`<span class="task-due"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${t.estimated_minutes}m</span>`:'';
-  const statusBadge = t.status==='in_progress' ? `<span class="status-badge in_progress">⏳ En progreso</span>` : '';
-  return `<div class="task-card ${t.status==='done'?'done':t.status==='in_progress'?'in_progress':''}" data-id="${t.id}">
+  const statusBadge = t.status==='in_progress' ? `<span class="status-badge in_progress">⏳ En progreso</span>` : t.status==='missed' ? `<span class="status-badge missed">❌ No completada</span>` : '';
+  const isClosed = t.status==='done'||t.status==='missed';
+  return `<div class="task-card ${t.status==='done'?'done':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''}" data-id="${t.id}">
     <div class="priority-bar ${t.priority}"></div>
-    <div class="task-check ${t.status==='done'?'checked':t.status==='in_progress'?'in_progress':''}" data-id="${t.id}">
+    <div class="task-check ${t.status==='done'?'checked':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''}" data-id="${t.id}">
       <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
     <div class="task-body">
@@ -790,7 +803,9 @@ function taskCardHTML(t){
       <div class="task-meta">${projHTML}${statusBadge}${tagsHTML}${dueHTML}${subHTML}${recurHTML}${estHTML}</div>
     </div>
     <div class="task-actions">
-      <button class="task-action-btn btn-progress" data-id="${t.id}" title="Marcar en progreso" style="${t.status==='done'?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+      <button class="task-action-btn btn-progress" data-id="${t.id}" title="Marcar en progreso" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+      <button class="task-action-btn btn-missed" data-id="${t.id}" title="No la completé (no se repite)" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></button>
+      <button class="task-action-btn btn-tomorrow" data-id="${t.id}" title="Pasar a mañana" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
       <button class="task-action-btn btn-edit" data-id="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
       <button class="task-action-btn danger btn-delete" data-id="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
     </div>
@@ -836,12 +851,32 @@ function renderGoalsView(el){
   el.querySelectorAll('.goal-delete').forEach(btn=>{ btn.onclick=()=>deleteGoal(btn.dataset.id); });
 }
 
+// Clave del lunes de la semana de una fecha, como YYYY-MM-DD — evita líos con semanas ISO.
+function weekKey(d){
+  const dt = new Date(d);
+  const day = dt.getDay();
+  dt.setDate(dt.getDate() + (day===0 ? -6 : 1-day));
+  return localDate(dt);
+}
+
+// ¿Ya pasó el periodo (semana/mes/año) en el que se creó este objetivo, y sigue sin completarse?
+function goalExpired(g){
+  if(g.status==='done'||!g.created_at) return false;
+  const created = new Date(g.created_at);
+  const now = new Date();
+  if(g.period==='week')  return weekKey(now) !== weekKey(created);
+  if(g.period==='month') return now.getFullYear()!==created.getFullYear() || now.getMonth()!==created.getMonth();
+  if(g.period==='year')  return now.getFullYear()!==created.getFullYear();
+  return false;
+}
+
 function goalItemHTML(g){
-  return `<div class="goal-item ${g.status==='done'?'done':''}">
+  const overdue = goalExpired(g);
+  return `<div class="goal-item ${g.status==='done'?'done':''} ${overdue?'overdue':''}">
     <div class="goal-check ${g.status==='done'?'checked':''}" data-id="${g.id}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
-    <div class="goal-title">${g.title}</div>
+    <div class="goal-title">${g.title}${overdue?' <span class="goal-overdue-tag">Vencido</span>':''}</div>
     <button class="goal-delete" data-id="${g.id}" title="Eliminar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
     </button>
@@ -919,10 +954,10 @@ function updateProgress(list){
 function updateCounts(){
   const today = localDate();
   const tomorrow = localDateOffset(1);
-  document.getElementById('countToday').textContent = tasks.filter(t=>t.status!=='done'&&(!t.due_date||t.due_date<=today)).length;
-  document.getElementById('countAll').textContent = tasks.filter(t=>t.status!=='done').length;
-  document.getElementById('countTomorrow').textContent = tasks.filter(t=>t.status!=='done'&&t.due_date===tomorrow).length;
-  const missed = tasks.filter(t=>t.status!=='done'&&t.due_date&&t.due_date<today).length;
+  document.getElementById('countToday').textContent = tasks.filter(t=>t.status!=='done'&&t.status!=='missed'&&(!t.due_date||t.due_date<=today)).length;
+  document.getElementById('countAll').textContent = tasks.filter(t=>t.status!=='done'&&t.status!=='missed').length;
+  document.getElementById('countTomorrow').textContent = tasks.filter(t=>t.status!=='done'&&t.status!=='missed'&&t.due_date===tomorrow).length;
+  const missed = tasks.filter(t=>t.status!=='done'&&t.status!=='missed'&&t.due_date&&t.due_date<today).length;
   document.getElementById('countMissed').textContent = missed;
   document.getElementById('countMissed').style.display = missed ? 'inline' : 'none';
 }
@@ -977,6 +1012,35 @@ async function markInProgress(id){
   t.status=newStatus;
   renderAll();
   showToast(newStatus==='in_progress'?'⏳ Marcada en progreso':'↩️ De vuelta a pendiente','info');
+}
+
+// Cierra una tarea del día como "no completada" — para tareas que solo aplican ese día.
+// A diferencia de "done", no dispara spawnNextRecurring: si era recurrente, la ocurrencia
+// de hoy simplemente queda marcada como fallida y no se repite retroactivamente.
+async function markMissed(id){
+  const t=tasks.find(t=>t.id===id);
+  if(!t||t.status==='done'||t.status==='missed') return;
+  const completed_at = new Date().toISOString();
+  await dbPatch('tasks',{status:'missed',completed_at},`?id=eq.${id}`);
+  t.status='missed'; t.completed_at=completed_at;
+  renderAll();
+  showToast('❌ Marcada como no completada','info');
+}
+
+// Para tareas que hay que hacer sí o sí: si no se completó hoy, se recorre a mañana
+// en vez de cerrarla. Evita crear un duplicado si ya existe otra tarea con ese título
+// programada para mañana (p.ej. una recurrente que ya generó su propia ocurrencia).
+async function moveToTomorrow(id){
+  const t=tasks.find(t=>t.id===id);
+  if(!t||t.status==='done'||t.status==='missed') return;
+  const tomorrow = localDateOffset(1);
+  if(t.due_date===tomorrow) return;
+  const dup = tasks.find(x=>x.id!==t.id && x.title===t.title && x.due_date===tomorrow);
+  if(dup){ showToast(`Ya existe "${t.title}" para mañana`,'error'); return; }
+  await dbPatch('tasks',{due_date:tomorrow},`?id=eq.${id}`);
+  t.due_date=tomorrow;
+  renderAll();
+  showToast('➡️ Movida a mañana','success');
 }
 
 async function spawnNextRecurring(t){
@@ -1367,7 +1431,7 @@ function shouldRecurToday(t){ return shouldRecurOnDate(t, new Date()); }
 // ── MISSED VIEW ──────────────────────────────────────────────
 function renderMissedView(el){
   const today = localDate();
-  const missed = tasks.filter(t=>t.status!=='done' && t.due_date && t.due_date < today)
+  const missed = tasks.filter(t=>t.status!=='done' && t.status!=='missed' && t.due_date && t.due_date < today)
     .sort((a,b)=>a.due_date.localeCompare(b.due_date));
   if(!missed.length){
     el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" style="margin:0 auto 12px;display:block;opacity:.3"><polyline points="20 6 9 17 4 12"/></svg><p>¡Sin tareas pendientes! Todo al día 🎉</p></div>`;
@@ -1393,6 +1457,8 @@ function renderMissedView(el){
   el.querySelectorAll('.btn-edit').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();openTaskModal(b.dataset.id);}; });
   el.querySelectorAll('.btn-delete').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();deleteTask(b.dataset.id);}; });
   el.querySelectorAll('.btn-progress').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();markInProgress(b.dataset.id);}; });
+  el.querySelectorAll('.btn-missed').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();markMissed(b.dataset.id);}; });
+  el.querySelectorAll('.btn-tomorrow').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();moveToTomorrow(b.dataset.id);}; });
 }
 
 // ── CALENDAR VIEW ─────────────────────────────────────────────
@@ -1436,7 +1502,7 @@ function renderWeekCal(el, today, tabsHTML){
     const dayTasks=tasks.filter(t=>t.due_date===ds).sort((a,b)=>{
       const o={high:0,medium:1,low:2}; return o[a.priority]-o[b.priority];
     });
-    const pillsHTML=dayTasks.slice(0,4).map(t=>`<div class="cal-task-pill ${t.status==='done'?'done':t.priority}" onclick="openTaskModal('${t.id}')" title="${t.title}">${t.title}</div>`).join('');
+    const pillsHTML=dayTasks.slice(0,4).map(t=>`<div class="cal-task-pill ${t.status==='done'?'done':t.status==='missed'?'missed':t.priority}" onclick="openTaskModal('${t.id}')" title="${t.title}">${t.title}</div>`).join('');
     const more=dayTasks.length>4?`<div class="cal-more">+${dayTasks.length-4} más</div>`:'';
     const emptyDay=dayTasks.length===0?`<div class="cal-empty-day" style="color:var(--text3);font-size:11px">Sin tareas</div>`:'';
     html+=`<div class="cal-week-row">
@@ -1488,7 +1554,7 @@ function renderMonthCal(el, today, tabsHTML){
     const ds=localDate(d);
     const isToday=ds===today;
     const dayTasks=tasks.filter(t=>t.due_date===ds);
-    const pills=dayTasks.slice(0,2).map(t=>`<div class="cal-task-pill ${t.status==='done'?'done':t.priority}" onclick="openTaskModal('${t.id}')" title="${t.title}">${t.title}</div>`).join('');
+    const pills=dayTasks.slice(0,2).map(t=>`<div class="cal-task-pill ${t.status==='done'?'done':t.status==='missed'?'missed':t.priority}" onclick="openTaskModal('${t.id}')" title="${t.title}">${t.title}</div>`).join('');
     const more=dayTasks.length>2?`<div class="cal-more">+${dayTasks.length-2}</div>`:'';
     html+=`<div class="cal-day ${isToday?'today':''} ${!cur?'other-month':''}">
       <div class="cal-day-header"><span class="cal-day-num">${d.getDate()}</span></div>
@@ -1504,8 +1570,8 @@ function renderStatsView(el){
   const today = localDate();
   const total = tasks.length;
   const done = tasks.filter(t=>t.status==='done').length;
-  const pending = tasks.filter(t=>t.status!=='done').length;
-  const missed = tasks.filter(t=>t.status!=='done'&&t.due_date&&t.due_date<today).length;
+  const pending = tasks.filter(t=>t.status!=='done'&&t.status!=='missed').length;
+  const missed = tasks.filter(t=>t.status!=='done'&&t.status!=='missed'&&t.due_date&&t.due_date<today).length;
   const inProg = tasks.filter(t=>t.status==='in_progress').length;
   const pct = total ? Math.round(done/total*100) : 0;
 
@@ -1620,7 +1686,7 @@ function renderStatsView(el){
     <div class="insight-card"><div class="ico">🏆</div><div class="val">${bestDayLabel}</div><div class="lbl">Mejor día</div></div>
     <div class="insight-card"><div class="ico">📊</div><div class="val">${avgPerDay}/día</div><div class="lbl">Promedio última semana</div></div>
     <div class="insight-card"><div class="ico">🔥</div><div class="val" id="streakInsight">—</div><div class="lbl">Racha actual</div></div>
-    <div class="insight-card"><div class="ico">⚡</div><div class="val">${tasks.filter(t=>t.priority==='high'&&t.status!=='done').length}</div><div class="lbl">Alta prioridad pendientes</div></div>
+    <div class="insight-card"><div class="ico">⚡</div><div class="val">${tasks.filter(t=>t.priority==='high'&&t.status!=='done'&&t.status!=='missed').length}</div><div class="lbl">Alta prioridad pendientes</div></div>
   </div>`;
 
   // Update streak in insight
