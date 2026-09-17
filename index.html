@@ -185,6 +185,41 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .goal-add-input:focus{border-color:var(--accent)}
 .goal-add-input::placeholder{color:var(--text3)}
 
+/* Reminders */
+.reminder-add-bar{display:flex;gap:8px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px}
+.reminder-add-bar input[type="text"]{flex:1;min-width:160px}
+.reminder-add-bar input[type="date"], .reminder-add-bar input[type="time"]{width:auto}
+.reminders-list{display:flex;flex-direction:column;gap:8px}
+.reminder-item{display:flex;align-items:flex-start;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:all .15s}
+.reminder-item:hover{border-color:var(--border2)}
+.reminder-item.done{opacity:0.5}
+.reminder-item.done .reminder-title{text-decoration:line-through;color:var(--text2)}
+.reminder-check{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer}
+.reminder-check:hover{border-color:var(--accent)}
+.reminder-check.checked{background:var(--accent);border-color:var(--accent)}
+.reminder-check svg{width:12px;height:12px;fill:white;opacity:0}
+.reminder-check.checked svg{opacity:1}
+.reminder-body{flex:1;min-width:0}
+.reminder-title{font-size:14px;color:var(--text)}
+.reminder-when{font-size:11px;color:var(--amber);display:flex;align-items:center;gap:4px;margin-top:4px}
+.reminder-when.past{color:var(--red)}
+.reminder-delete{background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;flex-shrink:0;display:flex}
+.reminder-delete:hover{color:var(--red)}
+
+/* Notes */
+.note-add-bar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px}
+.note-add-bar textarea{width:100%;min-height:70px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;resize:vertical;transition:border-color .15s}
+.note-add-bar textarea:focus{border-color:var(--accent)}
+.note-add-bar .btn{margin-top:8px}
+.notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.note-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:8px;transition:all .15s}
+.note-card:hover{border-color:var(--border2)}
+.note-text{font-size:13px;line-height:1.5;color:var(--text);white-space:pre-wrap;word-break:break-word;flex:1}
+.note-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.note-date{font-size:11px;color:var(--text3)}
+.note-delete{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px;display:flex}
+.note-delete:hover{color:var(--red)}
+
 /* Empty */
 .empty{text-align:center;padding:60px 20px;color:var(--text3)}
 .empty svg{width:40px;height:40px;margin:0 auto 12px;display:block;opacity:0.3}
@@ -193,14 +228,14 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 /* Modal */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
 .modal-overlay.open{opacity:1;pointer-events:all}
-.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;transform:translateY(20px);transition:transform .25s}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:540px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;transform:translateY(20px);transition:transform .25s}
 .modal-overlay.open .modal{transform:translateY(0)}
-.modal-header{padding:20px 24px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.modal-header{padding:20px 24px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-shrink:0}
 .modal-title{font-size:16px;font-weight:600}
 .modal-close{width:30px;height:30px;border-radius:6px;border:none;background:var(--bg3);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center}
 .modal-close svg{width:14px;height:14px}
-.modal-body{padding:20px 24px}
-.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1;min-height:0}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;flex-wrap:wrap}
 .form-group{margin-bottom:16px}
 .form-label{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px;display:block}
 .form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
@@ -218,15 +253,6 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .tag-chip{background:var(--bg4);color:var(--text2);padding:2px 8px;border-radius:20px;font-size:12px;display:flex;align-items:center;gap:4px}
 .tag-chip button{background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;line-height:1;padding:0}
 
-/* Subtask */
-.subtask-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)}
-.subtask-check{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
-.subtask-check.done{background:var(--accent);border-color:var(--accent)}
-.subtask-text{font-size:13px;flex:1}
-.subtask-text.done{text-decoration:line-through;color:var(--text3)}
-.add-subtask{display:flex;gap:8px;margin-top:8px}
-.add-subtask input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:13px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none}
-.add-subtask button{padding:6px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
 
 /* Toast */
 .toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
@@ -333,11 +359,21 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
   .sidebar-overlay.open{display:block}
   .kanban{grid-template-columns:1fr}
   .goals-board{grid-template-columns:1fr}
+  .notes-grid{grid-template-columns:1fr}
+  .reminder-add-bar input[type="text"], .reminder-add-bar input[type="date"], .reminder-add-bar input[type="time"], .reminder-add-bar button{width:100%}
   .topbar{padding:16px 16px 0}
+  .topbar-left{margin-left:44px} /* deja libre el botón de menú (☰) fijo arriba a la izquierda */
   .progress-section{padding:12px 16px}
   .filter-bar{padding:0 16px 12px}
   .content{padding:0 16px 40px}
   .form-row{grid-template-columns:1fr}
+  .modal-overlay{padding:0;align-items:flex-end}
+  .modal{max-width:100%;max-height:92vh;border-radius:16px 16px 0 0}
+  .modal-header{padding:16px 16px 12px}
+  .modal-body{padding:16px}
+  .modal-footer{padding:12px 16px}
+  /* 16px+ evita que iOS haga zoom automático al tocar un campo de texto */
+  .form-input, .search-input, .goal-add-input, .tags-input input{font-size:16px}
 }
 
 .loading{text-align:center;padding:60px;color:var(--text3)}
@@ -407,6 +443,18 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
     <div class="nav-item" data-view="goals">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
       Mis objetivos
+    </div>
+  </nav>
+
+  <div class="sidebar-section" style="margin-top:16px">Extras</div>
+  <nav id="extrasNav">
+    <div class="nav-item" data-view="reminders">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      Recordatorios
+    </div>
+    <div class="nav-item" data-view="notes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+      Notas
     </div>
   </nav>
 
@@ -538,14 +586,6 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
           <input type="number" class="form-input" id="taskEst" placeholder="ej. 30">
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Subtareas</label>
-        <div id="subtasksList"></div>
-        <div class="add-subtask">
-          <input type="text" id="subtaskInput" placeholder="Añadir subtarea...">
-          <button onclick="addSubtask()">+ Añadir</button>
-        </div>
-      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeTaskModal()">Cancelar</button>
@@ -619,7 +659,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const H = {'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=representation'};
 
 // State
-let tasks = [], projects = [], subtasks = [], goals = [];
+let tasks = [], projects = [], subtasks = [], goals = [], reminders = [], notes = [];
 let currentView = 'today', currentLayout = 'list', currentFilter = 'all', searchQ = '';
 let editingTaskId = null, currentTags = [], currentPriority = 'medium', currentRecur = '';
 let undoStack = [];
@@ -646,6 +686,8 @@ async function init(){
     await loadTasks();
     await loadSubtasks();
     await loadGoals();
+    await loadReminders();
+    await loadNotes();
     renderAll();
     updateStreak();
     setDate();
@@ -665,6 +707,14 @@ async function loadSubtasks(){ subtasks = await dbGet('subtasks','?order=positio
 async function loadGoals(){
   try{ goals = await dbGet('goals','?order=position.asc,created_at.desc') || []; }
   catch(e){ goals = []; } // tabla "goals" aún no creada en Supabase — no debe tumbar el resto de la app
+}
+async function loadReminders(){
+  try{ reminders = await dbGet('reminders','?order=created_at.desc') || []; }
+  catch(e){ reminders = []; } // tabla "reminders" aún no creada en Supabase
+}
+async function loadNotes(){
+  try{ notes = await dbGet('notes','?order=created_at.desc') || []; }
+  catch(e){ notes = []; } // tabla "notes" aún no creada en Supabase
 }
 
 function setDate(){
@@ -730,6 +780,8 @@ function renderContent(){
   if(currentView==='stats')   { filterBar.style.display='none'; renderStatsView(el);    updateProgress([]); return; }
   if(currentView==='missed')  { filterBar.style.display='none'; renderMissedView(el);   updateProgress([]); return; }
   if(currentView==='goals')   { filterBar.style.display='none'; renderGoalsView(el);     updateProgress([]); return; }
+  if(currentView==='reminders'){ filterBar.style.display='none'; renderRemindersView(el); updateProgress([]); return; }
+  if(currentView==='notes')  { filterBar.style.display='none'; renderNotesView(el);      updateProgress([]); return; }
   filterBar.style.display='flex';
 
   const list = getFilteredTasks();
@@ -907,6 +959,136 @@ async function deleteGoal(id){
   renderGoalsView(document.getElementById('content'));
   try{ await dbDelete('goals', `?id=eq.${id}`); }
   catch(e){ showToast('Error al eliminar el objetivo','error'); }
+}
+
+// ── RECORDATORIOS ────────────────────────────────────────────
+function renderRemindersView(el){
+  const now = new Date();
+  const nowStr = localDate(now);
+  const nowTime = now.toTimeString().slice(0,5);
+  const sorted = [...reminders].sort((a,b)=>{
+    if((a.status==='done')!==(b.status==='done')) return (a.status==='done')?1:-1;
+    const ak = (a.remind_date||'9999') + (a.remind_time||'99:99');
+    const bk = (b.remind_date||'9999') + (b.remind_time||'99:99');
+    return ak.localeCompare(bk);
+  });
+  el.innerHTML = `
+    <div class="reminder-add-bar">
+      <input type="text" class="form-input" id="reminderTitleInput" placeholder="Nuevo recordatorio...">
+      <input type="date" class="form-input" id="reminderDateInput">
+      <input type="time" class="form-input" id="reminderTimeInput">
+      <button class="btn btn-primary" onclick="addReminder()">+ Añadir</button>
+    </div>
+    <div class="reminders-list">
+      ${sorted.length ? sorted.map(r=>reminderItemHTML(r,nowStr,nowTime)).join('') : '<div class="empty"><p>No tienes recordatorios — agrega uno arriba 🔔</p></div>'}
+    </div>`;
+  el.querySelectorAll('.reminder-check').forEach(chk=>{ chk.onclick=()=>toggleReminder(chk.dataset.id); });
+  el.querySelectorAll('.reminder-delete').forEach(btn=>{ btn.onclick=()=>deleteReminder(btn.dataset.id); });
+  const titleInp = document.getElementById('reminderTitleInput');
+  titleInp.addEventListener('keydown', e=>{ if(e.key==='Enter') addReminder(); });
+}
+
+function reminderItemHTML(r, nowStr, nowTime){
+  let whenHTML = '';
+  if(r.remind_date){
+    const isPast = r.status!=='done' && (r.remind_date < nowStr || (r.remind_date===nowStr && r.remind_time && r.remind_time.slice(0,5) < nowTime));
+    const label = formatDate(r.remind_date) + (r.remind_time ? ` · ${r.remind_time.slice(0,5)}` : '');
+    whenHTML = `<div class="reminder-when ${isPast?'past':''}"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${label}</div>`;
+  }
+  return `<div class="reminder-item ${r.status==='done'?'done':''}">
+    <div class="reminder-check ${r.status==='done'?'checked':''}" data-id="${r.id}">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="reminder-body">
+      <div class="reminder-title">${r.title}</div>
+      ${whenHTML}
+    </div>
+    <button class="reminder-delete" data-id="${r.id}" title="Eliminar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    </button>
+  </div>`;
+}
+
+async function addReminder(){
+  const titleInp = document.getElementById('reminderTitleInput');
+  const title = titleInp.value.trim();
+  if(!title) return;
+  const remind_date = document.getElementById('reminderDateInput').value || null;
+  const remind_time = document.getElementById('reminderTimeInput').value || null;
+  try{
+    const [r] = await dbPost('reminders', {title, remind_date, remind_time, status:'active'});
+    reminders.unshift(r);
+    renderRemindersView(document.getElementById('content'));
+    showToast('🔔 Recordatorio añadido','success');
+  }catch(e){ showToast('Error al guardar el recordatorio','error'); }
+}
+
+async function toggleReminder(id){
+  const r = reminders.find(x=>x.id===id);
+  if(!r) return;
+  r.status = r.status==='done' ? 'active' : 'done';
+  renderRemindersView(document.getElementById('content'));
+  try{ await dbPatch('reminders', {status:r.status}, `?id=eq.${id}`); }
+  catch(e){ showToast('Error al actualizar el recordatorio','error'); }
+}
+
+async function deleteReminder(id){
+  reminders = reminders.filter(r=>r.id!==id);
+  renderRemindersView(document.getElementById('content'));
+  try{ await dbDelete('reminders', `?id=eq.${id}`); }
+  catch(e){ showToast('Error al eliminar el recordatorio','error'); }
+}
+
+// ── NOTAS ────────────────────────────────────────────────────
+function renderNotesView(el){
+  el.innerHTML = `
+    <div class="note-add-bar">
+      <textarea id="noteInput" placeholder="Escribe una nota..."></textarea>
+      <button class="btn btn-primary" onclick="addNote()">Guardar nota</button>
+    </div>
+    <div class="notes-grid">
+      ${notes.length ? notes.map(noteCardHTML).join('') : '<div class="empty"><p>Sin notas todavía — escribe la primera arriba 📝</p></div>'}
+    </div>`;
+  el.querySelectorAll('.note-delete').forEach(btn=>{ btn.onclick=()=>deleteNote(btn.dataset.id); });
+}
+
+function noteCardHTML(n){
+  const d = new Date(n.created_at);
+  const dateLabel = d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}) + ' · ' + d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+  return `<div class="note-card">
+    <div class="note-text">${escapeHTML(n.content)}</div>
+    <div class="note-footer">
+      <span class="note-date">${dateLabel}</span>
+      <button class="note-delete" data-id="${n.id}" title="Eliminar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+function escapeHTML(s){
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+async function addNote(){
+  const inp = document.getElementById('noteInput');
+  const content = inp.value.trim();
+  if(!content) return;
+  try{
+    const [n] = await dbPost('notes', {content});
+    notes.unshift(n);
+    renderNotesView(document.getElementById('content'));
+    showToast('📝 Nota guardada','success');
+  }catch(e){ showToast('Error al guardar la nota','error'); }
+}
+
+async function deleteNote(id){
+  notes = notes.filter(n=>n.id!==id);
+  renderNotesView(document.getElementById('content'));
+  try{ await dbDelete('notes', `?id=eq.${id}`); }
+  catch(e){ showToast('Error al eliminar la nota','error'); }
 }
 
 function renderKanban(el){
@@ -1112,7 +1294,6 @@ function openTaskModal(id=null){
     setRecur(t.recurrence||'');
     currentTags=[...(t.tags||[])];
     renderTags();
-    renderSubtasksList(id);
     document.getElementById('gcalBtn').style.display='flex';
   } else {
     document.getElementById('taskTitle').value='';
@@ -1125,7 +1306,6 @@ function openTaskModal(id=null){
     document.getElementById('taskEst').value='';
     setPriority('medium'); setRecur('');
     currentTags=[]; renderTags();
-    document.getElementById('subtasksList').innerHTML='';
     document.getElementById('gcalBtn').style.display='none';
   }
   modal.classList.add('open');
@@ -1191,12 +1371,6 @@ async function saveTask(){
       } else {
         const res=await dbPost('tasks',b);
         tasks.push(res[0]);
-        const subs=[...pendingSubtasks];
-        for(const s of subs){
-          const r=await dbPost('subtasks',{task_id:res[0].id,title:s.title,done:false,position:s.pos});
-          subtasks.push(r[0]);
-        }
-        pendingSubtasks=[];
         document.getElementById('gcalBtn').style.display='flex';
         editingTaskId=res[0].id;
         renderAll(); updateStreak();
@@ -1225,53 +1399,9 @@ async function saveTask(){
   }
 }
 
-// Subtasks
-let pendingSubtasks=[];
-function renderSubtasksList(taskId){
-  const el=document.getElementById('subtasksList');
-  const subs=taskId?subtasks.filter(s=>s.task_id===taskId):pendingSubtasks.map((s,i)=>({...s,id:`pending_${i}`}));
-  el.innerHTML=subs.map((s,i)=>`<div class="subtask-item">
-    <div class="subtask-check ${s.done?'done':''}" onclick="toggleSubtask('${s.id}',${!s.done})">
-      ${s.done?'<svg viewBox="0 0 24 24" width="10" height="10" fill="white"><polyline points="20 6 9 17 4 12"/></svg>':''}
-    </div>
-    <span class="subtask-text ${s.done?'done':''}">${s.title}</span>
-    <button onclick="delSubtask('${s.id}')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;margin-left:auto">×</button>
-  </div>`).join('');
-}
-
-async function addSubtask(){
-  const inp=document.getElementById('subtaskInput');
-  const title=inp.value.trim();
-  if(!title) return;
-  if(editingTaskId){
-    const r=await dbPost('subtasks',{task_id:editingTaskId,title,done:false,position:subtasks.filter(s=>s.task_id===editingTaskId).length});
-    subtasks.push(r[0]);
-    renderSubtasksList(editingTaskId);
-  } else {
-    pendingSubtasks.push({title,pos:pendingSubtasks.length});
-    renderSubtasksList(null);
-  }
-  inp.value='';
-}
-
-async function toggleSubtask(id,done){
-  if(id.startsWith('pending_')) return;
-  await dbPatch('subtasks',{done},`?id=eq.${id}`);
-  const s=subtasks.find(s=>s.id===id); if(s) s.done=done;
-  renderSubtasksList(editingTaskId); renderContent();
-}
-
-async function delSubtask(id){
-  if(id.startsWith('pending_')){
-    const i=parseInt(id.replace('pending_',''));
-    pendingSubtasks.splice(i,1); renderSubtasksList(null); return;
-  }
-  await dbDelete('subtasks',`?id=eq.${id}`);
-  subtasks=subtasks.filter(s=>s.id!==id);
-  renderSubtasksList(editingTaskId);
-}
-
-document.getElementById('subtaskInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addSubtask(); } });
+// Nota: la UI para crear/editar subtareas se quitó del modal (se veía mal en celular).
+// "subtasks" se sigue cargando y mostrando como progreso de solo lectura en las tarjetas
+// (ver subHTML en taskCardHTML) para no perder datos de tareas que ya tenían subtareas.
 
 // Google Calendar Integration
 function addToGCal(){
@@ -1325,7 +1455,7 @@ document.getElementById('gcalModal').addEventListener('click',e=>{ if(e.target==
 function setView(view, label){
   currentView=view;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
-  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos'}[view]||view);
+  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',reminders:'Recordatorios',notes:'Notas'}[view]||view);
   renderContent();
   if(window.innerWidth<768) closeSidebar();
 }
@@ -1334,6 +1464,10 @@ document.getElementById('mainNav').addEventListener('click',e=>{
   if(item) setView(item.dataset.view);
 });
 document.getElementById('goalsNav').addEventListener('click',e=>{
+  const item=e.target.closest('.nav-item');
+  if(item) setView(item.dataset.view);
+});
+document.getElementById('extrasNav').addEventListener('click',e=>{
   const item=e.target.closest('.nav-item');
   if(item) setView(item.dataset.view);
 });
@@ -1360,7 +1494,10 @@ document.querySelectorAll('.filter-chip').forEach(chip=>{
 document.getElementById('searchInput').addEventListener('input',e=>{ searchQ=e.target.value.toLowerCase(); renderContent(); });
 
 // Mobile
-document.getElementById('mobileToggle').onclick=()=>document.getElementById('sidebar').classList.toggle('open'),document.getElementById('sidebarOverlay').classList.toggle('open');
+document.getElementById('mobileToggle').onclick=()=>{
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+};
 document.getElementById('sidebarOverlay').onclick=closeSidebar;
 function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('open'); }
 
