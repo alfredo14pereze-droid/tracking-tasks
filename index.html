@@ -241,7 +241,6 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .form-label{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px;display:block}
 .form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
 .form-input:focus{border-color:var(--accent)}
-.form-textarea{resize:vertical;min-height:80px}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%239a9ba8' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
 .priority-btns{display:flex;gap:6px}
@@ -528,10 +527,6 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
         <input type="text" class="form-input" id="taskTitle" placeholder="¿Qué hay que hacer?">
       </div>
       <div class="form-group">
-        <label class="form-label">Descripción</label>
-        <textarea class="form-input form-textarea" id="taskDesc" placeholder="Detalles opcionales..."></textarea>
-      </div>
-      <div class="form-group">
         <label class="form-label">Prioridad</label>
         <div class="priority-btns">
           <button class="priority-btn" data-p="high" onclick="setPriority('high')">🔴 Alta</button>
@@ -553,10 +548,6 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
         <label class="form-label">Recurrencia</label>
         <div class="recur-options" id="recurOptions">
           <button class="recur-btn active" data-r="">No repetir</button>
-          <button class="recur-btn" data-r="daily">Diario</button>
-          <button class="recur-btn" data-r="weekly">Semanal</button>
-          <button class="recur-btn" data-r="weekdays">Lunes–Viernes</button>
-          <button class="recur-btn" data-r="monthly">Mensual</button>
           <button class="recur-btn" data-r="custom">Personalizado</button>
         </div>
         <div class="day-options" id="customDaysRow" style="display:none">
@@ -1289,7 +1280,6 @@ function openTaskModal(id=null){
   if(id){
     const t=tasks.find(t=>t.id===id);
     document.getElementById('taskTitle').value=t.title;
-    document.getElementById('taskDesc').value=t.description||'';
     document.getElementById('taskDue').value=t.due_date||'';
     document.getElementById('taskTime').value=t.due_time?t.due_time.slice(0,5):'';
     document.getElementById('taskEndDate').value=t.end_date||'';
@@ -1297,9 +1287,16 @@ function openTaskModal(id=null){
     document.getElementById('taskProject').value=t.category||'';
     document.getElementById('taskEst').value=t.estimated_minutes||'';
     setPriority(t.priority||'medium');
+    // Las tareas viejas con recurrencia diaria/semanal/lunes-viernes ya no tienen
+    // su propio botón — se muestran como "Personalizado" con los días equivalentes
+    // marcados, para no dejar la recurrencia "en blanco" al editarlas.
+    const legacyDays = legacyRecurrenceToDays(t.recurrence, t.due_date);
     if(t.recurrence && t.recurrence.startsWith('custom:')){
       setRecur('custom');
       setCustomDays(t.recurrence.slice(7).split(',').filter(x=>x!=='').map(Number));
+    } else if(legacyDays){
+      setRecur('custom');
+      setCustomDays(legacyDays);
     } else {
       setRecur(t.recurrence||'');
       setCustomDays([]);
@@ -1309,7 +1306,6 @@ function openTaskModal(id=null){
     document.getElementById('gcalBtn').style.display='flex';
   } else {
     document.getElementById('taskTitle').value='';
-    document.getElementById('taskDesc').value='';
     document.getElementById('taskDue').value='';
     document.getElementById('taskTime').value='';
     document.getElementById('taskEndDate').value='';
@@ -1379,7 +1375,6 @@ async function saveTask(){
     : (currentRecur||null);
   const body={
     title,
-    description:document.getElementById('taskDesc').value||null,
     priority:currentPriority,
     due_date:due||null,
     due_time:time||null,
@@ -1440,7 +1435,6 @@ function addToGCal(){
   const due   = document.getElementById('taskDue').value;
   const time  = document.getElementById('taskTime').value;
   const est   = document.getElementById('taskEst').value;
-  const desc  = document.getElementById('taskDesc').value;
   document.getElementById('gcalTitle').value = title;
   document.getElementById('gcalDate').value  = due || localDate();
   document.getElementById('gcalStart').value = time || '09:00';
@@ -1457,7 +1451,6 @@ async function confirmAddToGCal(){
   const date   = document.getElementById('gcalDate').value;
   const startT = document.getElementById('gcalStart').value;
   const dur    = parseInt(document.getElementById('gcalDur').value)||60;
-  const desc   = document.getElementById('taskDesc').value||'';
   if(!title||!date||!startT){ showToast('Completa título, fecha y hora','error'); return; }
 
   // Build dates as YYYYMMDDTHHmmss (local time, no Z — Google handles timezone via ctz)
@@ -1472,7 +1465,6 @@ async function confirmAddToGCal(){
     text:   title,
     dates:  `${startDt}/${endDt}`,
     ctz:    'America/Monterrey',
-    details: desc,
   });
 
   window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank');
@@ -1603,6 +1595,17 @@ function recurrenceLabel(r){
     return r.slice(7).split(',').filter(x=>x!=='').map(n=>DAY_NAMES[+n]).join(', ');
   }
   return r;
+}
+
+// Convierte una recurrencia "vieja" (diario/lunes-viernes/semanal) en los días de
+// semana equivalentes, para poder mostrarla como "Personalizado" al editarla —
+// esas opciones ya no tienen su propio botón en el formulario. "Mensual" no tiene
+// un equivalente por día de semana, así que se deja tal cual (sin botón activo).
+function legacyRecurrenceToDays(recurrence, dueDate){
+  if(recurrence==='daily') return [0,1,2,3,4,5,6];
+  if(recurrence==='weekdays') return [1,2,3,4,5];
+  if(recurrence==='weekly' && dueDate) return [new Date(dueDate+'T12:00:00').getDay()];
+  return null;
 }
 
 // ── MISSED VIEW ──────────────────────────────────────────────
