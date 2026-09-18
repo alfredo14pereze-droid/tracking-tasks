@@ -2,13 +2,13 @@
 // la app abra en modo offline básico. Nunca toca las llamadas a Supabase
 // (son cross-origin y/o no-GET, así que se excluyen explícitamente abajo).
 
-const CACHE_NAME = 'flowday-cache-v2';
+const CACHE_NAME = 'flowday-cache-v3';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './manifest.json',
-  './icons/icon-192.png?v=2',
-  './icons/icon-512.png?v=2'
+  './icons/icon-192.png?v=3',
+  './icons/icon-512.png?v=3'
 ];
 
 self.addEventListener('install', event => {
