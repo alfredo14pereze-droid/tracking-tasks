@@ -38,6 +38,8 @@
   --accent: #7c6af7;
   --accent2: #9d8ff9;
   --accent-bg: rgba(124,106,247,0.12);
+  --teal: #2dd4bf;
+  --teal-bg: rgba(45,212,191,0.12);
   --green: #4ade80;
   --green-bg: rgba(74,222,128,0.1);
   --amber: #fbbf24;
@@ -81,8 +83,8 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 
 /* Header */
 .topbar{padding:20px 28px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.topbar-left h2{font-size:22px;font-weight:700;letter-spacing:-0.3px}
-.topbar-left p{font-size:13px;color:var(--text2);margin-top:2px}
+.topbar-left h2{font-size:30px;font-weight:800;letter-spacing:-0.8px}
+.topbar-left p{font-size:13px;color:var(--text2);margin-top:4px}
 .topbar-right{display:flex;gap:8px;align-items:center}
 .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:var(--radius-sm);border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all .15s}
 .btn-primary{background:var(--accent);color:white}
@@ -91,11 +93,19 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .btn-ghost:hover{color:var(--text);border-color:var(--border2)}
 .btn svg{width:15px;height:15px}
 
-/* Progress bar */
+/* Hero / progress */
 .progress-section{padding:16px 28px}
-.progress-bar-wrap{background:var(--bg3);border-radius:4px;height:4px;overflow:hidden}
-.progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width .5s ease}
-.progress-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:6px}
+.hero-card{background:linear-gradient(135deg,var(--bg2),var(--bg3));border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;display:flex;align-items:center;gap:22px}
+.hero-ring-wrap{position:relative;width:88px;height:88px;flex-shrink:0}
+.hero-ring{width:88px;height:88px;transform:rotate(-90deg)}
+.hero-ring-track{fill:none;stroke:var(--bg4);stroke-width:9}
+.hero-ring-fill{fill:none;stroke:url(#heroRingGradient);stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .6s ease}
+.hero-ring-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text)}
+.hero-info{flex:1;min-width:0}
+.hero-sub{font-size:14px;color:var(--text2)}
+.hero-streak{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--amber);font-weight:600}
+.mini-heatmap{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:12px}
+.mini-heatmap-cell{aspect-ratio:1;border-radius:2px}
 
 /* Filters */
 .filter-bar{padding:0 28px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -111,11 +121,11 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .content{padding:0 28px 40px;flex:1}
 
 /* Task list */
-.tasks-list{display:flex;flex-direction:column;gap:6px}
+.tasks-list{display:flex;flex-direction:column;gap:10px}
 .task-group-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.8px;text-transform:uppercase;padding:12px 0 6px;display:flex;align-items:center;gap:8px}
 .task-group-label::after{content:'';flex:1;height:1px;background:var(--border)}
 
-.task-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;align-items:flex-start;gap:12px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.task-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px 18px;display:flex;align-items:flex-start;gap:14px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
 .task-card:hover{border-color:var(--border2);background:var(--bg3)}
 .task-card.done{opacity:0.5}
 .task-card.done .task-title{text-decoration:line-through;color:var(--text2)}
@@ -134,14 +144,14 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .priority-bar.medium{background:var(--amber)}
 .priority-bar.low{background:var(--green)}
 
-.task-check{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer}
+.task-check{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer}
 .task-check:hover{border-color:var(--accent)}
 .task-check.checked{background:var(--accent);border-color:var(--accent)}
 .task-check.checked svg{opacity:1}
 .task-check svg{width:12px;height:12px;fill:white;opacity:0}
 
 .task-body{flex:1;min-width:0}
-.task-title{font-size:14px;font-weight:500;line-height:1.4;color:var(--text)}
+.task-title{font-size:15px;font-weight:600;line-height:1.4;color:var(--text)}
 .task-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
 .task-tag{padding:2px 8px;border-radius:20px;font-size:11px;background:var(--bg4);color:var(--text2)}
 .task-project-tag{padding:2px 8px;border-radius:20px;font-size:11px;color:white}
@@ -317,7 +327,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .stat-card-val{font-family:'Syne',sans-serif;font-size:32px;font-weight:700;line-height:1}
 .stat-card-label{font-size:12px;color:var(--text2);margin-top:6px}
 .stat-card-sub{font-size:11px;color:var(--text3);margin-top:3px}
-.stats-section-title{font-size:13px;font-weight:600;color:var(--text2);margin:20px 0 10px;letter-spacing:0.3px}
+.stats-section-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--text);margin:24px 0 12px;letter-spacing:-0.2px}
 .stats-bars{display:flex;flex-direction:column;gap:10px}
 .stats-bar-row{display:grid;grid-template-columns:120px 1fr 50px;align-items:center;gap:10px}
 .stats-bar-label{font-size:13px;color:var(--text2)}
@@ -373,7 +383,9 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
   .modal{max-width:100%;max-height:88vh}
   .modal-header{padding:16px 16px 12px}
   .modal-body{padding:16px}
-  .modal-footer{padding:12px 16px}
+  .modal-footer{padding:12px 16px;flex-wrap:nowrap}
+  .gcal-label{display:none}
+  #gcalBtn{padding:8px 10px}
   /* 16px+ evita que iOS haga zoom automático al tocar un campo de texto */
   .form-input, .search-input, .goal-add-input, .tags-input input{font-size:16px}
 }
@@ -467,6 +479,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
     <div class="streak-card">
       <div class="streak-num" id="streakNum">0</div>
       <div class="streak-label">🔥 días de racha</div>
+      <div class="mini-heatmap" id="miniHeatmap" title="Últimas 4 semanas"></div>
     </div>
   </div>
 </aside>
@@ -487,11 +500,25 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
   </div>
 
   <div class="progress-section" id="progressSection">
-    <div class="progress-meta">
-      <span id="progressLabel">Cargando...</span>
-      <span id="progressPct"></span>
+    <div class="hero-card">
+      <div class="hero-ring-wrap">
+        <svg class="hero-ring" viewBox="0 0 88 88">
+          <defs>
+            <linearGradient id="heroRingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--accent)"/>
+              <stop offset="100%" stop-color="var(--teal)"/>
+            </linearGradient>
+          </defs>
+          <circle class="hero-ring-track" cx="44" cy="44" r="38"/>
+          <circle class="hero-ring-fill" id="heroRingFill" cx="44" cy="44" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"/>
+        </svg>
+        <div class="hero-ring-label" id="progressPct">0%</div>
+      </div>
+      <div class="hero-info">
+        <div class="hero-sub" id="progressLabel">Cargando...</div>
+        <div class="hero-streak">🔥 <span id="heroStreak">0</span> días de racha</div>
+      </div>
     </div>
-    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressBar" style="width:0%"></div></div>
   </div>
 
   <div class="filter-bar">
@@ -582,10 +609,9 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeTaskModal()">Cancelar</button>
-      <button class="btn btn-ghost" id="gcalBtn" onclick="addToGCal()" style="display:none;gap:6px">
+      <button class="btn btn-ghost" id="gcalBtn" onclick="addToGCal()" title="Añadir a Google Calendar" style="display:none;gap:6px">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Añadir a Google Calendar
+        <span class="gcal-label">Añadir a Google Calendar</span>
       </button>
       <button class="btn btn-primary" onclick="saveTask()">Guardar tarea</button>
     </div>
@@ -1123,7 +1149,8 @@ function updateProgress(list){
   const pct = total?Math.round(done/total*100):0;
   document.getElementById('progressLabel').textContent = `${done} de ${total} tareas completadas`;
   document.getElementById('progressPct').textContent = `${pct}%`;
-  document.getElementById('progressBar').style.width = pct+'%';
+  const circumference = 238.76; // 2 * π * r(38)
+  document.getElementById('heroRingFill').style.strokeDashoffset = circumference * (1 - pct/100);
 }
 
 function updateCounts(){
@@ -1146,6 +1173,24 @@ function updateStreak(){
     else break;
   }
   document.getElementById('streakNum').textContent=streak;
+  const heroStreakEl=document.getElementById('heroStreak');
+  if(heroStreakEl) heroStreakEl.textContent=streak;
+  renderMiniHeatmap();
+}
+
+// Mini heatmap de hábitos (últimas 4 semanas) en la tarjeta de racha del sidebar
+function renderMiniHeatmap(){
+  const el=document.getElementById('miniHeatmap');
+  if(!el) return;
+  let html='';
+  for(let i=27;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const ds=localDate(d);
+    const count=tasks.filter(t=>t.completed_at&&localDate(new Date(t.completed_at))===ds).length;
+    const bg=count===0?'var(--bg4)':count<=1?'rgba(124,106,247,0.35)':count<=3?'rgba(124,106,247,0.65)':'var(--accent)';
+    html+=`<div class="mini-heatmap-cell" style="background:${bg}" title="${ds}: ${count} completadas"></div>`;
+  }
+  el.innerHTML=html;
 }
 
 function localDate(d){
