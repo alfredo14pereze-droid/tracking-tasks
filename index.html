@@ -274,9 +274,6 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical-width:0}
 .form-input:focus{border-color:var(--accent)}
 .form-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
-/* Fecha/Hora: se quedan lado a lado (angostas) incluso en mobile — así el
-   formulario completo cabe en una pantalla sin tener que hacer scroll */
-.form-row.form-row-compact{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%239a9ba8' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
 .priority-btns{display:flex;gap:6px}
 .priority-btn{flex:1;padding:7px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;text-align:center}
@@ -587,7 +584,7 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
           <button class="priority-btn" data-p="low" onclick="setPriority('low')">🟢 Baja</button>
         </div>
       </div>
-      <div class="form-row form-row-compact">
+      <div class="form-row">
         <div class="form-group">
           <label class="form-label">Fecha inicio</label>
           <input type="date" class="form-input" id="taskDue">
