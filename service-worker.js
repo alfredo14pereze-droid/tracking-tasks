@@ -1,8 +1,8 @@
-// Service worker de Flowday — solo cachea el "app shell" estático para que
+// Service worker de TaskTracker — solo cachea el "app shell" estático para que
 // la app abra en modo offline básico. Nunca toca las llamadas a Supabase
 // (son cross-origin y/o no-GET, así que se excluyen explícitamente abajo).
 
-const CACHE_NAME = 'flowday-cache-v3';
+const CACHE_NAME = 'tasktracker-cache-v1';
 const PRECACHE_URLS = [
   './',
   './index.html',

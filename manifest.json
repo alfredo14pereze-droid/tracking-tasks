@@ -1,6 +1,6 @@
 {
-  "name": "Flowday",
-  "short_name": "Flowday",
+  "name": "TaskTracker",
+  "short_name": "TaskTracker",
   "description": "Task tracker diario — tareas, objetivos, recordatorios y notas.",
   "start_url": ".",
   "scope": ".",
