@@ -138,10 +138,10 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .task-card.in_progress{border-color:rgba(251,191,36,0.3)}
 .task-card.missed{opacity:0.6;border-color:rgba(248,113,113,0.3)}
 .task-card.missed .task-title{color:var(--text2)}
-.task-card.priority-high{background:linear-gradient(90deg,rgba(248,113,113,0.07),var(--bg2) 40%);border-color:rgba(248,113,113,0.35)}
-.task-card.priority-high:hover{border-color:rgba(248,113,113,0.55)}
-.task-card.priority-high .priority-bar{width:5px}
-.priority-flag{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:var(--red-bg);color:var(--red);border:1px solid rgba(248,113,113,0.35)}
+.task-card.priority-high{background:linear-gradient(90deg,rgba(96,165,250,0.08),var(--bg2) 40%);border-color:rgba(96,165,250,0.35)}
+.task-card.priority-high:hover{border-color:rgba(96,165,250,0.55)}
+.task-card.priority-high .priority-bar{width:5px;background:var(--blue)}
+.priority-flag{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:var(--blue-bg);color:var(--blue);border:1px solid rgba(96,165,250,0.35)}
 .status-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
 .status-badge.in_progress{background:var(--amber-bg);color:var(--amber)}
 .status-badge.missed{background:var(--red-bg);color:var(--red)}
@@ -274,6 +274,9 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical-width:0}
 .form-input:focus{border-color:var(--accent)}
 .form-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+/* Fecha/Hora: se quedan lado a lado (angostas) incluso en mobile — así el
+   formulario completo cabe en una pantalla sin tener que hacer scroll */
+.form-row.form-row-compact{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%239a9ba8' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
 .priority-btns{display:flex;gap:6px}
 .priority-btn{flex:1;padding:7px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;text-align:center}
@@ -584,7 +587,7 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
           <button class="priority-btn" data-p="low" onclick="setPriority('low')">🟢 Baja</button>
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row form-row-compact">
         <div class="form-group">
           <label class="form-label">Fecha inicio</label>
           <input type="date" class="form-input" id="taskDue">
