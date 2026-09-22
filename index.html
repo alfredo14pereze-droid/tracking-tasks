@@ -53,13 +53,17 @@
   --sidebar: 260px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+/* iOS Safari le da a los inputs de fecha/hora un ancho mínimo interno que ignora
+   width:100% dentro de flex/grid — esto evita que empujen o desborden el layout */
+input[type="date"], input[type="time"]{min-width:0;max-width:100%;-webkit-min-logical-width:0}
+html{overflow-x:hidden;width:100%}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;width:100%;overflow-x:hidden}
 h1,h2,h3,h4{font-family:'Syne',sans-serif}
 
 /* Layout */
 .app{display:flex;min-height:100vh}
 .sidebar{width:var(--sidebar);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;transition:transform .3s}
-.main{margin-left:var(--sidebar);flex:1;min-height:100vh;display:flex;flex-direction:column}
+.main{margin-left:var(--sidebar);flex:1;min-width:0;min-height:100vh;display:flex;flex-direction:column}
 
 /* Sidebar */
 .sidebar-logo{padding:24px 20px 16px;display:flex;align-items:center;gap:10px}
@@ -82,10 +86,12 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .streak-label{font-size:11px;color:var(--text3);margin-top:2px}
 
 /* Header */
-.topbar{padding:20px 28px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.topbar{padding:20px 28px 0;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.topbar-left{min-width:0}
+.topbar-left h2{overflow-wrap:break-word}
 .topbar-left h2{font-size:30px;font-weight:800;letter-spacing:-0.8px}
 .topbar-left p{font-size:13px;color:var(--text2);margin-top:4px}
-.topbar-right{display:flex;gap:8px;align-items:center}
+.topbar-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
 .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:var(--radius-sm);border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all .15s}
 .btn-primary{background:var(--accent);color:white}
 .btn-primary:hover{background:var(--accent2)}
@@ -132,6 +138,10 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .task-card.in_progress{border-color:rgba(251,191,36,0.3)}
 .task-card.missed{opacity:0.6;border-color:rgba(248,113,113,0.3)}
 .task-card.missed .task-title{color:var(--text2)}
+.task-card.priority-high{background:linear-gradient(90deg,rgba(248,113,113,0.07),var(--bg2) 40%);border-color:rgba(248,113,113,0.35)}
+.task-card.priority-high:hover{border-color:rgba(248,113,113,0.55)}
+.task-card.priority-high .priority-bar{width:5px}
+.priority-flag{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:var(--red-bg);color:var(--red);border:1px solid rgba(248,113,113,0.35)}
 .status-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
 .status-badge.in_progress{background:var(--amber-bg);color:var(--amber)}
 .status-badge.missed{background:var(--red-bg);color:var(--red)}
@@ -197,9 +207,9 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .goal-add-input::placeholder{color:var(--text3)}
 
 /* Reminders */
-.reminder-add-bar{display:flex;gap:8px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px}
+.reminder-add-bar{display:flex;gap:8px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px;min-width:0}
 .reminder-add-bar input[type="text"]{flex:1;min-width:160px}
-.reminder-add-bar input[type="date"], .reminder-add-bar input[type="time"]{width:auto}
+.reminder-add-bar input[type="date"], .reminder-add-bar input[type="time"]{width:auto;min-width:0;max-width:100%}
 .reminders-list{display:flex;flex-direction:column;gap:8px}
 .reminder-item{display:flex;align-items:flex-start;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:all .15s}
 .reminder-item:hover{border-color:var(--border2)}
@@ -214,22 +224,33 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .reminder-title{font-size:14px;color:var(--text)}
 .reminder-when{font-size:11px;color:var(--amber);display:flex;align-items:center;gap:4px;margin-top:4px}
 .reminder-when.past{color:var(--red)}
-.reminder-delete{background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;flex-shrink:0;display:flex}
+.reminder-edit,.reminder-delete{background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;flex-shrink:0;display:flex}
+.reminder-edit:hover{color:var(--accent2)}
 .reminder-delete:hover{color:var(--red)}
+.reminder-item.editing{background:var(--bg3);border-color:var(--border2);flex-direction:column;align-items:stretch}
+.reminder-edit-form{display:flex;flex-direction:column;gap:10px;width:100%}
+.reminder-edit-form .form-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.reminder-edit-actions{display:flex;justify-content:flex-end;gap:8px}
 
 /* Notes */
 .note-add-bar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px}
-.note-add-bar textarea{width:100%;min-height:70px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;resize:vertical;transition:border-color .15s}
-.note-add-bar textarea:focus{border-color:var(--accent)}
+.note-add-bar input[type="text"]{margin-bottom:8px}
+.note-add-bar textarea, .note-edit-textarea{width:100%;min-height:70px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;resize:vertical;transition:border-color .15s}
+.note-add-bar textarea:focus, .note-edit-textarea:focus{border-color:var(--accent)}
 .note-add-bar .btn{margin-top:8px}
 .notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .note-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:8px;transition:all .15s}
 .note-card:hover{border-color:var(--border2)}
+.note-card.editing{border-color:var(--border2);background:var(--bg3)}
+.note-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text)}
 .note-text{font-size:13px;line-height:1.5;color:var(--text);white-space:pre-wrap;word-break:break-word;flex:1}
 .note-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .note-date{font-size:11px;color:var(--text3)}
-.note-delete{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px;display:flex}
+.note-footer-actions{display:flex;gap:4px}
+.note-edit,.note-delete{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px;display:flex}
+.note-edit:hover{color:var(--accent2)}
 .note-delete:hover{color:var(--red)}
+.note-edit-actions{display:flex;justify-content:flex-end;gap:8px}
 
 /* Empty */
 .empty{text-align:center;padding:60px 20px;color:var(--text3)}
@@ -247,11 +268,12 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .modal-close svg{width:14px;height:14px}
 .modal-body{padding:20px 24px;overflow-y:auto;flex:1;min-height:0}
 .modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;flex-wrap:wrap}
-.form-group{margin-bottom:16px}
+.form-group{margin-bottom:16px;min-width:0}
 .form-label{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px;display:block}
-.form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
+.form-input{width:100%;min-width:0;max-width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
+input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical-width:0}
 .form-input:focus{border-color:var(--accent)}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 .form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%239a9ba8' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
 .priority-btns{display:flex;gap:6px}
 .priority-btn{flex:1;padding:7px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;text-align:center}
@@ -372,13 +394,14 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
   .sidebar-overlay.open{display:block}
   .goals-board{grid-template-columns:1fr}
   .notes-grid{grid-template-columns:1fr}
-  .reminder-add-bar input[type="text"], .reminder-add-bar input[type="date"], .reminder-add-bar input[type="time"], .reminder-add-bar button{width:100%}
+  .reminder-add-bar input[type="text"], .reminder-add-bar input[type="date"], .reminder-add-bar input[type="time"], .reminder-add-bar button{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
   .topbar{padding:16px 16px 0}
   .topbar-left{margin-left:44px} /* deja libre el botón de menú (☰) fijo arriba a la izquierda */
+  .topbar-left h2{font-size:24px}
   .progress-section{padding:12px 16px}
   .filter-bar{padding:0 16px 12px}
   .content{padding:0 16px 40px}
-  .form-row{grid-template-columns:1fr}
+  .form-row{grid-template-columns:minmax(0,1fr)}
   .modal-overlay{padding:16px}
   .modal{max-width:100%;max-height:88vh}
   .modal-header{padding:16px 16px 12px}
@@ -680,6 +703,7 @@ const H = {'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorizatio
 
 // State
 let tasks = [], projects = [], subtasks = [], goals = [], reminders = [], notes = [];
+let editingReminderId = null, editingNoteId = null;
 let currentView = 'today', currentFilter = 'all', searchQ = '';
 let editingTaskId = null, currentTags = [], currentPriority = '', currentRecur = '', currentCustomDays = [];
 let undoStack = [];
@@ -815,7 +839,15 @@ function getFilteredTasks(){
   if(currentView==='all') list = dedupeRecurring(list);
   if(currentFilter!=='all') list = list.filter(t=>t.priority===currentFilter);
   if(searchQ) list = list.filter(t=>t.title.toLowerCase().includes(searchQ)||((t.description||'').toLowerCase().includes(searchQ)));
+  list = sortByPriority(list);
   return list;
+}
+
+// Alta primero, luego media, luego baja — manteniendo el orden original dentro de
+// cada prioridad (sort estable) para no revolver tareas del mismo nivel.
+const PRIORITY_RANK = {high:0, medium:1, low:2};
+function sortByPriority(list){
+  return [...list].sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3));
 }
 
 function renderContent(){
@@ -891,14 +923,16 @@ function taskCardHTML(t){
   const estHTML = t.estimated_minutes?`<span class="task-due"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${t.estimated_minutes}m</span>`:'';
   const statusBadge = t.status==='in_progress' ? `<span class="status-badge in_progress">⏳ En progreso</span>` : t.status==='missed' ? `<span class="status-badge missed">❌ No completada</span>` : '';
   const isClosed = t.status==='done'||t.status==='missed';
-  return `<div class="task-card ${t.status==='done'?'done':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''}" data-id="${t.id}">
+  const isHigh = t.priority==='high' && !isClosed;
+  const highFlag = isHigh ? `<span class="priority-flag">🔥 Alta prioridad</span>` : '';
+  return `<div class="task-card ${t.status==='done'?'done':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''} ${isHigh?'priority-high':''}" data-id="${t.id}">
     <div class="priority-bar ${t.priority}"></div>
     <div class="task-check ${t.status==='done'?'checked':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''}" data-id="${t.id}">
       <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
     <div class="task-body">
       <div class="task-title">${t.title}</div>
-      <div class="task-meta">${projHTML}${statusBadge}${tagsHTML}${dueHTML}${subHTML}${recurHTML}${estHTML}</div>
+      <div class="task-meta">${highFlag}${projHTML}${statusBadge}${tagsHTML}${dueHTML}${subHTML}${recurHTML}${estHTML}</div>
     </div>
     <div class="task-actions">
       <button class="task-action-btn btn-progress" data-id="${t.id}" title="Marcar en progreso" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
@@ -1030,11 +1064,29 @@ function renderRemindersView(el){
     </div>`;
   el.querySelectorAll('.reminder-check').forEach(chk=>{ chk.onclick=()=>toggleReminder(chk.dataset.id); });
   el.querySelectorAll('.reminder-delete').forEach(btn=>{ btn.onclick=()=>deleteReminder(btn.dataset.id); });
+  el.querySelectorAll('.reminder-edit').forEach(btn=>{ btn.onclick=()=>startEditReminder(btn.dataset.id); });
+  el.querySelectorAll('.reminder-save').forEach(btn=>{ btn.onclick=()=>saveEditReminder(btn.dataset.id); });
+  el.querySelectorAll('.reminder-cancel').forEach(btn=>{ btn.onclick=()=>cancelEditReminder(); });
   const titleInp = document.getElementById('reminderTitleInput');
   titleInp.addEventListener('keydown', e=>{ if(e.key==='Enter') addReminder(); });
 }
 
 function reminderItemHTML(r, nowStr, nowTime){
+  if(editingReminderId===r.id){
+    return `<div class="reminder-item editing">
+      <div class="reminder-edit-form">
+        <input type="text" class="form-input" id="editReminderTitle_${r.id}" value="${escapeAttr(r.title)}">
+        <div class="form-row">
+          <input type="date" class="form-input" id="editReminderDate_${r.id}" value="${r.remind_date||''}">
+          <input type="time" class="form-input" id="editReminderTime_${r.id}" value="${r.remind_time?r.remind_time.slice(0,5):''}">
+        </div>
+        <div class="reminder-edit-actions">
+          <button class="btn btn-ghost reminder-cancel">Cancelar</button>
+          <button class="btn btn-primary reminder-save" data-id="${r.id}">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  }
   let whenHTML = '';
   if(r.remind_date){
     const isPast = r.status!=='done' && (r.remind_date < nowStr || (r.remind_date===nowStr && r.remind_time && r.remind_time.slice(0,5) < nowTime));
@@ -1046,9 +1098,12 @@ function reminderItemHTML(r, nowStr, nowTime){
       <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
     <div class="reminder-body">
-      <div class="reminder-title">${r.title}</div>
+      <div class="reminder-title">${escapeHTML(r.title)}</div>
       ${whenHTML}
     </div>
+    <button class="reminder-edit" data-id="${r.id}" title="Editar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    </button>
     <button class="reminder-delete" data-id="${r.id}" title="Eliminar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
     </button>
@@ -1085,10 +1140,28 @@ async function deleteReminder(id){
   catch(e){ showToast('Error al eliminar el recordatorio','error'); }
 }
 
+function startEditReminder(id){ editingReminderId=id; renderRemindersView(document.getElementById('content')); }
+function cancelEditReminder(){ editingReminderId=null; renderRemindersView(document.getElementById('content')); }
+
+async function saveEditReminder(id){
+  const r = reminders.find(x=>x.id===id);
+  if(!r) return;
+  const title = document.getElementById(`editReminderTitle_${id}`).value.trim();
+  if(!title){ showToast('El título es requerido','error'); return; }
+  const remind_date = document.getElementById(`editReminderDate_${id}`).value || null;
+  const remind_time = document.getElementById(`editReminderTime_${id}`).value || null;
+  r.title=title; r.remind_date=remind_date; r.remind_time=remind_time;
+  editingReminderId=null;
+  renderRemindersView(document.getElementById('content'));
+  try{ await dbPatch('reminders', {title, remind_date, remind_time}, `?id=eq.${id}`); }
+  catch(e){ showToast('Error al actualizar el recordatorio','error'); }
+}
+
 // ── NOTAS ────────────────────────────────────────────────────
 function renderNotesView(el){
   el.innerHTML = `
     <div class="note-add-bar">
+      <input type="text" class="form-input" id="noteTitleInput" placeholder="Título (opcional)">
       <textarea id="noteInput" placeholder="Escribe una nota..."></textarea>
       <button class="btn btn-primary" onclick="addNote()">Guardar nota</button>
     </div>
@@ -1096,18 +1169,38 @@ function renderNotesView(el){
       ${notes.length ? notes.map(noteCardHTML).join('') : '<div class="empty"><p>Sin notas todavía — escribe la primera arriba 📝</p></div>'}
     </div>`;
   el.querySelectorAll('.note-delete').forEach(btn=>{ btn.onclick=()=>deleteNote(btn.dataset.id); });
+  el.querySelectorAll('.note-edit').forEach(btn=>{ btn.onclick=()=>startEditNote(btn.dataset.id); });
+  el.querySelectorAll('.note-save').forEach(btn=>{ btn.onclick=()=>saveEditNote(btn.dataset.id); });
+  el.querySelectorAll('.note-cancel').forEach(btn=>{ btn.onclick=()=>cancelEditNote(); });
 }
 
 function noteCardHTML(n){
+  if(editingNoteId===n.id){
+    return `<div class="note-card editing">
+      <input type="text" class="form-input" id="editNoteTitle_${n.id}" placeholder="Título (opcional)" value="${escapeAttr(n.title)}">
+      <textarea class="note-edit-textarea" id="editNoteContent_${n.id}">${escapeHTML(n.content)}</textarea>
+      <div class="note-edit-actions">
+        <button class="btn btn-ghost note-cancel">Cancelar</button>
+        <button class="btn btn-primary note-save" data-id="${n.id}">Guardar</button>
+      </div>
+    </div>`;
+  }
   const d = new Date(n.created_at);
   const dateLabel = d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}) + ' · ' + d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+  const titleHTML = n.title ? `<div class="note-title">${escapeHTML(n.title)}</div>` : '';
   return `<div class="note-card">
+    ${titleHTML}
     <div class="note-text">${escapeHTML(n.content)}</div>
     <div class="note-footer">
       <span class="note-date">${dateLabel}</span>
-      <button class="note-delete" data-id="${n.id}" title="Eliminar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-      </button>
+      <div class="note-footer-actions">
+        <button class="note-edit" data-id="${n.id}" title="Editar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="note-delete" data-id="${n.id}" title="Eliminar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
     </div>
   </div>`;
 }
@@ -1118,16 +1211,40 @@ function escapeHTML(s){
   return div.innerHTML;
 }
 
+// Para insertar texto dentro de un atributo value="..." — escapeHTML no basta,
+// no escapa comillas dobles (no hacen falta en texto normal, sí en un atributo).
+function escapeAttr(s){
+  return escapeHTML(s||'').replace(/"/g,'&quot;');
+}
+
 async function addNote(){
+  const titleInp = document.getElementById('noteTitleInput');
   const inp = document.getElementById('noteInput');
+  const title = titleInp.value.trim() || null;
   const content = inp.value.trim();
   if(!content) return;
   try{
-    const [n] = await dbPost('notes', {content});
+    const [n] = await dbPost('notes', {title, content});
     notes.unshift(n);
     renderNotesView(document.getElementById('content'));
     showToast('📝 Nota guardada','success');
   }catch(e){ showToast('Error al guardar la nota','error'); }
+}
+
+function startEditNote(id){ editingNoteId=id; renderNotesView(document.getElementById('content')); }
+function cancelEditNote(){ editingNoteId=null; renderNotesView(document.getElementById('content')); }
+
+async function saveEditNote(id){
+  const n = notes.find(x=>x.id===id);
+  if(!n) return;
+  const title = document.getElementById(`editNoteTitle_${id}`).value.trim() || null;
+  const content = document.getElementById(`editNoteContent_${id}`).value.trim();
+  if(!content){ showToast('La nota no puede quedar vacía','error'); return; }
+  n.title=title; n.content=content;
+  editingNoteId=null;
+  renderNotesView(document.getElementById('content'));
+  try{ await dbPatch('notes', {title, content}, `?id=eq.${id}`); }
+  catch(e){ showToast('Error al actualizar la nota','error'); }
 }
 
 async function deleteNote(id){
@@ -1658,7 +1775,7 @@ function legacyRecurrenceToDays(recurrence, dueDate){
 function renderMissedView(el){
   const today = localDate();
   const missed = tasks.filter(t=>t.status!=='done' && t.status!=='missed' && t.due_date && t.due_date < today)
-    .sort((a,b)=>a.due_date.localeCompare(b.due_date));
+    .sort((a,b)=>a.due_date.localeCompare(b.due_date) || (PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3));
   if(!missed.length){
     el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" style="margin:0 auto 12px;display:block;opacity:.3"><polyline points="20 6 9 17 4 12"/></svg><p>¡Sin tareas pendientes! Todo al día 🎉</p></div>`;
     return;
