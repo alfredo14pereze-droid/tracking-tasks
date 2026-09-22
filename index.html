@@ -56,6 +56,9 @@
 /* iOS Safari le da a los inputs de fecha/hora un ancho mínimo interno que ignora
    width:100% dentro de flex/grid — esto evita que empujen o desborden el layout */
 input[type="date"], input[type="time"]{min-width:0;max-width:100%;-webkit-min-logical-width:0}
+/* iOS Safari renderiza estos inputs con una altura interna mucho más grande
+   que un input de texto normal, sin importar el padding — se fuerza aquí */
+input[type="date"].form-input, input[type="time"].form-input{height:42px;padding-top:0;padding-bottom:0}
 html{overflow-x:hidden;width:100%}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;width:100%;overflow-x:hidden}
 h1,h2,h3,h4{font-family:'Syne',sans-serif}
