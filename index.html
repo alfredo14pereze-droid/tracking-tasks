@@ -220,6 +220,42 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .goal-add-input:focus{border-color:var(--accent)}
 .goal-add-input::placeholder{color:var(--text3)}
 
+/* Habits */
+.habit-add-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px}
+.habit-add-bar input[type="text"]{flex:1;min-width:180px}
+.habit-add-freq{display:flex;flex-direction:column;gap:4px}
+.habit-add-freq input{width:90px}
+.habits-list{display:flex;flex-direction:column;gap:12px}
+.habit-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;transition:all .15s}
+.habit-card:hover{border-color:var(--border2)}
+.habit-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.habit-title{font-size:15px;font-weight:600;color:var(--text)}
+.habit-target{font-size:12px;color:var(--text3);margin-top:2px}
+.habit-progress-row{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.habit-dots{display:flex;gap:5px;flex-wrap:wrap}
+.habit-dot{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border2);background:transparent;flex-shrink:0}
+.habit-dot.filled{background:var(--accent);border-color:var(--accent)}
+.habit-dot.extra.filled{background:var(--teal);border-color:var(--teal)}
+.habit-count{font-size:13px;color:var(--text2);font-weight:600}
+.habit-adjust{display:flex;gap:4px;margin-left:auto}
+.habit-action-btn{width:26px;height:26px;border-radius:6px;border:none;background:var(--bg4);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.habit-action-btn:hover{background:var(--bg3);color:var(--text)}
+.habit-action-btn.habit-delete:hover{background:var(--red-bg);color:var(--red)}
+.habit-status{font-size:12px;font-weight:600;margin-top:10px}
+.habit-status.done{color:var(--green)}
+.habit-status.partial{color:var(--amber)}
+.habit-status.none{color:var(--text3)}
+.habit-history-toggle{background:none;border:none;color:var(--accent2);font-size:12px;cursor:pointer;padding:0;margin-top:10px;font-family:'DM Sans',sans-serif}
+.habit-history-toggle:hover{text-decoration:underline}
+.habit-history{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.habit-history-row{display:flex;align-items:center;gap:10px;font-size:12px;flex-wrap:wrap}
+.habit-history-week{color:var(--text2);flex:1}
+.habit-history-count{color:var(--text3)}
+.habit-history-status{font-weight:600}
+.habit-history-status.done{color:var(--green)}
+.habit-history-status.partial{color:var(--amber)}
+.habit-history-status.none{color:var(--text3)}
+
 /* Reminders */
 .reminder-add-bar{display:flex;gap:8px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px;min-width:0}
 .reminder-add-bar input[type="text"]{flex:1;min-width:160px}
@@ -499,6 +535,14 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
     </div>
   </nav>
 
+  <div class="sidebar-section" style="margin-top:16px">Hábitos</div>
+  <nav id="habitsNav">
+    <div class="nav-item" data-view="habits">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>
+      Mis hábitos
+    </div>
+  </nav>
+
   <div class="sidebar-section" style="margin-top:16px">Extras</div>
   <nav id="extrasNav">
     <div class="nav-item" data-view="reminders">
@@ -720,8 +764,8 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const H = {'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=representation'};
 
 // State
-let tasks = [], projects = [], subtasks = [], goals = [], reminders = [], notes = [];
-let editingReminderId = null, editingNoteId = null;
+let tasks = [], projects = [], subtasks = [], goals = [], reminders = [], notes = [], habits = [], habitWeeks = [];
+let editingReminderId = null, editingNoteId = null, expandedHabitHistory = {};
 let currentView = 'today', currentFilter = 'all', searchQ = '';
 let editingTaskId = null, currentTags = [], currentPriority = '', currentRecur = '', currentCustomDays = [];
 let undoStack = [];
@@ -748,6 +792,8 @@ async function init(){
     await loadTasks();
     await loadSubtasks();
     await loadGoals();
+    await loadHabits();
+    await loadHabitWeeks();
     await loadReminders();
     await loadNotes();
     renderAll();
@@ -769,6 +815,14 @@ async function loadSubtasks(){ subtasks = await dbGet('subtasks','?order=positio
 async function loadGoals(){
   try{ goals = await dbGet('goals','?order=position.asc,created_at.desc') || []; }
   catch(e){ goals = []; } // tabla "goals" aún no creada en Supabase — no debe tumbar el resto de la app
+}
+async function loadHabits(){
+  try{ habits = await dbGet('habits','?order=created_at.asc') || []; }
+  catch(e){ habits = []; } // tabla "habits" aún no creada en Supabase
+}
+async function loadHabitWeeks(){
+  try{ habitWeeks = await dbGet('habit_weeks','?order=week_key.desc') || []; }
+  catch(e){ habitWeeks = []; } // tabla "habit_weeks" aún no creada en Supabase
 }
 async function loadReminders(){
   try{ reminders = await dbGet('reminders','?order=created_at.desc') || []; }
@@ -877,6 +931,7 @@ function renderContent(){
   if(currentView==='stats')   { filterBar.style.display='none'; renderStatsView(el);    updateProgress([]); return; }
   if(currentView==='missed')  { filterBar.style.display='none'; renderMissedView(el);   updateProgress([]); return; }
   if(currentView==='goals')   { filterBar.style.display='none'; renderGoalsView(el);     updateProgress([]); return; }
+  if(currentView==='habits')  { filterBar.style.display='none'; renderHabitsView(el);    updateProgress([]); return; }
   if(currentView==='reminders'){ filterBar.style.display='none'; renderRemindersView(el); updateProgress([]); return; }
   if(currentView==='notes')  { filterBar.style.display='none'; renderNotesView(el);      updateProgress([]); return; }
   filterBar.style.display='flex';
@@ -1133,6 +1188,148 @@ async function deleteGoal(id){
   renderGoalsView(document.getElementById('content'));
   try{ await dbDelete('goals', `?id=eq.${id}`); }
   catch(e){ showToast('Error al eliminar el objetivo','error'); }
+}
+
+// ── HÁBITOS ──────────────────────────────────────────────────
+function renderHabitsView(el){
+  el.innerHTML = `
+    <div class="habit-add-bar">
+      <input type="text" class="form-input" id="habitTitleInput" placeholder="Nuevo hábito (ej. Ir al gimnasio)...">
+      <div class="habit-add-freq">
+        <label class="form-label" style="margin:0">Veces por semana</label>
+        <input type="number" class="form-input" id="habitTargetInput" min="1" max="14" value="3">
+      </div>
+      <button class="btn btn-primary" onclick="addHabit()">+ Añadir hábito</button>
+    </div>
+    <div class="habits-list">
+      ${habits.length ? habits.map(habitCardHTML).join('') : '<div class="empty"><p>Sin hábitos todavía — agrega el primero arriba 💪</p></div>'}
+    </div>`;
+  bindHabitEvents(el);
+  const titleInp = document.getElementById('habitTitleInput');
+  titleInp.addEventListener('keydown', e=>{ if(e.key==='Enter') addHabit(); });
+}
+
+function bindHabitEvents(el){
+  el.querySelectorAll('.habit-delete').forEach(btn=>{ btn.onclick=()=>deleteHabit(btn.dataset.id); });
+  el.querySelectorAll('.habit-increment').forEach(btn=>{ btn.onclick=()=>adjustHabitWeek(btn.dataset.id, 1); });
+  el.querySelectorAll('.habit-decrement').forEach(btn=>{ btn.onclick=()=>adjustHabitWeek(btn.dataset.id, -1); });
+  el.querySelectorAll('.habit-history-toggle').forEach(btn=>{ btn.onclick=()=>toggleHabitHistory(btn.dataset.id); });
+}
+
+function habitCardHTML(h){
+  const wk = weekKey(new Date());
+  const thisWeek = habitWeeks.find(w=>w.habit_id===h.id && w.week_key===wk);
+  const count = thisWeek ? thisWeek.count : 0;
+  const target = h.target_per_week || 1;
+  const dotsTotal = Math.max(target, count);
+  let dots = '';
+  for(let i=0; i<dotsTotal; i++){
+    dots += `<span class="habit-dot ${i<count?'filled':''} ${i>=target?'extra':''}"></span>`;
+  }
+  const statusKey = count>=target ? 'done' : count>0 ? 'partial' : 'none';
+  const statusLabel = {done:'✅ Meta cumplida esta semana', partial:'🟡 Vas bien, sigue así', none:'⚪ Aún no marcas esta semana'}[statusKey];
+  const isOpen = !!expandedHabitHistory[h.id];
+  return `<div class="habit-card">
+    <div class="habit-card-top">
+      <div>
+        <div class="habit-title">${escapeHTML(h.title)}</div>
+        <div class="habit-target">Meta: ${target}x por semana</div>
+      </div>
+      <button class="habit-action-btn habit-delete" data-id="${h.id}" title="Eliminar hábito">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </button>
+    </div>
+    <div class="habit-progress-row">
+      <div class="habit-dots">${dots}</div>
+      <span class="habit-count">${count}/${target}</span>
+      <div class="habit-adjust">
+        <button class="habit-action-btn habit-decrement" data-id="${h.id}" title="Quitar uno"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <button class="habit-action-btn habit-increment" data-id="${h.id}" title="¡Lo hice!"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      </div>
+    </div>
+    <div class="habit-status ${statusKey}">${statusLabel}</div>
+    <button class="habit-history-toggle" data-id="${h.id}">${isOpen?'▲ Ocultar historial':'▼ Ver historial de semanas anteriores'}</button>
+    ${isOpen ? renderHabitHistory(h) : ''}
+  </div>`;
+}
+
+function renderHabitHistory(h){
+  const currentWeek = weekKey(new Date());
+  const weeks = habitWeeks.filter(w=>w.habit_id===h.id && w.week_key!==currentWeek)
+    .sort((a,b)=>b.week_key.localeCompare(a.week_key));
+  if(!weeks.length) return '<div class="habit-history"><div class="goal-empty">Todavía no hay semanas anteriores</div></div>';
+  const rows = weeks.map(w=>{
+    const status = w.count>=h.target_per_week ? 'done' : w.count>0 ? 'partial' : 'none';
+    const label = {done:'✅ Cumplido', partial:'🟡 Parcial', none:'❌ No cumplido'}[status];
+    return `<div class="habit-history-row">
+      <span class="habit-history-week">${formatWeekRange(w.week_key)}</span>
+      <span class="habit-history-count">${w.count}/${h.target_per_week}</span>
+      <span class="habit-history-status ${status}">${label}</span>
+    </div>`;
+  }).join('');
+  return `<div class="habit-history">${rows}</div>`;
+}
+
+function formatWeekRange(mondayStr){
+  const monday = new Date(mondayStr+'T12:00:00');
+  const sunday = new Date(monday); sunday.setDate(sunday.getDate()+6);
+  const fmt = d=>d.toLocaleDateString('es-MX',{day:'numeric',month:'short'});
+  return `${fmt(monday)} – ${fmt(sunday)}`;
+}
+
+function toggleHabitHistory(id){
+  expandedHabitHistory[id] = !expandedHabitHistory[id];
+  renderHabitsView(document.getElementById('content'));
+}
+
+async function addHabit(){
+  const titleInp = document.getElementById('habitTitleInput');
+  const targetInp = document.getElementById('habitTargetInput');
+  const title = titleInp.value.trim();
+  const target_per_week = Math.max(1, parseInt(targetInp.value) || 1);
+  if(!title) return;
+  try{
+    const [h] = await dbPost('habits', {title, target_per_week});
+    habits.push(h);
+    renderHabitsView(document.getElementById('content'));
+    showToast('💪 Hábito añadido','success');
+  }catch(e){ showToast('Error al guardar el hábito','error'); }
+}
+
+async function deleteHabit(id){
+  habits = habits.filter(h=>h.id!==id);
+  habitWeeks = habitWeeks.filter(w=>w.habit_id!==id);
+  renderHabitsView(document.getElementById('content'));
+  try{ await dbDelete('habits', `?id=eq.${id}`); }
+  catch(e){ showToast('Error al eliminar el hábito','error'); }
+}
+
+// Suma/resta una marca del hábito para la semana actual (lunes de hoy). Si no
+// existe fila para esta semana todavía, se crea; si ya existe, se actualiza.
+async function adjustHabitWeek(habitId, delta){
+  const wk = weekKey(new Date());
+  const row = habitWeeks.find(w=>w.habit_id===habitId && w.week_key===wk);
+  const newCount = Math.max(0, (row?row.count:0) + delta);
+  if(row){
+    row.count = newCount;
+    renderHabitsView(document.getElementById('content'));
+    try{ await dbPatch('habit_weeks', {count:newCount}, `?id=eq.${row.id}`); }
+    catch(e){ showToast('Error al actualizar el hábito','error'); }
+  } else {
+    if(newCount===0) return;
+    const tempId = 'temp-'+Math.random().toString(36).slice(2);
+    habitWeeks.push({id:tempId, habit_id:habitId, week_key:wk, count:newCount});
+    renderHabitsView(document.getElementById('content'));
+    try{
+      const [created] = await dbPost('habit_weeks', {habit_id:habitId, week_key:wk, count:newCount});
+      const idx = habitWeeks.findIndex(w=>w.id===tempId);
+      if(idx!==-1) habitWeeks[idx] = created;
+    }catch(e){
+      habitWeeks = habitWeeks.filter(w=>w.id!==tempId);
+      renderHabitsView(document.getElementById('content'));
+      showToast('Error al guardar el hábito','error');
+    }
+  }
 }
 
 // ── RECORDATORIOS ────────────────────────────────────────────
@@ -1735,7 +1932,7 @@ document.getElementById('gcalModal').addEventListener('click',e=>{ if(e.target==
 function setView(view, label){
   currentView=view;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
-  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',reminders:'Recordatorios',notes:'Notas'}[view]||view);
+  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',habits:'Hábitos',reminders:'Recordatorios',notes:'Notas'}[view]||view);
   renderContent();
   if(window.innerWidth<768) closeSidebar();
 }
@@ -1744,6 +1941,10 @@ document.getElementById('mainNav').addEventListener('click',e=>{
   if(item) setView(item.dataset.view);
 });
 document.getElementById('goalsNav').addEventListener('click',e=>{
+  const item=e.target.closest('.nav-item');
+  if(item) setView(item.dataset.view);
+});
+document.getElementById('habitsNav').addEventListener('click',e=>{
   const item=e.target.closest('.nav-item');
   if(item) setView(item.dataset.view);
 });
