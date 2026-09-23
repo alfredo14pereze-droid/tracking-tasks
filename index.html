@@ -48,6 +48,8 @@
   --red-bg: rgba(248,113,113,0.1);
   --blue: #60a5fa;
   --blue-bg: rgba(96,165,250,0.1);
+  --purple: #a855f7;
+  --purple-bg: rgba(168,85,247,0.12);
   --radius: 12px;
   --radius-sm: 8px;
   --sidebar: 260px;
@@ -141,10 +143,9 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .task-card.in_progress{border-color:rgba(251,191,36,0.3)}
 .task-card.missed{opacity:0.6;border-color:rgba(248,113,113,0.3)}
 .task-card.missed .task-title{color:var(--text2)}
-.task-card.priority-high{background:linear-gradient(90deg,rgba(96,165,250,0.08),var(--bg2) 40%);border-color:rgba(96,165,250,0.35)}
-.task-card.priority-high:hover{border-color:rgba(96,165,250,0.55)}
-.task-card.priority-high .priority-bar{width:5px;background:var(--blue)}
-.priority-flag{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:var(--blue-bg);color:var(--blue);border:1px solid rgba(96,165,250,0.35)}
+.priority-flag{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid transparent;cursor:default}
+.priority-flag.high{background:var(--blue-bg);color:var(--blue);border-color:rgba(96,165,250,0.35)}
+.priority-flag.critical{background:var(--purple-bg);color:var(--purple);border-color:rgba(168,85,247,0.4)}
 .status-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
 .status-badge.in_progress{background:var(--amber-bg);color:var(--amber)}
 .status-badge.missed{background:var(--red-bg);color:var(--red)}
@@ -156,6 +157,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .priority-bar.high{background:var(--red)}
 .priority-bar.medium{background:var(--amber)}
 .priority-bar.low{background:var(--green)}
+.priority-bar.critical{background:var(--purple)}
 
 .task-check{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer}
 .task-check:hover{border-color:var(--accent)}
@@ -283,6 +285,7 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 .priority-btn.active-high{background:var(--red-bg);border-color:var(--red);color:var(--red)}
 .priority-btn.active-medium{background:var(--amber-bg);border-color:var(--amber);color:var(--amber)}
 .priority-btn.active-low{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+.priority-btn.active-critical{background:var(--purple-bg);border-color:var(--purple);color:var(--purple)}
 .tags-input{display:flex;flex-wrap:wrap;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px}
 .tags-input input{background:transparent;border:none;outline:none;font-size:13px;color:var(--text);font-family:'DM Sans',sans-serif;flex:1;min-width:80px}
 .tag-chip{background:var(--bg4);color:var(--text2);padding:2px 8px;border-radius:20px;font-size:12px;display:flex;align-items:center;gap:4px}
@@ -335,6 +338,7 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 .cal-task-pill.high{background:var(--red-bg);color:var(--red)}
 .cal-task-pill.medium{background:var(--amber-bg);color:var(--amber)}
 .cal-task-pill.low{background:var(--green-bg);color:var(--green)}
+.cal-task-pill.critical{background:var(--purple-bg);color:var(--purple)}
 .cal-task-pill.done{background:var(--bg4);color:var(--text3);text-decoration:line-through}
 .cal-task-pill.missed{background:var(--red-bg);color:var(--red);text-decoration:line-through}
 .cal-more{font-size:10px;color:var(--text3);margin-top:2px}
@@ -549,6 +553,7 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 
   <div class="filter-bar">
     <button class="filter-chip active" data-filter="all">Todas</button>
+    <button class="filter-chip" data-filter="critical">🟣 Crítica</button>
     <button class="filter-chip" data-filter="high">🔴 Alta</button>
     <button class="filter-chip" data-filter="medium">🟡 Media</button>
     <button class="filter-chip" data-filter="low">🟢 Baja</button>
@@ -582,6 +587,7 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
       <div class="form-group">
         <label class="form-label">Prioridad *</label>
         <div class="priority-btns">
+          <button class="priority-btn" data-p="critical" onclick="setPriority('critical')">🟣 Crítica</button>
           <button class="priority-btn" data-p="high" onclick="setPriority('high')">🔴 Alta</button>
           <button class="priority-btn" data-p="medium" onclick="setPriority('medium')">🟡 Media</button>
           <button class="priority-btn" data-p="low" onclick="setPriority('low')">🟢 Baja</button>
@@ -846,9 +852,9 @@ function getFilteredTasks(){
   return list;
 }
 
-// Alta primero, luego media, luego baja — manteniendo el orden original dentro de
-// cada prioridad (sort estable) para no revolver tareas del mismo nivel.
-const PRIORITY_RANK = {high:0, medium:1, low:2};
+// Crítica primero, luego alta, media y baja — manteniendo el orden original
+// dentro de cada prioridad (sort estable) para no revolver tareas del mismo nivel.
+const PRIORITY_RANK = {critical:0, high:1, medium:2, low:3};
 function sortByPriority(list){
   return [...list].sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3));
 }
@@ -926,16 +932,17 @@ function taskCardHTML(t){
   const estHTML = t.estimated_minutes?`<span class="task-due"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${t.estimated_minutes}m</span>`:'';
   const statusBadge = t.status==='in_progress' ? `<span class="status-badge in_progress">⏳ En progreso</span>` : t.status==='missed' ? `<span class="status-badge missed">❌ No completada</span>` : '';
   const isClosed = t.status==='done'||t.status==='missed';
-  const isHigh = t.priority==='high' && !isClosed;
-  const highFlag = isHigh ? `<span class="priority-flag">🔥 Alta prioridad</span>` : '';
-  return `<div class="task-card ${t.status==='done'?'done':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''} ${isHigh?'priority-high':''}" data-id="${t.id}">
+  const priorityFlag = isClosed ? '' :
+    t.priority==='critical' ? `<span class="priority-flag critical">🟣 Crítica</span>` :
+    t.priority==='high' ? `<span class="priority-flag high">🔥 Alta prioridad</span>` : '';
+  return `<div class="task-card ${t.status==='done'?'done':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''}" data-id="${t.id}">
     <div class="priority-bar ${t.priority}"></div>
     <div class="task-check ${t.status==='done'?'checked':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''}" data-id="${t.id}">
       <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
     <div class="task-body">
       <div class="task-title">${t.title}</div>
-      <div class="task-meta">${highFlag}${projHTML}${statusBadge}${tagsHTML}${dueHTML}${subHTML}${recurHTML}${estHTML}</div>
+      <div class="task-meta">${priorityFlag}${projHTML}${statusBadge}${tagsHTML}${dueHTML}${subHTML}${recurHTML}${estHTML}</div>
     </div>
     <div class="task-actions">
       <button class="task-action-btn btn-progress" data-id="${t.id}" title="Marcar en progreso" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
@@ -1845,9 +1852,7 @@ function renderWeekCal(el, today, tabsHTML){
   days.forEach((d,i)=>{
     const ds=localDate(d);
     const isToday=ds===today;
-    const dayTasks=tasks.filter(t=>t.due_date===ds).sort((a,b)=>{
-      const o={high:0,medium:1,low:2}; return o[a.priority]-o[b.priority];
-    });
+    const dayTasks=tasks.filter(t=>t.due_date===ds).sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3));
     const pillsHTML=dayTasks.slice(0,4).map(t=>`<div class="cal-task-pill ${t.status==='done'?'done':t.status==='missed'?'missed':t.priority}" onclick="openTaskModal('${t.id}')" title="${t.title}">${t.title}</div>`).join('');
     const more=dayTasks.length>4?`<div class="cal-more">+${dayTasks.length-4} más</div>`:'';
     const emptyDay=dayTasks.length===0?`<div class="cal-empty-day" style="color:var(--text3);font-size:11px">Sin tareas</div>`:'';
@@ -1935,7 +1940,7 @@ function renderStatsView(el){
   }).join('');
 
   // By priority
-  const prios=[{id:'high',name:'🔴 Alta',color:'var(--red)'},{id:'medium',name:'🟡 Media',color:'var(--amber)'},{id:'low',name:'🟢 Baja',color:'var(--green)'}];
+  const prios=[{id:'critical',name:'🟣 Crítica',color:'var(--purple)'},{id:'high',name:'🔴 Alta',color:'var(--red)'},{id:'medium',name:'🟡 Media',color:'var(--amber)'},{id:'low',name:'🟢 Baja',color:'var(--green)'}];
   const prioBars=prios.map(p=>{
     const pTasks=tasks.filter(t=>t.priority===p.id);
     const pDone=pTasks.filter(t=>t.status==='done').length;
