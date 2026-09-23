@@ -908,7 +908,11 @@ function getFilteredTasks(){
   } else {
     list = list.filter(t=>t.status!=='done');
   }
-  if(currentView==='all') list = dedupeRecurring(list);
+  // "Todas", "Próximas" y las categorías son vistas de exploración: una tarea
+  // recurrente se ve UNA vez ahí, no una por cada día que ya se generó. "Hoy",
+  // "Mañana" y "Sin completar" sí necesitan cada ocurrencia por separado
+  // (son días concretos que hay que resolver uno por uno).
+  if(currentView==='all' || currentView==='upcoming' || currentView.startsWith('project_')) list = dedupeRecurring(list);
   if(currentFilter!=='all') list = list.filter(t=>t.priority===currentFilter);
   if(searchQ) list = list.filter(t=>t.title.toLowerCase().includes(searchQ)||((t.description||'').toLowerCase().includes(searchQ)));
   list = sortByPriority(list);
