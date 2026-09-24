@@ -153,6 +153,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .task-check.in_progress svg{opacity:0}
 .task-check.missed{border-color:var(--red)}
 .task-action-btn.btn-tomorrow:hover{background:var(--blue-bg);color:var(--blue)}
+.task-action-btn.btn-duplicate:hover{background:var(--teal-bg);color:var(--teal)}
 .task-card .priority-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:12px 0 0 12px}
 .priority-bar.high{background:var(--red)}
 .priority-bar.medium{background:var(--amber)}
@@ -979,6 +980,7 @@ function renderContent(){
   el.querySelectorAll('.btn-progress').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();markInProgress(el.dataset.id);}; });
   el.querySelectorAll('.btn-missed').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();markMissed(el.dataset.id);}; });
   el.querySelectorAll('.btn-tomorrow').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();moveToTomorrow(el.dataset.id);}; });
+  el.querySelectorAll('.btn-duplicate').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();duplicateToTomorrow(el.dataset.id);}; });
 }
 
 function taskCardHTML(t){
@@ -1016,6 +1018,7 @@ function taskCardHTML(t){
       <button class="task-action-btn btn-progress" data-id="${t.id}" title="Marcar en progreso" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
       <button class="task-action-btn btn-missed" data-id="${t.id}" title="No la completé (no se repite)" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></button>
       <button class="task-action-btn btn-tomorrow" data-id="${t.id}" title="Pasar a mañana" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+      <button class="task-action-btn btn-duplicate" data-id="${t.id}" title="Duplicar para mañana"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
       <button class="task-action-btn btn-edit" data-id="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
       <button class="task-action-btn danger btn-delete" data-id="${t.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
     </div>
@@ -1675,6 +1678,29 @@ async function moveToTomorrow(id){
   showToast('➡️ Movida a mañana','success');
 }
 
+// A diferencia de "Pasar a mañana" (que MUEVE la tarea), esto deja la tarea de hoy
+// como está (puede quedar completada) y crea una copia nueva para mañana — para
+// tareas que sí se terminaron hoy pero que en realidad toman más de un día.
+// La copia es de una sola vez (no recurrente) y empieza como pendiente.
+async function duplicateToTomorrow(id){
+  const t=tasks.find(t=>t.id===id);
+  if(!t) return;
+  const tomorrow = localDateOffset(1);
+  const exists = tasks.find(x=>x.id!==t.id && x.title===t.title && x.due_date===tomorrow);
+  if(exists){ showToast(`Ya existe "${t.title}" para mañana`,'error'); return; }
+  const {id:_id, created_at, completed_at, ...rest} = t;
+  const body = {...rest, status:'todo', due_date:tomorrow, completed_at:null, is_recurring:false, recurrence:null, end_date:null, position:tasks.length};
+  try{
+    const [created] = await dbPost('tasks', body);
+    tasks.push(created);
+    renderAll();
+    showToast('📋 Duplicada para mañana','success');
+  }catch(e){
+    showToast('Error al duplicar la tarea','error');
+    console.error('duplicateToTomorrow:', e);
+  }
+}
+
 async function spawnNextRecurring(t){
   // Find the next occurrence date based on recurrence type
   const today = localDate();
@@ -2101,6 +2127,7 @@ function renderMissedView(el){
   el.querySelectorAll('.btn-progress').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();markInProgress(b.dataset.id);}; });
   el.querySelectorAll('.btn-missed').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();markMissed(b.dataset.id);}; });
   el.querySelectorAll('.btn-tomorrow').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();moveToTomorrow(b.dataset.id);}; });
+  el.querySelectorAll('.btn-duplicate').forEach(b=>{ b.onclick=(e)=>{e.stopPropagation();duplicateToTomorrow(b.dataset.id);}; });
 }
 
 // ── CALENDAR VIEW ─────────────────────────────────────────────
