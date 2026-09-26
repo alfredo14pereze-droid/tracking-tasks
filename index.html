@@ -406,6 +406,16 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 .cal-sel-item span{flex:1;min-width:0}
 .cal-sel-item em{font-style:normal;font-size:12px;color:var(--text3)}
 .cal-sel-done{text-decoration:line-through;color:var(--text3)}
+.cal-tabs{display:flex;gap:4px;background:var(--bg3);border-radius:var(--radius-sm);padding:3px;margin-bottom:14px;width:fit-content}
+.cal-tab{padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text3);background:none;border:none;font-family:'DM Sans',sans-serif}
+.cal-tab.active{background:var(--accent);color:#fff}
+.cal-week{display:flex;flex-direction:column;gap:8px}
+.cal-wrow{display:grid;grid-template-columns:64px minmax(0,1fr);background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.cal-wrow.saturated{border:2px solid var(--amber)}
+.cal-wlabel{background:var(--bg3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:10px 4px;font-size:10px;font-weight:700;color:var(--text3)}
+.cal-wtasks{padding:8px 10px;min-width:0}
+.cal-wpill{white-space:normal;font-size:13px;padding:6px 8px;margin-bottom:4px;cursor:pointer}
+.cal-wpill em{font-style:normal;opacity:.7;font-size:11px}
 .cal-empty-day{font-size:12px;color:var(--text3);padding:4px 0}
 
 /* ── Stats view ── */
@@ -446,6 +456,7 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
   .insight-cards{grid-template-columns:1fr}
   .cal-cell{min-height:54px;padding:4px 2px}
   .cal-pills,.cal-more{display:none}
+  .cal-wlabel{padding:8px 2px}
   .cal-dots{display:flex}
   .cal-dot{margin-right:0}
   .cal-num-row{justify-content:center;gap:2px}
@@ -2151,7 +2162,12 @@ function renderMissedView(el){
 }
 
 // ── CALENDAR VIEW ─────────────────────────────────────────────
-let calOffset=0, calShowDone=true, calSelected=null;
+let calOffset=0, calShowDone=true, calSelected=null, calMode='month';
+function setCalMode(m){ calMode=m; calOffset=0; renderContent(); }
+function calTabsHTML(){
+  return `<div class="cal-tabs"><button class="cal-tab ${calMode==='month'?'active':''}" onclick="setCalMode('month')">Mes</button><button class="cal-tab ${calMode==='week'?'active':''}" onclick="setCalMode('week')">Semana</button></div>`;
+}
+
 
 function calPillClass(t){
   return t.status==='done'?'done':t.status==='missed'?'missed':(t.priority||'low');
@@ -2176,8 +2192,10 @@ function renderCalendarView(el){
   visible.forEach(t=>{ (byDate[t.due_date] ||= []).push(t); });
   Object.values(byDate).forEach(l=>l.sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3)));
 
+  if(calMode==='week'){ renderWeekCalendar(el, today, byDate); return; }
+
   const DOW=['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
-  let html=`<div class="cal-toolbar">
+  let html=calTabsHTML()+`<div class="cal-toolbar">
     <div class="cal-nav">
       <button class="cal-nav-btn" onclick="calOffset--;renderContent()">← <span class="cal-nav-txt">Mes anterior</span></button>
       <h3>${monthLabel}</h3>
@@ -2218,6 +2236,32 @@ function renderCalendarView(el){
       ${list.length?list.map(t=>`<div class="cal-sel-item" onclick="openTaskModal('${t.id}')"><i class="cal-dot ${calPillClass(t)}"></i><span class="${t.status==='done'?'cal-sel-done':''}">${escapeHTML(t.title)}</span>${t.due_time?`<em>${t.due_time.slice(0,5)}</em>`:''}</div>`).join(''):'<div class="cal-empty-day">Sin tareas este día</div>'}
     </div>`;
   }
+  el.innerHTML=html;
+}
+
+function renderWeekCalendar(el, today, byDate){
+  const start=new Date(); start.setHours(12,0,0,0);
+  start.setDate(start.getDate()-start.getDay()+calOffset*7); // domingo
+  const days=[...Array(7)].map((_,i)=>{ const d=new Date(start); d.setDate(start.getDate()+i); return d; });
+  const fmt=d=>d.toLocaleDateString('es-MX',{day:'numeric',month:'short'});
+  const DOW=['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
+  let html=calTabsHTML()+`<div class="cal-toolbar">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="calOffset--;renderContent()">← <span class="cal-nav-txt">Semana anterior</span></button>
+      <h3>${fmt(days[0])} – ${fmt(days[6])}</h3>
+      <button class="cal-nav-btn" onclick="calOffset++;renderContent()"><span class="cal-nav-txt">Semana siguiente</span> →</button>
+    </div>
+    <label class="cal-check"><input type="checkbox" ${calShowDone?'checked':''} onchange="calShowDone=this.checked;renderContent()"> Incluir completadas</label>
+  </div><div class="cal-week">`;
+  days.forEach((d,i)=>{
+    const ds=localDate(d), list=byDate[ds]||[];
+    const saturated=list.filter(t=>t.status!=='done'&&t.status!=='missed').length>=5;
+    html+=`<div class="cal-wrow ${saturated?'saturated':''}">
+      <div class="cal-wlabel"><span>${DOW[i]}</span><b class="cal-num ${ds===today?'today':''}">${d.getDate()}</b>${saturated?'<span class="cal-warn">⚠</span>':''}</div>
+      <div class="cal-wtasks">${list.length?list.map(t=>`<div class="cal-pill cal-wpill ${calPillClass(t)}" onclick="openTaskModal('${t.id}')">${t.due_time?`<em>${t.due_time.slice(0,5)}</em> `:''}${escapeHTML(t.title)}</div>`).join(''):'<div class="cal-empty-day">Sin tareas</div>'}</div>
+    </div>`;
+  });
+  html+='</div>';
   el.innerHTML=html;
 }
 
