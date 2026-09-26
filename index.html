@@ -232,13 +232,15 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .habit-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .habit-title{font-size:15px;font-weight:600;color:var(--text)}
 .habit-target{font-size:12px;color:var(--text3);margin-top:2px}
-.habit-progress-row{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
-.habit-dots{display:flex;gap:5px;flex-wrap:wrap}
-.habit-dot{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border2);background:transparent;flex-shrink:0}
-.habit-dot.filled{background:var(--accent);border-color:var(--accent)}
-.habit-dot.extra.filled{background:var(--teal);border-color:var(--teal)}
-.habit-count{font-size:13px;color:var(--text2);font-weight:600}
-.habit-adjust{display:flex;gap:4px;margin-left:auto}
+\.habit-days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:14px}
+.habit-day-col{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
+.habit-day-label{font-size:11px;font-weight:600;color:var(--text3)}
+.habit-day-col.today .habit-day-label{color:var(--accent2)}
+.habit-day-btn{width:100%;max-width:40px;height:34px;border-radius:8px;border:1.5px solid var(--border2);background:transparent;cursor:pointer;transition:all .15s;padding:0}
+.habit-day-btn:hover:not(:disabled){border-color:var(--accent)}
+.habit-day-btn.on{background:var(--accent);border-color:var(--accent)}
+.habit-day-btn:disabled{opacity:.3;cursor:default}
+.habit-day-col.today .habit-day-btn:not(.on){border-color:var(--accent2)}
 .habit-action-btn{width:26px;height:26px;border-radius:6px;border:none;background:var(--bg4);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .habit-action-btn:hover{background:var(--bg3);color:var(--text)}
 .habit-action-btn.habit-delete:hover{background:var(--red-bg);color:var(--red)}
@@ -366,34 +368,44 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
 
 /* ── Calendar view ── */
-.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.cal-nav h3{font-size:15px;font-weight:600}
-.cal-nav-btn{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;color:var(--text2);cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif}
+.cal-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.cal-nav{display:flex;align-items:center;gap:14px;min-width:0}
+.cal-nav h3{font-size:16px;font-weight:600;text-transform:capitalize;white-space:nowrap}
+.cal-nav-btn{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;color:var(--text2);cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;white-space:nowrap}
 .cal-nav-btn:hover{color:var(--text);border-color:var(--border2)}
-.cal-tabs{display:flex;gap:4px;background:var(--bg3);border-radius:var(--radius-sm);padding:3px;margin-bottom:20px;width:fit-content}
-.cal-tab{padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text3);transition:all .15s}
-.cal-tab.active{background:var(--bg4);color:var(--text)}
-.cal-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
-.cal-day{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px;min-height:100px}
-.cal-day.today{border-color:var(--accent);background:var(--accent-bg)}
-.cal-day.other-month{opacity:0.4}
-.cal-day-header{font-size:11px;color:var(--text3);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
-.cal-day-num{font-size:14px;font-weight:600;color:var(--text)}
-.cal-day.today .cal-day-num{color:var(--accent2)}
-.cal-task-pill{font-size:10px;padding:2px 6px;border-radius:4px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
-.cal-task-pill.high{background:var(--red-bg);color:var(--red)}
-.cal-task-pill.medium{background:var(--amber-bg);color:var(--amber)}
-.cal-task-pill.low{background:var(--green-bg);color:var(--green)}
-.cal-task-pill.critical{background:var(--purple-bg);color:var(--purple)}
-.cal-task-pill.done{background:var(--bg4);color:var(--text3);text-decoration:line-through}
-.cal-task-pill.missed{background:var(--red-bg);color:var(--red);text-decoration:line-through}
-.cal-more{font-size:10px;color:var(--text3);margin-top:2px}
-.cal-week-row{display:grid;grid-template-columns:60px 1fr;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px}
-.cal-week-label{background:var(--bg3);padding:12px 8px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px}
-.cal-week-label .wday{font-size:10px;color:var(--text3);text-transform:uppercase}
-.cal-week-label .wnum{font-size:16px;font-weight:600}
-.cal-week-label.today-col .wnum{color:var(--accent2)}
-.cal-week-tasks{padding:10px 12px;display:flex;flex-wrap:wrap;gap:5px;align-items:flex-start;background:var(--bg2)}
+.cal-check{font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;cursor:pointer}
+.cal-check input{accent-color:var(--accent);width:16px;height:16px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.cal-dow div{background:var(--bg4);color:var(--text2);font-size:11px;font-weight:700;letter-spacing:.5px;text-align:center;padding:8px 0;border:1px solid var(--border)}
+.cal-cell{background:var(--bg2);border:1px solid var(--border);min-height:104px;padding:6px;cursor:pointer;min-width:0;overflow:hidden}
+.cal-cell:hover{background:var(--bg3)}
+.cal-cell.other{opacity:.4}
+.cal-cell.selected{outline:2px solid var(--accent);outline-offset:-2px}
+.cal-cell.saturated{border:2px solid var(--amber)}
+.cal-num-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.cal-num{font-size:12px;font-weight:600;color:var(--text2);min-width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%}
+.cal-num.today{background:var(--accent);color:#fff}
+.cal-warn{font-size:11px;color:var(--amber);font-style:normal}
+.cal-pill{font-size:10.5px;padding:2px 6px;border-radius:4px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-pill.high{background:var(--blue-bg);color:var(--blue)}
+.cal-pill.medium{background:var(--amber-bg);color:var(--amber)}
+.cal-pill.low{background:var(--green-bg);color:var(--green)}
+.cal-pill.critical{background:var(--purple-bg);color:var(--purple)}
+.cal-pill.done{background:var(--bg4);color:var(--text3);text-decoration:line-through}
+.cal-pill.missed{background:var(--red-bg);color:var(--red);text-decoration:line-through}
+.cal-more{font-size:10px;color:var(--text3)}
+.cal-dots{display:none;gap:3px;flex-wrap:wrap;justify-content:center}
+.cal-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:5px;vertical-align:middle}
+.cal-dot.high{background:var(--blue)}.cal-dot.medium{background:var(--amber)}.cal-dot.low{background:var(--green)}
+.cal-dot.critical{background:var(--purple)}.cal-dot.done{background:var(--text3)}.cal-dot.missed{background:var(--red)}
+.cal-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:14px;font-size:12px;color:var(--text2)}
+.cal-legend .cal-warn{margin-right:4px}
+.cal-selected{margin-top:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.cal-selected h4{font-size:14px;margin-bottom:8px}
+.cal-sel-item{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--border);font-size:14px;cursor:pointer}
+.cal-sel-item span{flex:1;min-width:0}
+.cal-sel-item em{font-style:normal;font-size:12px;color:var(--text3)}
+.cal-sel-done{text-decoration:line-through;color:var(--text3)}
 .cal-empty-day{font-size:12px;color:var(--text3);padding:4px 0}
 
 /* ── Stats view ── */
@@ -432,8 +444,15 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
   .stats-grid{grid-template-columns:1fr 1fr}
   .stats-row2{grid-template-columns:1fr}
   .insight-cards{grid-template-columns:1fr}
-  .cal-week-grid{grid-template-columns:repeat(7,1fr);gap:4px}
-  .cal-day{padding:6px;min-height:70px}
+  .cal-cell{min-height:54px;padding:4px 2px}
+  .cal-pills,.cal-more{display:none}
+  .cal-dots{display:flex}
+  .cal-dot{margin-right:0}
+  .cal-num-row{justify-content:center;gap:2px}
+  .cal-nav{width:100%;justify-content:space-between}
+  .cal-nav-txt{display:none}
+  .cal-nav h3{font-size:15px}
+  .cal-dow div{font-size:10px;padding:6px 0}
 }
 
 /* Mobile */
@@ -1218,21 +1237,25 @@ function renderHabitsView(el){
 
 function bindHabitEvents(el){
   el.querySelectorAll('.habit-delete').forEach(btn=>{ btn.onclick=()=>deleteHabit(btn.dataset.id); });
-  el.querySelectorAll('.habit-increment').forEach(btn=>{ btn.onclick=()=>adjustHabitWeek(btn.dataset.id, 1); });
-  el.querySelectorAll('.habit-decrement').forEach(btn=>{ btn.onclick=()=>adjustHabitWeek(btn.dataset.id, -1); });
+  el.querySelectorAll('.habit-day-btn').forEach(btn=>{ btn.onclick=()=>toggleHabitDay(btn.dataset.id, parseInt(btn.dataset.day)); });
   el.querySelectorAll('.habit-history-toggle').forEach(btn=>{ btn.onclick=()=>toggleHabitHistory(btn.dataset.id); });
 }
+
+const HABIT_DAY_LABELS=['M','T','W','Th','F','S','S'];
+
+function habitCount(w){ return !w ? 0 : Array.isArray(w.days) ? w.days.length : (w.count||0); }
 
 function habitCardHTML(h){
   const wk = weekKey(new Date());
   const thisWeek = habitWeeks.find(w=>w.habit_id===h.id && w.week_key===wk);
-  const count = thisWeek ? thisWeek.count : 0;
+  const count = habitCount(thisWeek);
+  const days = (thisWeek && Array.isArray(thisWeek.days)) ? thisWeek.days : [];
   const target = h.target_per_week || 1;
-  const dotsTotal = Math.max(target, count);
-  let dots = '';
-  for(let i=0; i<dotsTotal; i++){
-    dots += `<span class="habit-dot ${i<count?'filled':''} ${i>=target?'extra':''}"></span>`;
-  }
+  const todayIdx = (new Date().getDay()+6)%7; // 0 = lunes
+  const dayBtns = HABIT_DAY_LABELS.map((lbl,i)=>`<div class="habit-day-col ${i===todayIdx?'today':''}">
+      <span class="habit-day-label">${lbl}</span>
+      <button class="habit-day-btn ${days.includes(i)?'on':''}" data-id="${h.id}" data-day="${i}" ${i>todayIdx?'disabled':''} aria-label="${lbl}"></button>
+    </div>`).join('');
   const statusKey = count>=target ? 'done' : count>0 ? 'partial' : 'none';
   const statusLabel = {done:'✅ Meta cumplida esta semana', partial:'🟡 Vas bien, sigue así', none:'⚪ Aún no marcas esta semana'}[statusKey];
   const isOpen = !!expandedHabitHistory[h.id];
@@ -1240,20 +1263,13 @@ function habitCardHTML(h){
     <div class="habit-card-top">
       <div>
         <div class="habit-title">${escapeHTML(h.title)}</div>
-        <div class="habit-target">Meta: ${target}x por semana</div>
+        <div class="habit-target">Meta: ${target}x por semana · <b>${count}/${target}</b></div>
       </div>
       <button class="habit-action-btn habit-delete" data-id="${h.id}" title="Eliminar hábito">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
       </button>
     </div>
-    <div class="habit-progress-row">
-      <div class="habit-dots">${dots}</div>
-      <span class="habit-count">${count}/${target}</span>
-      <div class="habit-adjust">
-        <button class="habit-action-btn habit-decrement" data-id="${h.id}" title="Quitar uno"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-        <button class="habit-action-btn habit-increment" data-id="${h.id}" title="¡Lo hice!"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-      </div>
-    </div>
+    <div class="habit-days">${dayBtns}</div>
     <div class="habit-status ${statusKey}">${statusLabel}</div>
     <button class="habit-history-toggle" data-id="${h.id}">${isOpen?'▲ Ocultar historial':'▼ Ver historial de semanas anteriores'}</button>
     ${isOpen ? renderHabitHistory(h) : ''}
@@ -1266,11 +1282,12 @@ function renderHabitHistory(h){
     .sort((a,b)=>b.week_key.localeCompare(a.week_key));
   if(!weeks.length) return '<div class="habit-history"><div class="goal-empty">Todavía no hay semanas anteriores</div></div>';
   const rows = weeks.map(w=>{
-    const status = w.count>=h.target_per_week ? 'done' : w.count>0 ? 'partial' : 'none';
+    const c = habitCount(w);
+    const status = c>=h.target_per_week ? 'done' : c>0 ? 'partial' : 'none';
     const label = {done:'✅ Cumplido', partial:'🟡 Parcial', none:'❌ No cumplido'}[status];
     return `<div class="habit-history-row">
       <span class="habit-history-week">${formatWeekRange(w.week_key)}</span>
-      <span class="habit-history-count">${w.count}/${h.target_per_week}</span>
+      <span class="habit-history-count">${Array.isArray(w.days)?HABIT_DAY_LABELS.map((l,i)=>w.days.includes(i)?l:'·').join(' '):''} ${c}/${h.target_per_week}</span>
       <span class="habit-history-status ${status}">${label}</span>
     </div>`;
   }).join('');
@@ -1311,30 +1328,33 @@ async function deleteHabit(id){
   catch(e){ showToast('Error al eliminar el hábito','error'); }
 }
 
-// Suma/resta una marca del hábito para la semana actual (lunes de hoy). Si no
-// existe fila para esta semana todavía, se crea; si ya existe, se actualiza.
-async function adjustHabitWeek(habitId, delta){
+// Marca/desmarca un día de la semana actual para el hábito. Si no existe fila
+// para esta semana se crea; si existe se actualiza (days + count sincronizados).
+async function toggleHabitDay(habitId, dayIdx){
   const wk = weekKey(new Date());
-  const row = habitWeeks.find(w=>w.habit_id===habitId && w.week_key===wk);
-  const newCount = Math.max(0, (row?row.count:0) + delta);
+  const content = ()=>document.getElementById('content');
+  let row = habitWeeks.find(w=>w.habit_id===habitId && w.week_key===wk);
+  const prevDays = row && Array.isArray(row.days) ? [...row.days] : [];
+  const days = prevDays.includes(dayIdx) ? prevDays.filter(d=>d!==dayIdx) : [...prevDays, dayIdx].sort();
   if(row){
-    row.count = newCount;
-    renderHabitsView(document.getElementById('content'));
-    try{ await dbPatch('habit_weeks', {count:newCount}, `?id=eq.${row.id}`); }
-    catch(e){ showToast('Error al actualizar el hábito','error'); }
+    const prev = {days:row.days, count:row.count};
+    row.days = days; row.count = days.length;
+    renderHabitsView(content());
+    if(String(row.id).startsWith('temp-')) return;
+    try{ await dbPatch('habit_weeks', {days, count:days.length}, `?id=eq.${row.id}`); }
+    catch(e){ row.days=prev.days; row.count=prev.count; renderHabitsView(content()); showToast('Error al actualizar el hábito (¿ya corriste el SQL de días?)','error'); }
   } else {
-    if(newCount===0) return;
     const tempId = 'temp-'+Math.random().toString(36).slice(2);
-    habitWeeks.push({id:tempId, habit_id:habitId, week_key:wk, count:newCount});
-    renderHabitsView(document.getElementById('content'));
+    habitWeeks.push({id:tempId, habit_id:habitId, week_key:wk, days, count:days.length});
+    renderHabitsView(content());
     try{
-      const [created] = await dbPost('habit_weeks', {habit_id:habitId, week_key:wk, count:newCount});
+      const [created] = await dbPost('habit_weeks', {habit_id:habitId, week_key:wk, days, count:days.length});
       const idx = habitWeeks.findIndex(w=>w.id===tempId);
       if(idx!==-1) habitWeeks[idx] = created;
     }catch(e){
       habitWeeks = habitWeeks.filter(w=>w.id!==tempId);
-      renderHabitsView(document.getElementById('content'));
-      showToast('Error al guardar el hábito','error');
+      renderHabitsView(content());
+      showToast('Error al guardar el hábito (¿ya corriste el SQL de días?)','error');
     }
   }
 }
@@ -2131,106 +2151,77 @@ function renderMissedView(el){
 }
 
 // ── CALENDAR VIEW ─────────────────────────────────────────────
-let calMode='week', calOffset=0;
+let calOffset=0, calShowDone=true, calSelected=null;
+
+function calPillClass(t){
+  return t.status==='done'?'done':t.status==='missed'?'missed':(t.priority||'low');
+}
 
 function renderCalendarView(el){
   const today = localDate();
-  const tabsHTML=`<div class="cal-tabs">
-    <div class="cal-tab ${calMode==='week'?'active':''}" onclick="setCalMode('week')">Semana</div>
-    <div class="cal-tab ${calMode==='month'?'active':''}" onclick="setCalMode('month')">Mes</div>
-  </div>`;
+  const base = new Date(); base.setDate(1); base.setMonth(base.getMonth()+calOffset);
+  const year=base.getFullYear(), month=base.getMonth();
+  const monthLabel = base.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
 
-  if(calMode==='week') renderWeekCal(el, today, tabsHTML);
-  else renderMonthCal(el, today, tabsHTML);
-}
-
-function setCalMode(mode){ calMode=mode; calOffset=0; renderContent(); }
-
-function renderWeekCal(el, today, tabsHTML){
-  const now=new Date();
-  now.setDate(now.getDate() - now.getDay() + 1 + calOffset*7); // Mon
-  const days=[];
-  for(let i=0;i<7;i++){
-    const d=new Date(now); d.setDate(now.getDate()+i);
-    days.push(d);
-  }
-  const startLabel=days[0].toLocaleDateString('es-MX',{day:'numeric',month:'short'});
-  const endLabel=days[6].toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'});
-  const DAYS=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-
-  let html=`${tabsHTML}
-  <div class="cal-nav">
-    <button class="cal-nav-btn" onclick="calOffset--;renderContent()">← Anterior</button>
-    <h3>${startLabel} – ${endLabel}</h3>
-    <button class="cal-nav-btn" onclick="calOffset++;renderContent()">Siguiente →</button>
-  </div>`;
-
-  days.forEach((d,i)=>{
-    const ds=localDate(d);
-    const isToday=ds===today;
-    const dayTasks=tasks.filter(t=>t.due_date===ds).sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3));
-    const pillsHTML=dayTasks.slice(0,4).map(t=>`<div class="cal-task-pill ${t.status==='done'?'done':t.status==='missed'?'missed':t.priority}" onclick="openTaskModal('${t.id}')" title="${t.title}">${t.title}</div>`).join('');
-    const more=dayTasks.length>4?`<div class="cal-more">+${dayTasks.length-4} más</div>`:'';
-    const emptyDay=dayTasks.length===0?`<div class="cal-empty-day" style="color:var(--text3);font-size:11px">Sin tareas</div>`:'';
-    html+=`<div class="cal-week-row">
-      <div class="cal-week-label ${isToday?'today-col':''}">
-        <span class="wday">${DAYS[i]}</span>
-        <span class="wnum">${d.getDate()}</span>
-      </div>
-      <div class="cal-week-tasks">${pillsHTML}${more}${emptyDay}</div>
-    </div>`;
-  });
-
-  el.innerHTML=html;
-}
-
-function renderMonthCal(el, today, tabsHTML){
-  const now=new Date();
-  now.setDate(1);
-  now.setMonth(now.getMonth()+calOffset);
-  const year=now.getFullYear(), month=now.getMonth();
-  const monthLabel=now.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
-
-  // Build grid starting Monday
-  const firstDay=new Date(year,month,1);
-  let startDow=firstDay.getDay()-1; if(startDow<0) startDow=6;
-  const daysInMonth=new Date(year,month+1,0).getDate();
+  // Cuadrícula que empieza en domingo
+  const startDow = new Date(year,month,1).getDay();
+  const daysInMonth = new Date(year,month+1,0).getDate();
   const cells=[];
-  // prev month padding
-  for(let i=0;i<startDow;i++){
-    const d=new Date(year,month,1-startDow+i);
-    cells.push({d,cur:false});
-  }
+  for(let i=0;i<startDow;i++) cells.push({d:new Date(year,month,1-startDow+i),cur:false});
   for(let i=1;i<=daysInMonth;i++) cells.push({d:new Date(year,month,i),cur:true});
-  // next month padding to fill grid
-  while(cells.length%7!==0){ const last=cells[cells.length-1].d; const d=new Date(last); d.setDate(d.getDate()+1); cells.push({d,cur:false}); }
+  while(cells.length%7!==0){ const l=cells[cells.length-1].d; cells.push({d:new Date(l.getFullYear(),l.getMonth(),l.getDate()+1),cur:false}); }
 
-  const DAYS=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-  let html=`${tabsHTML}
-  <div class="cal-nav">
-    <button class="cal-nav-btn" onclick="calOffset--;renderContent()">← Anterior</button>
-    <h3 style="text-transform:capitalize">${monthLabel}</h3>
-    <button class="cal-nav-btn" onclick="calOffset++;renderContent()">Siguiente →</button>
+  const visible = tasks.filter(t=>t.due_date && (calShowDone || (t.status!=='done' && t.status!=='missed')));
+  const byDate={};
+  visible.forEach(t=>{ (byDate[t.due_date] ||= []).push(t); });
+  Object.values(byDate).forEach(l=>l.sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3)));
+
+  const DOW=['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
+  let html=`<div class="cal-toolbar">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="calOffset--;renderContent()">← <span class="cal-nav-txt">Mes anterior</span></button>
+      <h3>${monthLabel}</h3>
+      <button class="cal-nav-btn" onclick="calOffset++;renderContent()"><span class="cal-nav-txt">Mes siguiente</span> →</button>
+    </div>
+    <label class="cal-check"><input type="checkbox" ${calShowDone?'checked':''} onchange="calShowDone=this.checked;renderContent()"> Incluir completadas</label>
   </div>
-  <div class="cal-week-grid" style="margin-bottom:6px">
-    ${DAYS.map(d=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text3);padding:4px">${d}</div>`).join('')}
-  </div>
-  <div class="cal-week-grid">`;
+  <div class="cal-grid cal-dow">${DOW.map(d=>`<div>${d}</div>`).join('')}</div>
+  <div class="cal-grid cal-cells">`;
 
   cells.forEach(({d,cur})=>{
     const ds=localDate(d);
+    const list=byDate[ds]||[];
     const isToday=ds===today;
-    const dayTasks=tasks.filter(t=>t.due_date===ds);
-    const pills=dayTasks.slice(0,2).map(t=>`<div class="cal-task-pill ${t.status==='done'?'done':t.status==='missed'?'missed':t.priority}" onclick="openTaskModal('${t.id}')" title="${t.title}">${t.title}</div>`).join('');
-    const more=dayTasks.length>2?`<div class="cal-more">+${dayTasks.length-2}</div>`:'';
-    html+=`<div class="cal-day ${isToday?'today':''} ${!cur?'other-month':''}">
-      <div class="cal-day-header"><span class="cal-day-num">${d.getDate()}</span></div>
-      ${pills}${more}
+    const saturated=list.filter(t=>t.status!=='done'&&t.status!=='missed').length>=5;
+    const pills=list.slice(0,3).map(t=>`<div class="cal-pill ${calPillClass(t)}" title="${escapeAttr(t.title)}">${escapeHTML(t.title)}</div>`).join('');
+    const more=list.length>3?`<div class="cal-more">+${list.length-3} más</div>`:'';
+    const dots=list.slice(0,4).map(t=>`<span class="cal-dot ${calPillClass(t)}"></span>`).join('');
+    html+=`<div class="cal-cell ${cur?'':'other'} ${saturated?'saturated':''} ${ds===calSelected?'selected':''}" onclick="calSelectDay('${ds}')">
+      <div class="cal-num-row"><span class="cal-num ${isToday?'today':''}">${d.getDate()}</span>${saturated?'<span class="cal-warn">⚠</span>':''}</div>
+      <div class="cal-pills">${pills}${more}</div>
+      <div class="cal-dots">${dots}</div>
     </div>`;
   });
   html+='</div>';
+
+  html+=`<div class="cal-legend">
+    <span><i class="cal-dot critical"></i>Crítica</span><span><i class="cal-dot high"></i>Alta</span>
+    <span><i class="cal-dot medium"></i>Media</span><span><i class="cal-dot low"></i>Baja</span>
+    <span><i class="cal-dot done"></i>Completada</span><span><i class="cal-dot missed"></i>No completada</span>
+    <span><i class="cal-warn">⚠</i>Día saturado (5+ pendientes)</span>
+  </div>`;
+
+  if(calSelected){
+    const list=byDate[calSelected]||[];
+    const label=new Date(calSelected+'T12:00:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+    html+=`<div class="cal-selected"><h4 style="text-transform:capitalize">${label}</h4>
+      ${list.length?list.map(t=>`<div class="cal-sel-item" onclick="openTaskModal('${t.id}')"><i class="cal-dot ${calPillClass(t)}"></i><span class="${t.status==='done'?'cal-sel-done':''}">${escapeHTML(t.title)}</span>${t.due_time?`<em>${t.due_time.slice(0,5)}</em>`:''}</div>`).join(''):'<div class="cal-empty-day">Sin tareas este día</div>'}
+    </div>`;
+  }
   el.innerHTML=html;
 }
+
+function calSelectDay(ds){ calSelected = calSelected===ds ? null : ds; renderContent(); }
 
 // ── STATS VIEW ────────────────────────────────────────────────
 function renderStatsView(el){
