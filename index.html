@@ -991,7 +991,7 @@ function renderContent(){
     groups[g].push(t);
   });
 
-  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','Sin fecha','❌ No completadas','✅ Completadas hoy','🔄 Tareas recurrentes'];
+  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','Sin fecha','🔄 Tareas recurrentes','❌ No completadas','✅ Completadas hoy'];
   let html = '<div class="tasks-list">';
   order.forEach(g=>{
     if(!groups[g]) return;
