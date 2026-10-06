@@ -979,7 +979,8 @@ function renderContent(){
   const today = localDate();
   list.forEach(t=>{
     let g = 'Sin fecha';
-    if(t.status==='done') g = '✅ Completadas hoy';
+    if(currentView==='today' && t.is_recurring) g = '🔄 Tareas recurrentes';
+    else if(t.status==='done') g = '✅ Completadas hoy';
     else if(t.status==='missed') g = '❌ No completadas';
     else if(t.due_date){
       if(t.due_date < today) g = '⚠️ Vencidas';
@@ -990,7 +991,7 @@ function renderContent(){
     groups[g].push(t);
   });
 
-  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','Sin fecha','❌ No completadas','✅ Completadas hoy'];
+  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','Sin fecha','❌ No completadas','✅ Completadas hoy','🔄 Tareas recurrentes'];
   let html = '<div class="tasks-list">';
   order.forEach(g=>{
     if(!groups[g]) return;
