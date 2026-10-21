@@ -259,6 +259,12 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .habit-history-status.partial{color:var(--amber)}
 .habit-history-status.none{color:var(--text3)}
 
+/* Quick tasks */
+.quick-add-bar{display:flex;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px;min-width:0}
+.quick-add-bar input{flex:1;min-width:0}
+.quick-item{align-items:center}
+.quick-item .reminder-check{margin-top:0}
+
 /* Reminders */
 .reminder-add-bar{display:flex;gap:8px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px;min-width:0}
 .reminder-add-bar input[type="text"]{flex:1;min-width:160px}
@@ -576,6 +582,10 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 
   <div class="sidebar-section" style="margin-top:16px">Extras</div>
   <nav id="extrasNav">
+    <div class="nav-item" data-view="quick">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Tareas rápidas
+    </div>
     <div class="nav-item" data-view="reminders">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
       Recordatorios
@@ -795,7 +805,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const H = {'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=representation'};
 
 // State
-let tasks = [], projects = [], subtasks = [], goals = [], reminders = [], notes = [], habits = [], habitWeeks = [];
+let tasks = [], projects = [], subtasks = [], goals = [], reminders = [], notes = [], habits = [], habitWeeks = [], quickTasks = [];
 let editingReminderId = null, editingNoteId = null, expandedHabitHistory = {};
 let currentView = 'today', currentFilter = 'all', searchQ = '';
 let editingTaskId = null, currentTags = [], currentPriority = '', currentRecur = '', currentCustomDays = [];
@@ -826,6 +836,7 @@ async function init(){
     await loadHabits();
     await loadHabitWeeks();
     await loadReminders();
+    await loadQuickTasks();
     await loadNotes();
     renderAll();
     updateStreak();
@@ -855,6 +866,11 @@ async function loadHabitWeeks(){
   try{ habitWeeks = await dbGet('habit_weeks','?order=week_key.desc') || []; }
   catch(e){ habitWeeks = []; } // tabla "habit_weeks" aún no creada en Supabase
 }
+async function loadQuickTasks(){
+  try{ quickTasks = await dbGet('quick_tasks','?order=created_at.asc') || []; }
+  catch(e){ quickTasks = []; } // tabla "quick_tasks" aún no creada en Supabase
+}
+
 async function loadReminders(){
   try{ reminders = await dbGet('reminders','?order=created_at.desc') || []; }
   catch(e){ reminders = []; } // tabla "reminders" aún no creada en Supabase
@@ -967,6 +983,7 @@ function renderContent(){
   if(currentView==='missed')  { filterBar.style.display='none'; renderMissedView(el);   updateProgress([]); return; }
   if(currentView==='goals')   { filterBar.style.display='none'; renderGoalsView(el);     updateProgress([]); return; }
   if(currentView==='habits')  { filterBar.style.display='none'; renderHabitsView(el);    updateProgress([]); return; }
+  if(currentView==='quick')  { filterBar.style.display='none'; renderQuickView(el);      updateProgress([]); return; }
   if(currentView==='reminders'){ filterBar.style.display='none'; renderRemindersView(el); updateProgress([]); return; }
   if(currentView==='notes')  { filterBar.style.display='none'; renderNotesView(el);      updateProgress([]); return; }
   filterBar.style.display='flex';
@@ -1369,6 +1386,84 @@ async function toggleHabitDay(habitId, dayIdx){
       showToast('Error al guardar el hábito (¿ya corriste el SQL de días?)','error');
     }
   }
+}
+
+// ── TAREAS RÁPIDAS ───────────────────────────────────────────
+// Lista simple: solo texto + tachar. Sin prioridad, categoría ni fecha.
+function renderQuickView(el, refocus){
+  const pending = quickTasks.filter(q=>!q.done);
+  const done = quickTasks.filter(q=>q.done);
+  const item = q=>`<div class="reminder-item quick-item ${q.done?'done':''}">
+      <div class="reminder-check ${q.done?'checked':''}" data-id="${q.id}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="reminder-body"><div class="reminder-title">${escapeHTML(q.title)}</div></div>
+      <button class="reminder-delete" data-id="${q.id}" title="Eliminar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </button>
+    </div>`;
+  el.innerHTML = `
+    <div class="quick-add-bar">
+      <input type="text" class="form-input" id="quickInput" placeholder="Anota un pendiente..." autocomplete="off">
+      <button class="btn btn-primary" id="quickAddBtn">+ Añadir</button>
+    </div>
+    <div class="reminders-list">
+      ${pending.length ? pending.map(item).join('') : '<div class="empty"><p>Sin pendientes rápidos ⚡</p></div>'}
+    </div>
+    ${done.length ? `<div class="task-group-label" style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
+      <span>✅ Hechas (${done.length})</span>
+      <button class="btn btn-ghost" id="quickClearDone" style="padding:2px 10px;font-size:12px">Borrar hechas</button>
+    </div><div class="reminders-list">${done.map(item).join('')}</div>` : ''}`;
+  el.querySelectorAll('.reminder-check').forEach(c=>{ c.onclick=()=>toggleQuickTask(c.dataset.id); });
+  el.querySelectorAll('.reminder-delete').forEach(b=>{ b.onclick=()=>deleteQuickTask(b.dataset.id); });
+  const clr = document.getElementById('quickClearDone'); if(clr) clr.onclick=clearDoneQuickTasks;
+  const inp = document.getElementById('quickInput');
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') addQuickTask(); });
+  document.getElementById('quickAddBtn').onclick = addQuickTask;
+  if(refocus) inp.focus();
+}
+
+async function addQuickTask(){
+  const inp = document.getElementById('quickInput');
+  const title = inp.value.trim();
+  if(!title) return;
+  const row = {id:'temp-'+Math.random().toString(36).slice(2), title, done:false};
+  quickTasks.push(row);
+  renderQuickView(document.getElementById('content'), true);
+  try{
+    const [created] = await dbPost('quick_tasks', {title, done:false});
+    const wasDone = row.done;
+    Object.assign(row, created, {done:wasDone});
+    if(wasDone) await dbPatch('quick_tasks', {done:true, completed_at:new Date().toISOString()}, `?id=eq.${row.id}`);
+  }catch(e){
+    quickTasks = quickTasks.filter(q=>q!==row);
+    if(currentView==='quick') renderQuickView(document.getElementById('content'));
+    showToast('Error al guardar (¿ya corriste el SQL de tareas rápidas?)','error');
+  }
+}
+
+async function toggleQuickTask(id){
+  const q = quickTasks.find(x=>x.id===id);
+  if(!q) return;
+  q.done = !q.done;
+  renderQuickView(document.getElementById('content'), true);
+  if(String(q.id).startsWith('temp-')) return; // se sincroniza al terminar de guardarse
+  try{ await dbPatch('quick_tasks', {done:q.done, completed_at:q.done?new Date().toISOString():null}, `?id=eq.${id}`); }
+  catch(e){ q.done=!q.done; renderQuickView(document.getElementById('content')); showToast('Error al actualizar','error'); }
+}
+
+async function deleteQuickTask(id){
+  quickTasks = quickTasks.filter(q=>q.id!==id);
+  renderQuickView(document.getElementById('content'), true);
+  if(String(id).startsWith('temp-')) return;
+  try{ await dbDelete('quick_tasks', `?id=eq.${id}`); }
+  catch(e){ showToast('Error al eliminar','error'); }
+}
+
+async function clearDoneQuickTasks(){
+  const ids = quickTasks.filter(q=>q.done && !String(q.id).startsWith('temp-')).map(q=>q.id);
+  quickTasks = quickTasks.filter(q=>!q.done);
+  renderQuickView(document.getElementById('content'), true);
+  try{ for(const id of ids) await dbDelete('quick_tasks', `?id=eq.${id}`); }
+  catch(e){ showToast('Error al borrar las hechas','error'); }
 }
 
 // ── RECORDATORIOS ────────────────────────────────────────────
@@ -1994,7 +2089,7 @@ document.getElementById('gcalModal').addEventListener('click',e=>{ if(e.target==
 function setView(view, label){
   currentView=view;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
-  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',habits:'Hábitos',reminders:'Recordatorios',notes:'Notas'}[view]||view);
+  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',habits:'Hábitos',reminders:'Recordatorios',notes:'Notas',quick:'Tareas rápidas'}[view]||view);
   renderContent();
   if(window.innerWidth<768) closeSidebar();
 }
