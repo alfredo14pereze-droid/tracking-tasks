@@ -1504,8 +1504,8 @@ function startOrderDrag(e){
     const center = desiredTop + h/2;
     const sibs = siblings(), i = sibs.indexOf(item);
     const prev = sibs[i-1], next = sibs[i+1];
-    if(prev){ const r=prev.getBoundingClientRect(); if(center < r.top + r.height/2){ list.insertBefore(item, prev); return place(); } }
-    if(next){ const r=next.getBoundingClientRect(); if(center > r.top + r.height/2){ list.insertBefore(item, next.nextSibling); return place(); } }
+    if(prev){ const r=prev.getBoundingClientRect(); if(center < r.top + r.height/2){ list.insertBefore(prev, item.nextSibling); return place(); } }
+    if(next){ const r=next.getBoundingClientRect(); if(center > r.top + r.height/2){ list.insertBefore(next, item); return place(); } }
     item.style.transform = `translateY(${desiredTop-layoutTop}px)`;
   };
   // Auto-scroll cuando el dedo llega a la orilla de la pantalla
@@ -1519,15 +1519,15 @@ function startOrderDrag(e){
   const move = ev=>{ lastY = ev.clientY; place(); };
   const end = ()=>{
     cancelAnimationFrame(raf);
-    handle.removeEventListener('pointermove', move);
-    handle.removeEventListener('pointerup', end);
-    handle.removeEventListener('pointercancel', end);
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', end);
+    document.removeEventListener('pointercancel', end);
     item.style.transform=''; item.classList.remove('dragging');
     saveOrderFromDOM();
   };
-  handle.addEventListener('pointermove', move);
-  handle.addEventListener('pointerup', end);
-  handle.addEventListener('pointercancel', end);
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
   raf = requestAnimationFrame(tick);
 }
 
