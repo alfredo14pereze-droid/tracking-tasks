@@ -326,7 +326,8 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .note-add-bar textarea{width:100%;min-height:70px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;resize:vertical;transition:border-color .15s}
 .note-add-bar textarea:focus{border-color:var(--accent)}
 .note-add-bar .btn{margin-top:8px}
-.notes-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.notes-cols{display:flex;gap:14px;align-items:flex-start}
+.notes-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px}
 .note-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s;min-width:0}
 .note-card:hover{border-color:var(--border2)}
 .note-card.editing{border-color:var(--accent)}
@@ -516,7 +517,6 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
   .mobile-toggle{display:flex}
   .sidebar-overlay.open{display:block}
   .goals-board{grid-template-columns:1fr}
-  .notes-grid{grid-template-columns:1fr}
   .reminder-add-bar input[type="text"], .reminder-add-bar input[type="date"], .reminder-add-bar input[type="time"], .reminder-add-bar button{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
   .topbar{padding:16px 16px 0}
   .topbar-left{margin-left:44px} /* deja libre el botón de menú (☰) fijo arriba a la izquierda */
@@ -1800,9 +1800,8 @@ function renderNotesView(el){
       <textarea id="noteInput" placeholder="Escribe una nota..."></textarea>
       <button class="btn btn-primary" onclick="addNote()">Guardar nota</button>
     </div>
-    <div class="notes-grid">
-      ${notes.length ? notes.map(noteCardHTML).join('') : '<div class="empty"><p>Sin notas todavía — escribe la primera arriba 📝</p></div>'}
-    </div>`;
+    ${notes.length ? '<div class="notes-cols" id="notesCols"></div>' : '<div class="empty"><p>Sin notas todavía — escribe la primera arriba 📝</p></div>'}`;
+  layoutNotes();
   el.querySelectorAll('.note-delete').forEach(btn=>{ btn.onclick=()=>deleteNote(btn.dataset.id); });
   el.querySelectorAll('.note-edit').forEach(btn=>{ btn.onclick=()=>startEditNote(btn.dataset.id); });
   el.querySelectorAll('.note-save').forEach(btn=>{ btn.onclick=()=>saveEditNote(btn.dataset.id); });
@@ -1822,6 +1821,33 @@ function renderNotesView(el){
     }
   }
 }
+
+// Acomodo tipo "mosaico": cada nota va a la columna más corta (máx. 2 columnas,
+// 1 en celular), así no quedan huecos. Cada nota recuerda su columna para que
+// no se muevan de lugar al editar o borrar otra.
+let noteColOf = new Map(), noteColCount = 0;
+function layoutNotes(){
+  const wrap = document.getElementById('notesCols');
+  if(!wrap) return;
+  const count = window.innerWidth<=768 ? 1 : 2;
+  if(count!==noteColCount){ noteColOf = new Map(); noteColCount = count; }
+  wrap.innerHTML = Array.from({length:count},()=>'<div class="notes-col"></div>').join('');
+  const cols = [...wrap.children];
+  const place = (n, col, top)=>{ const t=document.createElement('template'); t.innerHTML=noteCardHTML(n).trim(); const node=t.content.firstChild; top ? col.prepend(node) : col.appendChild(node); };
+  const initial = noteColOf.size===0;
+  notes.filter(n=>noteColOf.has(n.id)).forEach(n=>place(n, cols[noteColOf.get(n.id)]));
+  // las notas nuevas (después del primer acomodo) entran arriba, en la columna más corta
+  const fresh = notes.filter(n=>!noteColOf.has(n.id));
+  (initial ? fresh : fresh.reverse()).forEach(n=>{
+    let best = 0;
+    cols.forEach((c,i)=>{ if(c.offsetHeight < cols[best].offsetHeight) best=i; });
+    noteColOf.set(n.id, best);
+    place(n, cols[best], !initial);
+  });
+}
+window.addEventListener('resize',()=>{
+  if(currentView==='notes' && !editingNoteId && (window.innerWidth<=768?1:2)!==noteColCount) renderNotesView(document.getElementById('content'));
+});
 
 function noteCardHTML(n){
   if(editingNoteId===n.id){
