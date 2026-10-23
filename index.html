@@ -323,13 +323,18 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 /* Notes */
 .note-add-bar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px}
 .note-add-bar input[type="text"]{margin-bottom:8px}
-.note-add-bar textarea, .note-edit-textarea{width:100%;min-height:70px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;resize:vertical;transition:border-color .15s}
-.note-add-bar textarea:focus, .note-edit-textarea:focus{border-color:var(--accent)}
+.note-add-bar textarea{width:100%;min-height:70px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;resize:vertical;transition:border-color .15s}
+.note-add-bar textarea:focus{border-color:var(--accent)}
 .note-add-bar .btn{margin-top:8px}
-.notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-.note-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:8px;transition:all .15s}
+.notes-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.note-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s;min-width:0}
 .note-card:hover{border-color:var(--border2)}
-.note-card.editing{border-color:var(--border2);background:var(--bg3)}
+.note-card.editing{border-color:var(--accent)}
+/* Al editar, el texto se ve igual que antes: mismos tamaños, sin cajas ni bordes */
+.note-title-input,.note-edit-textarea{display:block;width:100%;background:transparent;border:none;outline:none;padding:0;margin:0;color:var(--text);min-height:0;border-radius:0;box-shadow:none}
+.note-title-input{font-family:'Syne',sans-serif;font-size:14px;font-weight:700}
+.note-title-input::placeholder,.note-edit-textarea::placeholder{color:var(--text3);font-weight:400}
+.note-edit-textarea{font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.5;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word}
 .note-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text)}
 .note-text{font-size:13px;line-height:1.5;color:var(--text);white-space:pre-wrap;word-break:break-word;flex:1}
 .note-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -529,6 +534,10 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
   #gcalBtn{padding:8px 10px}
   /* 16px+ evita que iOS haga zoom automático al tocar un campo de texto */
   .form-input, .search-input, .goal-add-input, .tags-input input{font-size:16px}
+  .note-title-input,.note-edit-textarea,.note-text{font-size:16px}
+  .note-title{font-size:16px}
+  .note-card.editing .note-date{display:none}
+  .note-card.editing .note-footer{justify-content:flex-end}
 }
 
 .loading{text-align:center;padding:60px;color:var(--text3)}
@@ -1433,7 +1442,8 @@ async function toggleHabitDay(habitId, dayIdx){
 // va después, por prioridad.
 function orderedTodayTasks(){
   const today = localDate();
-  const list = tasks.filter(t=>isTodayTask(t,today));
+  // Solo tareas con fecha de hoy (sin fecha o vencidas no entran en esta lista)
+  const list = tasks.filter(t=>t.due_date===today && isTodayTask(t,today));
   const open = list.filter(t=>t.status!=='done' && t.status!=='missed');
   const closed = list.filter(t=>t.status==='done' || t.status==='missed');
   const idx = new Map(tasks.map((t,i)=>[t.id,i]));
@@ -1797,16 +1807,33 @@ function renderNotesView(el){
   el.querySelectorAll('.note-edit').forEach(btn=>{ btn.onclick=()=>startEditNote(btn.dataset.id); });
   el.querySelectorAll('.note-save').forEach(btn=>{ btn.onclick=()=>saveEditNote(btn.dataset.id); });
   el.querySelectorAll('.note-cancel').forEach(btn=>{ btn.onclick=()=>cancelEditNote(); });
+  if(editingNoteId){
+    const ta = document.getElementById(`editNoteContent_${editingNoteId}`);
+    const ti = document.getElementById(`editNoteTitle_${editingNoteId}`);
+    if(ta){
+      const fit = ()=>{ ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; };
+      ta.addEventListener('input', fit); fit();
+      const keys = e=>{
+        if(e.key==='Escape') cancelEditNote();
+        else if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) saveEditNote(editingNoteId);
+      };
+      ta.addEventListener('keydown', keys); ti.addEventListener('keydown', keys);
+      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+  }
 }
 
 function noteCardHTML(n){
   if(editingNoteId===n.id){
     return `<div class="note-card editing">
-      <input type="text" class="form-input" id="editNoteTitle_${n.id}" placeholder="Título (opcional)" value="${escapeAttr(n.title)}">
-      <textarea class="note-edit-textarea" id="editNoteContent_${n.id}">${escapeHTML(n.content)}</textarea>
-      <div class="note-edit-actions">
-        <button class="btn btn-ghost note-cancel">Cancelar</button>
-        <button class="btn btn-primary note-save" data-id="${n.id}">Guardar</button>
+      <input type="text" class="note-title-input" id="editNoteTitle_${n.id}" placeholder="Título (opcional)" value="${escapeAttr(n.title)}">
+      <textarea class="note-edit-textarea" id="editNoteContent_${n.id}" rows="1">${escapeHTML(n.content)}</textarea>
+      <div class="note-footer">
+        <span class="note-date">Ctrl/⌘ + Enter para guardar</span>
+        <div class="note-edit-actions">
+          <button class="btn btn-ghost note-cancel">Cancelar</button>
+          <button class="btn btn-primary note-save" data-id="${n.id}">Guardar</button>
+        </div>
       </div>
     </div>`;
   }
