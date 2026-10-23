@@ -259,6 +259,20 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .habit-history-status.partial{color:var(--amber)}
 .habit-history-status.none{color:var(--text3)}
 
+/* Orden del día */
+.order-hint{font-size:12px;color:var(--text3);margin-bottom:12px}
+.order-list{display:flex;flex-direction:column;gap:8px}
+.order-item{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;min-width:0;position:relative}
+.order-item.dragging{z-index:50;border-color:var(--accent);box-shadow:0 8px 24px rgba(0,0,0,.5);background:var(--bg3);transition:none}
+.order-item.closed{opacity:.5}
+.order-item.closed .order-title{text-decoration:line-through}
+.order-handle{touch-action:none;cursor:grab;color:var(--text3);display:flex;align-items:center;padding:8px 4px;margin:-8px -2px -8px -6px;flex-shrink:0;user-select:none;-webkit-user-select:none}
+.order-handle:active{cursor:grabbing;color:var(--accent2)}
+.order-num{font-size:12px;font-weight:700;color:var(--text3);min-width:16px;text-align:center;flex-shrink:0}
+.order-body{flex:1;min-width:0;cursor:pointer}
+.order-title{font-size:14px;color:var(--text);overflow-wrap:anywhere}
+.order-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;align-items:center}
+.order-item .task-check{flex-shrink:0;margin-top:0}
 /* Quick tasks */
 .quick-add-bar{display:flex;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px;min-width:0}
 .quick-add-bar input{flex:1;min-width:0}
@@ -545,6 +559,10 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       Hoy
       <span class="count" id="countToday">0</span>
+    </div>
+    <div class="nav-item" data-view="order">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+      Orden del día
     </div>
     <div class="nav-item" data-view="tomorrow">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
@@ -947,16 +965,19 @@ function dedupeRecurring(list){
   return result;
 }
 
+// Qué tareas pertenecen a "Hoy" (la pestaña "Orden del día" usa el mismo criterio)
+function isTodayTask(t, today){
+  if(t.status==='in_progress') return true;
+  if(t.status==='done'||t.status==='missed') return t.completed_at && localDate(new Date(t.completed_at))===today;
+  if(!t.due_date) return true;
+  return t.due_date <= today;
+}
+
 function getFilteredTasks(){
   const today = localDate();
   const tomorrow = localDateOffset(1);
   let list = [...tasks];
-  if(currentView==='today') list = list.filter(t=>{
-    if(t.status==='in_progress') return true;
-    if(t.status==='done'||t.status==='missed') return t.completed_at && localDate(new Date(t.completed_at))===today;
-    if(!t.due_date) return true;
-    return t.due_date <= today;
-  });
+  if(currentView==='today') list = list.filter(t=>isTodayTask(t,today));
   else if(currentView==='tomorrow'){
     list = list.filter(t=>t.status!=='done' && t.due_date===tomorrow);
   }
@@ -998,6 +1019,7 @@ function renderContent(){
   if(currentView==='missed')  { filterBar.style.display='none'; renderMissedView(el);   updateProgress([]); return; }
   if(currentView==='goals')   { filterBar.style.display='none'; renderGoalsView(el);     updateProgress([]); return; }
   if(currentView==='habits')  { filterBar.style.display='none'; renderHabitsView(el);    updateProgress([]); return; }
+  if(currentView==='order')  { filterBar.style.display='none'; renderOrderView(el);      updateProgress([]); return; }
   if(currentView==='quick')  { filterBar.style.display='none'; renderQuickView(el);      updateProgress([]); return; }
   if(currentView==='reminders'){ filterBar.style.display='none'; renderRemindersView(el); updateProgress([]); return; }
   if(currentView==='notes')  { filterBar.style.display='none'; renderNotesView(el);      updateProgress([]); return; }
@@ -1402,6 +1424,117 @@ async function toggleHabitDay(habitId, dayIdx){
       renderHabitsView(content());
       showToast('Error al guardar el hábito (¿ya corriste el SQL de días?)','error');
     }
+  }
+}
+
+// ── ORDEN DEL DÍA ────────────────────────────────────────────
+// Las mismas tareas de "Hoy", pero en una lista que se reordena arrastrando.
+// El orden se guarda en tasks.day_order (menor = primero). Lo que no tiene orden
+// va después, por prioridad.
+function orderedTodayTasks(){
+  const today = localDate();
+  const list = tasks.filter(t=>isTodayTask(t,today));
+  const open = list.filter(t=>t.status!=='done' && t.status!=='missed');
+  const closed = list.filter(t=>t.status==='done' || t.status==='missed');
+  const idx = new Map(tasks.map((t,i)=>[t.id,i]));
+  open.sort((a,b)=>{
+    const ao=a.day_order ?? 1e9, bo=b.day_order ?? 1e9;
+    return ao-bo || (PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3) || idx.get(a.id)-idx.get(b.id);
+  });
+  return {open, closed};
+}
+
+function orderItemHTML(t, n){
+  const closed = t.status==='done' || t.status==='missed';
+  const badge = closed ? '' :
+    t.priority==='critical' ? '<span class="priority-flag critical">🟣 Crítica</span>' :
+    t.priority==='high' ? '<span class="priority-flag high">🔥 Alta</span>' : '';
+  const when = t.due_date && t.due_date<localDate() ? '<span class="task-due overdue">Vencida</span>' : (t.due_time?`<span class="task-due">${t.due_time.slice(0,5)}</span>`:'');
+  const prog = t.status==='in_progress' ? '<span class="status-badge in_progress">⏳</span>' : '';
+  return `<div class="order-item ${closed?'closed':''}" data-id="${t.id}">
+    ${closed ? '' : `<div class="order-handle" title="Arrastra para ordenar"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></div>
+    <span class="order-num">${n}</span>`}
+    <div class="task-check ${t.status==='done'?'checked':t.status==='missed'?'missed':t.status==='in_progress'?'in_progress':''}" data-id="${t.id}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <div class="order-body" data-open="${t.id}">
+      <div class="order-title">${escapeHTML(t.title)}</div>
+      ${badge||when||prog ? `<div class="order-meta">${badge}${prog}${when}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function renderOrderView(el){
+  const {open, closed} = orderedTodayTasks();
+  el.innerHTML = `
+    <div class="order-hint">Arrastra ⋮⋮ para decidir en qué orden vas a hacer tus tareas de hoy.</div>
+    <div class="order-list" id="orderList">
+      ${open.length ? open.map((t,i)=>orderItemHTML(t,i+1)).join('') : '<div class="empty"><p>No hay tareas pendientes para hoy 🎉</p></div>'}
+    </div>
+    ${closed.length ? `<div class="task-group-label" style="margin-top:20px">✅ Completadas hoy</div><div class="order-list">${closed.map((t,i)=>orderItemHTML(t,i+1)).join('')}</div>` : ''}`;
+  el.querySelectorAll('.task-check').forEach(c=>{ c.onclick=(e)=>{e.stopPropagation(); toggleTask(c.dataset.id);}; });
+  el.querySelectorAll('.order-body').forEach(b=>{ b.onclick=()=>openTaskModal(b.dataset.open); });
+  el.querySelectorAll('.order-handle').forEach(h=>{ h.addEventListener('pointerdown', startOrderDrag); });
+}
+
+// Arrastre con pointer events (funciona con mouse y con el dedo en iPhone).
+function startOrderDrag(e){
+  if(e.button!==undefined && e.button!==0) return;
+  e.preventDefault();
+  const handle = e.currentTarget, item = handle.closest('.order-item'), list = item.parentElement;
+  const grab = e.clientY - item.getBoundingClientRect().top;
+  let lastY = e.clientY, raf = 0;
+  try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+  item.classList.add('dragging');
+  const siblings = ()=>[...list.querySelectorAll('.order-item:not(.closed)')];
+
+  const place = ()=>{
+    item.style.transform='';
+    const layoutTop = item.getBoundingClientRect().top;
+    const h = item.offsetHeight;
+    const desiredTop = lastY - grab;
+    const center = desiredTop + h/2;
+    const sibs = siblings(), i = sibs.indexOf(item);
+    const prev = sibs[i-1], next = sibs[i+1];
+    if(prev){ const r=prev.getBoundingClientRect(); if(center < r.top + r.height/2){ list.insertBefore(item, prev); return place(); } }
+    if(next){ const r=next.getBoundingClientRect(); if(center > r.top + r.height/2){ list.insertBefore(item, next.nextSibling); return place(); } }
+    item.style.transform = `translateY(${desiredTop-layoutTop}px)`;
+  };
+  // Auto-scroll cuando el dedo llega a la orilla de la pantalla
+  const tick = ()=>{
+    const edge = 90;
+    if(lastY < edge) window.scrollBy(0, -Math.ceil((edge-lastY)/6));
+    else if(lastY > window.innerHeight-edge) window.scrollBy(0, Math.ceil((lastY-(window.innerHeight-edge))/6));
+    place();
+    raf = requestAnimationFrame(tick);
+  };
+  const move = ev=>{ lastY = ev.clientY; place(); };
+  const end = ()=>{
+    cancelAnimationFrame(raf);
+    handle.removeEventListener('pointermove', move);
+    handle.removeEventListener('pointerup', end);
+    handle.removeEventListener('pointercancel', end);
+    item.style.transform=''; item.classList.remove('dragging');
+    saveOrderFromDOM();
+  };
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+  raf = requestAnimationFrame(tick);
+}
+
+async function saveOrderFromDOM(){
+  const ids = [...document.querySelectorAll('#orderList .order-item')].map(i=>i.dataset.id);
+  const changed = [];
+  ids.forEach((id,i)=>{
+    const t = tasks.find(x=>x.id===id);
+    if(t && t.day_order!==i){ changed.push({t, prev:t.day_order}); t.day_order=i; }
+  });
+  document.querySelectorAll('#orderList .order-num').forEach((n,i)=>{ n.textContent=i+1; });
+  if(!changed.length) return;
+  try{ await Promise.all(changed.map(({t})=>dbPatch('tasks',{day_order:t.day_order},`?id=eq.${t.id}`))); }
+  catch(e){
+    changed.forEach(({t,prev})=>{ t.day_order=prev; });
+    if(currentView==='order') renderContent();
+    showToast('No se pudo guardar el orden (¿ya corriste el SQL de orden?)','error');
   }
 }
 
@@ -2156,7 +2289,7 @@ document.getElementById('gcalModal').addEventListener('click',e=>{ if(e.target==
 function setView(view, label){
   currentView=view;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
-  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',habits:'Hábitos',reminders:'Recordatorios',notes:'Notas',quick:'Tareas rápidas'}[view]||view);
+  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',habits:'Hábitos',reminders:'Recordatorios',notes:'Notas',quick:'Tareas rápidas',order:'Orden del día'}[view]||view);
   renderContent();
   if(window.innerWidth<768) closeSidebar();
 }
