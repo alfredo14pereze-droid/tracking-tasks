@@ -1,15 +1,15 @@
 # TaskTracker — contexto del proyecto
 
-App personal de tareas de Alfredo (idioma de la UI y del trato: **español**). Un solo usuario, sin login.
+App personal de tareas de Alfredo (idioma de la UI y del trato: **español**). Un solo usuario, con login por enlace mágico (Supabase Auth).
 Producción: https://alfredo14pereze-droid.github.io/tracking-tasks/ · Repo: `alfredo14pereze-droid/tracking-tasks` (rama `main`).
 
 ## 1. Qué es
 Gestor de tareas diario con: Hoy / Orden del día / Mañana / Todas / Próximas / Sin completar / Calendario / Estadísticas / Completadas, más Objetivos (semana/mes/año), Hábitos (7 botones por día), Tareas rápidas, Recordatorios y Notas. Se usa mucho **desde iPhone (PWA instalada en Safari)** y desde un app de escritorio, así que móvil es prioridad.
 
 ## 2. Stack
-- **Frontend:** un solo `index.html` (HTML + CSS + JS vanilla, sin build, sin dependencias). Fuentes: Syne (títulos), DM Sans. Tema oscuro con variables CSS (`--bg…--bg4`, `--accent`, `--teal`, `--purple`, `--red/--amber/--green/--blue` y variantes `-bg`).
+- **Frontend:** un solo `index.html` (HTML + CSS + JS vanilla, sin build). Única dependencia: `supabase-js@2.45.4` (jsdelivr), usada **solo para la sesión**; los datos siguen con `fetch`. Fuentes: Syne (títulos), DM Sans. Tema oscuro con variables CSS (`--bg…--bg4`, `--accent`, `--teal`, `--purple`, `--red/--amber/--green/--blue` y variantes `-bg`).
 - **Backend/DB:** Supabase (Postgres vía PostgREST) llamado directo desde el navegador. Sin servidor propio.
-- **Auth:** ninguna. Se usa la *anon key* y las tablas tienen RLS abierto (política `"public access"`).
+- **Auth (oct-2026):** Supabase Auth por enlace mágico (`signInWithOtp`, flujo implícito) + código opcional (`verifyOtp`). Sin sesión solo se ve `#loginScreen` (`body.auth-locked`). `api()` manda `Authorization: Bearer <access_token>`; la anon key va solo en `apikey`. Todas las tablas tienen `user_id default auth.uid()`; RLS por usuario con la política `"own rows"` (ver `migrations/2026-10-24-auth-*.sql`). Nunca poner service_role en el frontend. Botón "Cerrar sesión" abajo del sidebar. El correo integrado de Supabase tiene límite de pocos envíos por hora.
 - **Deploy:** GitHub Pages sirviendo la raíz de `main`. Deploy = `git push`.
 - **PWA:** `manifest.json` + `service-worker.js` + `icons/` (ícono con `?v=3` para romper caché de iOS).
 
@@ -41,7 +41,7 @@ Gestor de tareas diario con: Hoy / Orden del día / Mañana / Todas / Próximas 
 - Siempre escapar texto de usuario con `escapeHTML` / `escapeAttr` al armar HTML.
 
 ### Tablas Supabase
-`tasks` (title, priority, status, due_date, due_time, end_date, category, is_recurring, recurrence, estimated_minutes, position, completed_at, **day_order**), `subtasks`, `projects` (categorías), `goals` (title, period, status, is_critical, completed_at, position), `habits` (title, target_per_week), `habit_weeks` (habit_id FK cascade, week_key, count, **days**, unique(habit_id, week_key)), `reminders`, `notes` (title, content), `quick_tasks` (title, done, completed_at). Todas las migraciones pendientes ya fueron aplicadas por el usuario (verificado 2026-10-24). Los `.sql` de migración **no están en el repo** (se entregaron en el chat); si se agrega una migración nueva, considerar guardarla en `/sql`.
+`tasks` (title, priority, status, due_date, due_time, end_date, category, is_recurring, recurrence, estimated_minutes, position, completed_at, **day_order**), `subtasks`, `projects` (categorías), `goals` (title, period, status, is_critical, completed_at, position), `habits` (title, target_per_week), `habit_weeks` (habit_id FK cascade, week_key, count, **days**, unique(habit_id, week_key)), `reminders`, `notes` (title, content), `quick_tasks` (title, done, completed_at). Todas las migraciones pendientes ya fueron aplicadas por el usuario (verificado 2026-10-24). Finanzas (`accounts, categories, transactions, budgets, money_goals, balance_snapshots`) existe en la DB pero su código no está en este repo. Migraciones nuevas van en `migrations/AAAA-MM-DD-nombre.sql` y las corre el usuario a mano.
 
 ## 5. Estado
 **Hecho:** todas las vistas listadas arriba; PWA con ícono; recurrentes personalizadas; hábitos por día; calendario mes/semana; tareas rápidas (sección en Hoy + vista propia); Orden del día con arrastre; notas en mosaico con edición en el lugar; "Duplicar para mañana"; "No completada" vs "Pasar a mañana"; objetivos críticos/archivo.
@@ -49,9 +49,8 @@ Gestor de tareas diario con: Hoy / Orden del día / Mañana / Todas / Próximas 
 **Pendiente / ideas:** que "Orden del día" incluya o no tareas vencidas (hoy se excluyen; pendiente de confirmar con el usuario); guardar migraciones SQL en el repo; textos legales/privacidad (se pidió una vez, quedó sin ejecutar al no aclarar el sitio).
 
 ## 6. Problemas conocidos
-- **Seguridad:** sin auth + RLS abierto → cualquiera con la anon key (pública en el JS) puede leer/escribir. Aceptable para uso personal; endurecer si se comparte.
-- `taskCardHTML` inserta `t.title` **sin escapar** (riesgo de HTML inyectado desde datos propios); el resto de vistas sí escapa.
-- Llamada a `rpc/add_end_date_if_missing` en el init es un resto: falla en silencio (`.catch`), se puede quitar.
+- **PWA en iPhone:** la PWA instalada no comparte sesión con Safari; el enlace del correo abre en Safari. Para entrar desde la PWA usar el código (`{{ .Token }}` en las plantillas de correo de Supabase).
+- Al probar en el navegador del panel, cada navegador tiene su propia sesión; los enlaces mágicos son de un solo uso.
 - Al probar en local, el navegador integrado puede servir `index.html` en caché: recargar con `?nocache=N` antes de concluir que un arreglo falló.
 - Tras desplegar hay retraso de ~30–60 s en GitHub Pages; un re-dupe de recurrentes ocurrió una vez por probar antes de que el deploy estuviera vivo.
 - Service workers no registran en el navegador de pruebas; el simulador de iOS no está disponible (sin Xcode completo): la verificación en iPhone real la hace el usuario.
