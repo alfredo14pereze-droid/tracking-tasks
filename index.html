@@ -67,7 +67,7 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 
 /* Layout */
 .app{display:flex;min-height:100vh}
-.sidebar{width:var(--sidebar);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;transition:transform .3s}
+.sidebar{width:var(--sidebar);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;overscroll-behavior:contain;z-index:100;transition:transform .3s}
 .main{margin-left:var(--sidebar);flex:1;min-width:0;min-height:100vh;display:flex;flex-direction:column}
 
 /* Sidebar */
@@ -554,6 +554,8 @@ body.auth-locked .login-screen{display:flex;min-height:100vh;align-items:center;
 .login-card .btn{width:100%;justify-content:center;padding:11px 16px;font-size:14px}
 .login-msg{font-size:13px;margin-top:12px;min-height:18px;color:var(--text2);overflow-wrap:anywhere}
 .login-msg.error{color:var(--red)}
+.login-secondary{margin-top:8px;background:transparent;border:1px solid var(--border2);color:var(--text)}
+.login-secondary:hover{border-color:var(--accent)}
 .login-link{background:none;border:none;color:var(--accent2);font-size:13px;cursor:pointer;margin-top:10px;font-family:'DM Sans',sans-serif;padding:0}
 .logout-btn{width:100%;margin-top:10px;background:transparent;border:1px solid var(--border);color:var(--text2);justify-content:center}
 .logout-btn:hover{color:var(--text);border-color:var(--border2)}
@@ -566,10 +568,12 @@ body.auth-locked .login-screen{display:flex;min-height:100vh;align-items:center;
 <div class="login-screen" id="loginScreen">
   <form class="login-card" id="loginForm" autocomplete="on">
     <h1>TaskTracker</h1>
-    <p id="loginHint">Escribe tu correo y te mandamos un enlace para entrar.</p>
+    <p id="loginHint">Entra con tu contraseña o pide un enlace a tu correo.</p>
     <div id="loginEmailStep">
       <input class="form-input" id="loginEmail" type="email" placeholder="tu@correo.com" required autocomplete="email" inputmode="email">
-      <button class="btn btn-primary" type="submit" id="loginBtn">Enviar enlace</button>
+      <input class="form-input" id="loginPassword" type="password" placeholder="Contraseña" autocomplete="current-password">
+      <button class="btn btn-primary" type="submit" id="loginPwBtn">Entrar</button>
+      <button class="btn login-secondary" type="button" id="loginBtn">Enviarme un enlace</button>
     </div>
     <div id="loginCodeStep" style="display:none">
       <input class="form-input" id="loginCode" type="text" placeholder="Código de 6 dígitos" inputmode="numeric" autocomplete="one-time-code" maxlength="10">
@@ -680,6 +684,11 @@ body.auth-locked .login-screen{display:flex;min-height:100vh;align-items:center;
       <div class="streak-label">🔥 días de racha</div>
       <div class="mini-heatmap" id="miniHeatmap" title="Últimas 4 semanas"></div>
     </div>
+    <button class="btn logout-btn" id="setPwToggle" type="button">Poner contraseña</button>
+    <form id="setPwForm" style="display:none;margin-top:8px">
+      <input class="form-input" id="setPwInput" type="password" placeholder="Nueva contraseña (mín. 8)" autocomplete="new-password" minlength="8" style="font-size:16px;margin-bottom:6px">
+      <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Guardar contraseña</button>
+    </form>
     <button class="btn logout-btn" id="logoutBtn" type="button">Cerrar sesión</button>
   </div>
 </aside>
@@ -2851,12 +2860,27 @@ function showCodeStep(show){
   document.getElementById('loginCodeStep').style.display = show?'':'none';
   document.getElementById('loginHint').textContent = show
     ? 'Revisa tu correo y abre el enlace. Si el correo trae un código, escríbelo aquí.'
-    : 'Escribe tu correo y te mandamos un enlace para entrar.';
+    : 'Entra con tu contraseña o pide un enlace a tu correo.';
 }
+// Entrar con contraseña (Enter o botón "Entrar")
 document.getElementById('loginForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
   if(!email) return;
+  if(!password){ loginMsg('Escribe tu contraseña o usa "Enviarme un enlace".', true); return; }
+  const btn = document.getElementById('loginPwBtn');
+  btn.disabled = true; loginMsg('Entrando…');
+  const {error} = await sb.auth.signInWithPassword({email, password});
+  btn.disabled = false;
+  if(error){ loginMsg(error.message==='Invalid login credentials' ? 'Correo o contraseña incorrectos.' : 'No se pudo entrar: '+error.message, true); return; }
+  loginMsg('');
+});
+// Enlace mágico
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const emailInput = document.getElementById('loginEmail');
+  const email = emailInput.value.trim();
+  if(!email || !emailInput.checkValidity()){ loginMsg('Escribe un correo válido.', true); return; }
   const btn = document.getElementById('loginBtn');
   btn.disabled = true; loginMsg('Enviando…');
   const {error} = await sb.auth.signInWithOtp({email, options:{emailRedirectTo: location.origin+location.pathname}});
@@ -2873,6 +2897,21 @@ document.getElementById('loginCodeBtn').addEventListener('click', async ()=>{
   if(error) loginMsg('Código inválido o vencido', true); else loginMsg('');
 });
 document.getElementById('loginBack').addEventListener('click', ()=>{ loginMsg(''); showCodeStep(false); });
+document.getElementById('setPwToggle').addEventListener('click', ()=>{
+  const f = document.getElementById('setPwForm');
+  f.style.display = f.style.display==='none' ? '' : 'none';
+  if(f.style.display==='') document.getElementById('setPwInput').focus();
+});
+document.getElementById('setPwForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const input = document.getElementById('setPwInput');
+  if(input.value.length < 8){ showToast('La contraseña debe tener al menos 8 caracteres','error'); return; }
+  const {error} = await sb.auth.updateUser({password: input.value});
+  if(error){ showToast('No se pudo guardar: '+error.message,'error'); return; }
+  input.value = '';
+  document.getElementById('setPwForm').style.display = 'none';
+  showToast('Contraseña guardada. Ya puedes entrar con ella.');
+});
 document.getElementById('logoutBtn').addEventListener('click', async ()=>{
   await sb.auth.signOut();
   location.reload();
