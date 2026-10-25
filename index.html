@@ -560,6 +560,7 @@ body.section-finance .content{padding-bottom:110px}
 .fin-tabs .filter-chip{flex-shrink:0;font-size:13px;padding:6px 14px}
 .fin-warn{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;margin-bottom:14px}
 .fin-cards{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;margin-bottom:8px}
+.fin-cards.three{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr)}
 .fin-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;min-width:0}
 .fin-card-hero{background:linear-gradient(135deg,var(--bg2),var(--bg3))}
 .fin-label{font-size:12px;color:var(--text2);font-weight:500}
@@ -632,7 +633,7 @@ body.section-finance .content{padding-bottom:110px}
   body.section-finance .content{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
   .toast-container{bottom:calc(72px + env(safe-area-inset-bottom));right:16px;left:16px}
   .fin-fab{right:16px;bottom:calc(72px + env(safe-area-inset-bottom))}
-  .fin-cards,.fin-acc-grid{grid-template-columns:minmax(0,1fr)}
+  .fin-cards,.fin-cards.three,.fin-acc-grid{grid-template-columns:minmax(0,1fr)}
   .fin-big{font-size:24px}
 }
 /* Login */
@@ -3005,6 +3006,21 @@ function accBalance(id){
   }
   return b;
 }
+// Ahorro del mes = lo que entra a cuentas de ahorro/inversión desde otras cuentas − lo que sale de ellas.
+// Movimientos entre NU y GBM no cuentan; rendimientos tampoco (no son aportación tuya).
+function isSavingsAcc(id){ const a=fin.accounts.find(x=>x.id===id); return !!a && (a.kind==='savings' || a.kind==='investment'); }
+function savedInMonth(offset=0){
+  let s = 0;
+  for(const t of fin.tx){
+    if(t.type!=='transfer' || !txInMonth(t,offset)) continue;
+    const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);
+    if(to && !from) s += Number(t.amount_cents)||0;
+    else if(from && !to) s -= Number(t.amount_cents)||0;
+  }
+  return s;
+}
+function savingsGoal(){ return activeCats('savings').reduce((s,c)=>{ const b=currentBudget(c.id); return s + (b ? Number(b.amount_cents)||0 : 0); }, 0); }
+function savingsClass(pct){ return pct>=100 ? 'ok' : pct>=80 ? 'warn' : 'over'; }
 function monthTotals(offset=0){
   let inc=0, exp=0;
   for(const t of fin.tx){
@@ -3092,7 +3108,8 @@ function finHomeHTML(){
   const {inc, exp} = monthTotals(0);
   const left = inc - exp;
   const last = fin.tx.slice(0,5);
-  return `<div class="fin-cards">
+  const three = !!savingsCardHTML();
+  return `<div class="fin-cards${three?' three':''}">
       <div class="fin-card fin-card-hero">
         <div class="fin-label">Te queda este mes</div>
         <div class="fin-big ${left<0?'neg':'pos'}">${fmtMoney(left)}</div>
@@ -3103,9 +3120,22 @@ function finHomeHTML(){
         <div class="fin-big">${fmtMoney(exp)}</div>
         <div class="fin-sub">${escapeHTML(monthLabel(0))}</div>
       </div>
+      ${savingsCardHTML()}
     </div>
     <div class="task-group-label fin-section-label"><span>Últimos movimientos</span>${fin.tx.length>5?'<button type="button" class="btn btn-ghost fin-small-btn" data-fin-goto="movs">Ver todos</button>':''}</div>
     <div class="fin-list">${last.length ? last.map(txRowHTML).join('') : '<div class="empty"><p>Aún no hay movimientos. Usa el botón + para agregar el primero.</p></div>'}</div>`;
+}
+
+function savingsCardHTML(){
+  const goal = savingsGoal(), saved = savedInMonth(0);
+  if(!goal && !saved) return '';
+  const pct = goal>0 ? saved*100/goal : 0;
+  return `<div class="fin-card">
+    <div class="fin-label">Ahorrado este mes</div>
+    <div class="fin-big ${goal>0&&pct>=100?'pos':''}">${fmtMoney(saved)}</div>
+    ${goal>0 ? `<div class="fin-bar"><div class="${savingsClass(pct)}" style="width:${Math.max(0,Math.min(100,pct)).toFixed(1)}%"></div></div>
+      <div class="fin-sub">${pct>=100?'¡Meta cumplida! ':''}Meta ${fmtMoney(goal)} (${Math.round(pct)}%)</div>` : '<div class="fin-sub">Sin meta de ahorro</div>'}
+  </div>`;
 }
 
 // b) Movimientos
@@ -3437,6 +3467,28 @@ function finBudgetHTML(){
       </div>${detail}
     </div>`;
   }).join('');
+  const saved = savedInMonth(0);
+  const savRows = activeCats('savings').map(c=>{
+    const b = currentBudget(c.id);
+    let detail;
+    if(b){
+      const goal = Number(b.amount_cents)||0;
+      const pct = goal>0 ? saved*100/goal : 100;
+      detail = `<div class="fin-bar"><div class="${savingsClass(pct)}" style="width:${Math.max(0,Math.min(100,pct)).toFixed(1)}%"></div></div>
+        <div class="fin-budget-txt" style="color:${pct>=100?'var(--green)':pct>=80?'var(--amber)':'var(--red)'}">${fmtMoney(saved)} de ${fmtMoney(goal)} (${Math.round(pct)}%)${pct>=100?' · ¡Meta cumplida!':''}</div>`;
+    } else detail = `<div class="fin-budget-txt">Ahorrado: ${fmtMoney(saved)}</div>`;
+    return `<div class="fin-budget-row">
+      <div class="fin-budget-top">
+        <div class="fin-budget-name">${escapeHTML(c.name)}</div>
+        <button type="button" class="fin-limit ${b?'':'empty'}" data-fin-limit="${escapeAttr(c.id)}" title="Editar meta">${b?fmtMoney(b.amount_cents):'Sin meta'}</button>
+        <button type="button" class="fin-icon-btn" data-cat-rename="${escapeAttr(c.id)}" title="Renombrar" aria-label="Renombrar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+      </div>${detail}
+    </div>`;
+  }).join('');
+  const savHTML = savRows ? `<div class="task-group-label fin-section-label" style="margin-top:0"><span>Meta de ahorro</span></div>
+    <div class="fin-list">${savRows}</div>
+    <div class="fin-hint" style="margin-bottom:6px">Cuenta lo que transfieres a tus cuentas de ahorro e inversión (NU, GBM) este mes, menos lo que sacas.</div>
+    <div class="task-group-label fin-section-label"><span>Gastos</span></div>` : '';
   const incRows = activeCats('income').map(c=>`<div class="fin-budget-row"><div class="fin-budget-top">
       <div class="fin-budget-name">${escapeHTML(c.name)}</div>
       <button type="button" class="fin-icon-btn" data-cat-rename="${escapeAttr(c.id)}" title="Renombrar" aria-label="Renombrar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
@@ -3444,8 +3496,9 @@ function finBudgetHTML(){
     </div></div>`).join('');
   const archived = fin.categories.filter(c=>c.archived);
   const archivedHTML = archived.length ? `<div class="task-group-label fin-section-label"><span>Archivadas (${archived.length})</span><button type="button" class="btn btn-ghost fin-small-btn" id="finToggleArchived">${finShowArchived?'Ocultar':'Ver'}</button></div>
-    ${finShowArchived ? `<div class="fin-list">${archived.map(c=>`<div class="fin-budget-row"><div class="fin-budget-top"><div class="fin-budget-name">${escapeHTML(c.name)} <span class="fin-kind">${c.kind==='income'?'Ingreso':'Gasto'}</span></div><button type="button" class="fin-icon-btn" data-cat-restore="${escapeAttr(c.id)}">Restaurar</button></div></div>`).join('')}</div>` : ''}` : '';
+    ${finShowArchived ? `<div class="fin-list">${archived.map(c=>`<div class="fin-budget-row"><div class="fin-budget-top"><div class="fin-budget-name">${escapeHTML(c.name)} <span class="fin-kind">${c.kind==='income'?'Ingreso':c.kind==='savings'?'Ahorro':'Gasto'}</span></div><button type="button" class="fin-icon-btn" data-cat-restore="${escapeAttr(c.id)}">Restaurar</button></div></div>`).join('')}</div>` : ''}` : '';
   return `<div class="fin-month-sum">${escapeHTML(monthLabel(0))} · Gastado ${fmtMoney(totalSpent)} de ${fmtMoney(totalLim)} presupuestado</div>
+    ${savHTML}
     <div class="fin-list">${rows || '<div class="empty"><p>No hay categorías de gasto.</p></div>'}</div>
     ${incRows ? `<div class="task-group-label fin-section-label"><span>Categorías de ingreso</span></div><div class="fin-list">${incRows}</div>` : ''}
     ${archivedHTML}
@@ -3673,7 +3726,7 @@ function openCategoryModal(id){
     `<div class="form-group"><label class="form-label" for="catName">Nombre</label>
       <input class="form-input" id="catName" maxlength="40" autocomplete="off" value="${escapeAttr(c?c.name:'')}" style="font-size:16px"></div>
      ${c ? '' : `<div class="form-group" style="margin-bottom:0"><label class="form-label" for="catKind">Tipo</label>
-      <select class="form-input form-select fin-field" id="catKind"><option value="expense">Gasto</option><option value="income">Ingreso</option></select></div>`}`,
+      <select class="form-input form-select fin-field" id="catKind"><option value="expense">Gasto</option><option value="income">Ingreso</option><option value="savings">Meta de ahorro</option></select></div>`}`,
     `<button type="button" class="btn btn-primary" id="catSave">Guardar</button>`);
   setTimeout(()=>document.getElementById('catName').focus(), 50);
   document.getElementById('catSave').onclick = async ()=>{
