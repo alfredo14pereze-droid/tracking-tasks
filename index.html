@@ -3044,7 +3044,7 @@ function isSavingsAcc(id){ const a=fin.accounts.find(x=>x.id===id); return !!a &
 function savedInMonth(offset=0){
   let s = 0;
   for(const t of fin.tx){
-    if(t.type!=='transfer' || !txInMonth(t,offset)) continue;
+    if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
     const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);
     if(to && !from) s += Number(t.amount_cents)||0;
     else if(from && !to) s -= Number(t.amount_cents)||0;
@@ -3141,7 +3141,7 @@ function renderFinance(el){
 function txRowHTML(t){
   const amt = Number(t.amount_cents)||0;
   let title, sub, sign = '';
-  if(t.type==='transfer'){ title='Transferencia'; sub=`${escapeHTML(accName(t.account_id))} → ${escapeHTML(accName(t.to_account_id))}`; }
+  if(t.type==='transfer'){ title=t.is_allocation?'Reparto de ahorro':'Transferencia'; sub=`${escapeHTML(accName(t.account_id))} → ${escapeHTML(accName(t.to_account_id))}`; }
   else{ title=escapeHTML(catName(t.category_id)); sub=escapeHTML(accName(t.account_id)); sign = t.type==='income' ? '+' : '−'; }
   return `<div class="fin-tx" data-tx="${escapeAttr(t.id)}">
     <div class="fin-tx-main">
@@ -3261,7 +3261,7 @@ function finAccountsHTML(){
       </div>
     </div>`;
   }).join('')}</div>${closedAccountsHTML()}
-    <button type="button" class="btn btn-ghost fin-add-btn" id="finNewAcc">+ Nueva cuenta</button>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-ghost fin-add-btn" id="finNewAcc">+ Nueva cuenta</button><button type="button" class="btn btn-ghost fin-add-btn" data-fin-allocate>Repartir ahorros</button></div>`;
 }
 function closedAccountsHTML(){
   const closed = fin.accounts.filter(a=>a.archived && !isLoan(a));
@@ -3654,7 +3654,8 @@ function monthsUntil(due){
 function goalSiblings(g){ const k=x=>x.due_date||'9999-12-31'; return fin.goals.filter(x=>x.account_id===g.account_id).sort((a,b)=>k(a)<k(b)?-1:k(a)>k(b)?1:String(a.created_at).localeCompare(String(b.created_at))); }
 function goalCurrent(g){
   if(!g.account_id) return Number(g.saved_cents)||0;
-  const pool = Math.max(0, accountValue(g.account_id));
+  const acc = fin.accounts.find(a=>a.id===g.account_id);
+  const pool = Math.max(0, acc && acc.kind==='investment' && accPositions(acc.id).length ? accBalance(acc.id) : accountValue(g.account_id));
   const sib = goalSiblings(g);
   if(sib.length<2) return pool;
   let left = pool;
@@ -3665,6 +3666,7 @@ function finGoalsHTML(){
   const cards = fin.goals.map(g=>{
     const target = Number(g.target_cents)||0;
     const cur = goalCurrent(g);
+    if(!target) return `<div class="fin-card fin-goal" data-goal="${escapeAttr(g.id)}"><div class="fin-acc-head"><div class="fin-acc-name">${escapeHTML(g.name)}</div><span class="fin-kind">Sin monto total</span></div><div class="fin-big">${fmtMoney(cur)}</div><div class="fin-sub">${g.account_id?`Vive en: ${escapeHTML(accName(g.account_id))}`:'Progreso capturado a mano'}</div></div>`;
     const pct = target>0 ? Math.min(100, cur*100/target) : 0;
     const remaining = Math.max(0, target-cur);
     const lines = [];
@@ -3692,7 +3694,9 @@ function finGoalsHTML(){
       <div class="fin-goal-lines">${lines.map(l=>`<div>${l}</div>`).join('')}</div>
     </div>`;
   }).join('');
-  return `${cards ? `<div class="fin-acc-grid">${cards}</div>` : '<div class="empty"><p>Aún no tienes metas.</p></div>'}
+  return `${bucketsHTML()}
+    <div class="task-group-label fin-section-label"><span>Metas</span></div>
+    ${cards ? `<div class="fin-acc-grid">${cards}</div>` : '<div class="empty"><p>Aún no tienes metas.</p></div>'}
     <button type="button" class="btn btn-ghost fin-add-btn" id="finNewGoal">+ Nueva meta</button>`;
 }
 
@@ -3720,7 +3724,7 @@ function bindFinance(el){
   el.querySelectorAll('[data-income-receive]').forEach(b=>b.onclick=()=>{
     const x = expectedIncomes().find(i=>i.cat.id===b.dataset.incomeReceive); if(!x) return;
     const step = x.source && x.source.frequency!=='irregular' ? Math.min(Number(x.source.amount_cents)||0, x.expected-x.received) : x.expected-x.received;
-    openTxModal(null, {type:'income', category_id:x.cat.id, amount:Math.max(0,step), account_id:x.source&&x.source.account_id, title:`Recibí ${x.cat.name}`});
+    openTxModal(null, {type:'income', category_id:x.cat.id, amount:Math.max(0,step), account_id:x.source&&x.source.account_id, title:`Recibí ${x.cat.name}`, receipt:true});
   });
   el.querySelectorAll('[data-card-edit]').forEach(b=>b.onclick=()=>openCardModal(b.dataset.cardEdit));
   el.querySelectorAll('[data-rec-edit]').forEach(b=>b.onclick=()=>openRecurringModal(b.dataset.recEdit));
@@ -3732,6 +3736,8 @@ function bindFinance(el){
   const sr = el.querySelector('#finSaveReview'); if(sr) sr.onclick=saveReview;
   const em = el.querySelector('#finExportMovs'); if(em) em.onclick=exportMovsCSV;
   const ep = el.querySelector('#finExportPat'); if(ep) ep.onclick=exportPatrimonioCSV;
+  el.querySelectorAll('[data-fin-allocate]').forEach(b=>b.onclick=openAllocateModal);
+  el.querySelectorAll('[data-acc-monthly]').forEach(b=>b.onclick=()=>editAccMonthlyInline(b));
   el.querySelectorAll('[data-src-edit]').forEach(b=>b.onclick=()=>openSourceModal(b.dataset.srcEdit));
   el.querySelectorAll('[data-src-new]').forEach(b=>b.onclick=()=>openSourceModal());
   el.querySelectorAll('[data-acc-edit]').forEach(b=>b.onclick=()=>openAccountModal(b.dataset.accEdit));
@@ -3778,7 +3784,8 @@ function openTxModal(id, preset){
     <div class="form-group"><label class="form-label" for="txDate">Fecha</label>
       <input type="date" class="form-input" id="txDate" value="${escapeAttr(t?t.occurred_on:localDate())}"></div>
     <div class="form-group" style="margin-bottom:0"><label class="form-label" for="txNote">Nota (opcional)</label>
-      <input class="form-input" id="txNote" maxlength="200" autocomplete="off" value="${escapeAttr(t ? (t.note||'') : (preset.note||''))}"></div>`;
+      <input class="form-input" id="txNote" maxlength="200" autocomplete="off" value="${escapeAttr(t ? (t.note||'') : (preset.note||''))}"></div>
+    ${!t && preset.receipt ? `<label class="wiz-check" style="margin-top:14px"><input type="checkbox" id="txIncluded"> Ya estaba incluido en el saldo que capturé (solo lo registro, no lo vuelvo a sumar)</label>` : ''}`;
   const footer = `${t?'<button type="button" class="btn btn-ghost fin-modal-del" id="txDelete">Eliminar</button>':''}<button type="button" class="btn btn-primary" id="txSave">Guardar</button>`;
   openFinModal(t ? 'Editar movimiento' : (preset.title || 'Nuevo movimiento'), body, footer);
 
@@ -3822,8 +3829,14 @@ async function saveTx(t, type){
       const [row] = await dbPatch('transactions', payload, `?id=eq.${t.id}`);
       Object.assign(t, row || payload);
     } else {
+      const included = type==='income' && document.getElementById('txIncluded') && document.getElementById('txIncluded').checked;
       const [row] = await dbPost('transactions', payload);
       fin.tx.push(row);
+      if(included){ // el saldo capturado ya lo traía: bajamos el saldo inicial para no contarlo dos veces
+        const acc = fin.accounts.find(a=>a.id===account_id);
+        const opening = (Number(acc.opening_balance_cents)||0) - amount;
+        await dbPatch('accounts', {opening_balance_cents:opening}, `?id=eq.${acc.id}`); acc.opening_balance_cents = opening;
+      }
     }
     sortTx(); closeFinModal(); renderContent();
     showToast(t ? 'Movimiento actualizado' : 'Movimiento guardado','success');
@@ -3924,7 +3937,7 @@ function openGoalModal(id){
     <div class="form-group"><label class="form-label" for="goalName">Nombre</label>
       <input class="form-input" id="goalName" maxlength="60" autocomplete="off" style="font-size:16px" value="${escapeAttr(g?g.name:'')}"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label" for="goalTarget">Monto objetivo</label>
+      <div class="form-group"><label class="form-label" for="goalTarget">Monto total (opcional)</label>
         <input class="form-input fin-money" id="goalTarget" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${g?centsToInput(g.target_cents):''}"></div>
       <div class="form-group"><label class="form-label" for="goalDue">Fecha límite</label>
         <input type="date" class="form-input" id="goalDue" value="${escapeAttr(g&&g.due_date||'')}"></div>
@@ -3949,12 +3962,12 @@ function openGoalModal(id){
   if(!g) setTimeout(()=>document.getElementById('goalName').focus(), 50);
   document.getElementById('goalSave').onclick = async ()=>{
     const name = finVal('goalName');
-    const target = parseCents(finVal('goalTarget'));
+    const targetRaw = finVal('goalTarget'); const target = targetRaw==='' ? null : parseCents(targetRaw);
     const monthlyRaw = finVal('goalMonthly'), savedRaw = finVal('goalSaved');
     const monthly = monthlyRaw==='' ? 0 : parseCents(monthlyRaw);
     const saved = savedRaw==='' ? 0 : parseCents(savedRaw);
     if(!name){ showToast('Escribe un nombre','error'); return; }
-    if(!target){ showToast('Escribe el monto objetivo','error'); return; }
+    if(targetRaw!=='' && !target){ showToast('Revisa el monto objetivo','error'); return; }
     if(monthly===null || saved===null){ showToast('Revisa los montos','error'); return; }
     const payload = {name, target_cents:target, due_date: finVal('goalDue') || null, account_id: finVal('goalAccount') || null, monthly_contribution_cents:monthly, saved_cents:saved};
     try{
@@ -3987,9 +4000,33 @@ function paydaysInMonth(weekday, offset=0){
   return n;
 }
 // Mensual "base": semanal ×4, quincenal ×2. Para lo que esperas recibir ESTE mes, semanal cuenta los días de pago reales del mes.
+// Fecha de los saldos que capturaste en el asistente: lo que se pagó antes ya estaba en tus saldos.
+function finStartDate(){ const v=assumption('start_date'); if(!v) return null; const s=String(Math.round(v)); return new Date(Number(s.slice(0,4)), Number(s.slice(4,6))-1, Number(s.slice(6,8))); }
+// Primer día que cuenta este mes (día 1, o la fecha de inicio si cae en este mes)
+function countFrom(){ const first=new Date(); first.setHours(0,0,0,0); first.setDate(1); const st=finStartDate(); return st && st>first ? st : first; }
+function paydaysFrom(src, from, until){ // pagos con fecha en [from, until)
+  const a = Number(src.amount_cents)||0;
+  if(src.frequency==='semanal'){
+    if(src.pay_weekday===null || src.pay_weekday===undefined || src.pay_weekday==='') return null;
+    let n=0; const d=new Date(from); while(d<until){ if(d.getDay()===Number(src.pay_weekday)) n++; d.setDate(d.getDate()+1); } return n*a;
+  }
+  if((src.frequency==='mensual' || src.frequency==='quincenal') && src.pay_day){
+    const y=from.getFullYear(), m=from.getMonth(), len=new Date(y,m+1,0).getDate();
+    const days = src.frequency==='mensual' ? [src.pay_day] : [src.pay_day, src.pay_day+15];
+    return days.filter(dd=>dd<=len).map(dd=>new Date(y,m,dd)).filter(dt=>dt>=from && dt<until).length * a;
+  }
+  return null;
+}
 function sourceMonthly(src, thisMonth){
   const a = Number(src.amount_cents)||0;
-  if(src.frequency==='semanal') return thisMonth && src.pay_weekday!==null && src.pay_weekday!==undefined && src.pay_weekday!=='' ? a*paydaysInMonth(src.pay_weekday) : a*4;
+  if(thisMonth){
+    const from = countFrom(), end = new Date(from.getFullYear(), from.getMonth()+1, 1);
+    const n = paydaysFrom(src, from, end);
+    if(n!==null) return n;
+    const st = finStartDate(), first = new Date(from.getFullYear(), from.getMonth(), 1);
+    if(st && st>first && src.frequency!=='semanal') return 0; // sin día conocido y empezaste este mes: ya estaba en tus saldos
+  }
+  if(src.frequency==='semanal') return a*4;
   if(src.frequency==='quincenal') return a*2;
   return a;
 }
@@ -4183,7 +4220,8 @@ function wizDefaults(){
     savings: {monthly: ahorro && currentBudget(ahorro.id) ? centsToInput(currentBudget(ahorro.id).amount_cents) : '',
       viaje: {balance: viaje?money(Math.max(0,accBalance(viaje.id))):'', trips},
       futuro: {balance: futuro?money(Math.max(0,accBalance(futuro.id))):'', amount: boda?money(boda.target_cents):'', date: boda&&boda.due_date||''},
-      largo: {amount: largo?money(largo.target_cents):'', date: largo&&largo.due_date||''}},
+      largo: {amount: largo?money(largo.target_cents):'', date: largo&&largo.due_date||''},
+      monthlyBy: {nu: nu&&Number(nu.monthly_target_cents)?money(nu.monthly_target_cents):'', viaje: viaje&&Number(viaje.monthly_target_cents)?money(viaje.monthly_target_cents):'', futuro: futuro&&Number(futuro.monthly_target_cents)?money(futuro.monthly_target_cents):'', gbm: (()=>{ const g=wizAcc(a=>a.kind==='investment'); return g&&Number(g.monthly_target_cents)?money(g.monthly_target_cents):''; })()}},
     assume: {inflation:A('inflation'), expected_return:A('expected_return'), retirement_age:A('retirement_age'), years_to_retirement:A('years_to_retirement')},
     removed: {incomes:[], recurring:[], funds:[]},
   };
@@ -4271,21 +4309,27 @@ function wizStepHTML(){
   }
   if(st===5){
     const t = wizIncomeTotals();
+    d.savings.monthlyBy = d.savings.monthlyBy || {nu:'', viaje:'', futuro:'', gbm:''};
     if(!d.savings.monthly && t.total) d.savings.monthly = centsToInput(Math.round(t.total/2/10000)*10000);
     const pct = t.total ? wc(d.savings.monthly)*100/t.total : 0;
+    const mb = d.savings.monthlyBy, plan = wc(mb.nu)+wc(mb.viaje)+wc(mb.futuro)+wc(mb.gbm), goalM = wc(d.savings.monthly);
     return `${wField('Meta de ahorro mensual (monto fijo)', wMoney('savings.monthly', d.savings.monthly), `Tus ingresos totales: ${fmtMoney(t.total)}/mes. Debe quedar entre 30% y 70%.`)}
-      <div class="wiz-sum" id="wizLive">Equivale a <b>${pct.toFixed(0)}%</b> de tus ingresos.</div>
+      <div class="wiz-sum" id="wizLive">Equivale a <b>${pct.toFixed(0)}%</b> de tus ingresos.<br>¿Cuánto va a cada cubeta al mes? <b>${fmtMoney(plan)}</b> de ${fmtMoney(goalM)}${plan===goalM?' ✓':plan<goalM?` · faltan ${fmtMoney(goalM-plan)} por asignar`:` · te pasas ${fmtMoney(plan-goalM)}`}</div>
       <div class="task-group-label fin-section-label"><span>Cubetas</span></div>
-      <div class="wiz-item"><b>Colchón</b> · vive en NU ahorro. Su meta se calcula en el paso siguiente.</div>
+      <p class="fin-hint" style="margin:-2px 0 10px">El monto al mes es lo que piensas apartar cada mes. La meta total es opcional. Los ahorros que ya tienes los separas después con "Repartir ahorros".</p>
+      <div class="wiz-item"><b>Colchón</b> · vive en NU ahorro. Su meta total se calcula en el paso siguiente.
+        <div class="form-row">${wField('Al mes', wMoney('savings.monthlyBy.nu', d.savings.monthlyBy.nu))}<div></div></div></div>
       <div class="wiz-item"><b>Viaje</b> · cajita propia
+        <div class="form-row">${wField('Al mes', wMoney('savings.monthlyBy.viaje', d.savings.monthlyBy.viaje))}<div></div></div>
         ${wField(`Saldo al ${escapeHTML(wizDate())}`, wMoney('savings.viaje.balance', d.savings.viaje.balance))}
         ${d.savings.viaje.trips.map((tr,k)=>`<div class="form-row">${wField(k<2?'Viaje grande':'Viaje pequeño', wText(`savings.viaje.trips.${k}.name`, tr.name))}<div class="form-row" style="gap:8px">${wField('Monto', wMoney(`savings.viaje.trips.${k}.amount`, tr.amount))}${wField('Fecha', wDate(`savings.viaje.trips.${k}.date`, tr.date))}</div></div>`).join('')}
         <div class="fin-hint">El saldo de Viaje se reparte entre los viajes por fecha: el más cercano se llena primero.</div></div>
       <div class="wiz-item"><b>Futuro</b> (boda y casa) · cajita propia
-        <div class="form-row">${wField(`Saldo al ${escapeHTML(wizDate())}`, wMoney('savings.futuro.balance', d.savings.futuro.balance))}<div></div></div>
-        <div class="form-row">${wField('Meta (opcional)', wMoney('savings.futuro.amount', d.savings.futuro.amount))}${wField('Fecha (opcional)', wDate('savings.futuro.date', d.savings.futuro.date))}</div></div>
-      <div class="wiz-item"><b>Largo plazo</b> · GBM
-        <div class="form-row">${wField('Meta (opcional)', wMoney('savings.largo.amount', d.savings.largo.amount))}${wField('Fecha (opcional)', wDate('savings.largo.date', d.savings.largo.date))}</div></div>`;
+        <div class="form-row">${wField(`Saldo al ${escapeHTML(wizDate())}`, wMoney('savings.futuro.balance', d.savings.futuro.balance))}${wField('Al mes', wMoney('savings.monthlyBy.futuro', d.savings.monthlyBy.futuro))}</div>
+        <div class="form-row">${wField('Meta total (opcional)', wMoney('savings.futuro.amount', d.savings.futuro.amount))}${wField('Fecha (opcional)', wDate('savings.futuro.date', d.savings.futuro.date))}</div></div>
+      <div class="wiz-item"><b>Largo plazo</b> · GBM (cuenta solo lo que tú aportas, no la herencia)
+        <div class="form-row">${wField('Al mes', wMoney('savings.monthlyBy.gbm', d.savings.monthlyBy.gbm))}<div></div></div>
+        <div class="form-row">${wField('Meta total (opcional)', wMoney('savings.largo.amount', d.savings.largo.amount))}${wField('Fecha (opcional)', wDate('savings.largo.date', d.savings.largo.date))}</div></div>`;
   }
   if(st===6){
     const goal = wizColchonGoal(), have = wc(d.balances.nu);
@@ -4331,7 +4375,7 @@ function wizValidate(){
     const t = wizIncomeTotals().total;
     const e = money(d.savings.monthly,'meta de ahorro mensual',true); errs.push(e);
     if(!e && t){ const pct = wc(d.savings.monthly)*100/t; if(pct<30||pct>70) errs.push(`La meta debe estar entre 30% y 70% de tus ingresos: entre ${fmtMoney(t*0.3)} y ${fmtMoney(t*0.7)}`); }
-    [d.savings.viaje.balance, d.savings.futuro.balance, d.savings.futuro.amount, d.savings.largo.amount, ...d.savings.viaje.trips.map(x=>x.amount)].forEach(v=>errs.push(money(v,'monto',false)));
+    [d.savings.viaje.balance, d.savings.futuro.balance, d.savings.futuro.amount, d.savings.largo.amount, ...d.savings.viaje.trips.map(x=>x.amount), ...Object.values(d.savings.monthlyBy||{})].forEach(v=>errs.push(money(v,'monto',false)));
   }
   if(st===6) errs.push(money(d.balances.nu,'saldo de NU',false));
   if(st===7){
@@ -4441,6 +4485,11 @@ async function wizFinish(){
       tr.id = g.id; wizSave();
     }
     await upsertGoal('Boda y casa', futuro.id, wc(d.savings.futuro.amount), d.savings.futuro.date);
+    const mb = d.savings.monthlyBy || {};
+    for(const [acc, v] of [[nu, mb.nu], [viaje, mb.viaje], [futuro, mb.futuro], [gbm, mb.gbm]]){
+      if(!acc) continue; const c = wc(v||'');
+      if(c!==Number(acc.monthly_target_cents||0)){ await dbPatch('accounts', {monthly_target_cents:c}, `?id=eq.${acc.id}`); acc.monthly_target_cents = c; }
+    }
     if(gbm) await upsertGoal('Largo plazo', gbm.id, wc(d.savings.largo.amount), d.savings.largo.date);
     // 7) Colchón
     if(nu) await upsertGoal('Colchón', nu.id, wizColchonGoal(), null);
@@ -4450,6 +4499,7 @@ async function wizFinish(){
       await setAssumption(k, v==='' ? null : Number(v));
     }
     await setAssumption('setup_completed', Number(localDate().replace(/-/g,'')));
+    await setAssumption('start_date', Number(d.date.replace(/-/g,'')));
     try{ localStorage.removeItem(WIZ_KEY); }catch(e){}
     document.getElementById('finWizard').classList.remove('open');
     wiz = null;
@@ -4602,6 +4652,10 @@ function alertsOff(){ try{ const o=JSON.parse(localStorage.getItem(ALERTS_KEY)||
 function hideAlert(id){ try{ const o=JSON.parse(localStorage.getItem(ALERTS_KEY)||'{}'); const k=monthStartStr(0); o[k]=[...(o[k]||[]), id]; localStorage.setItem(ALERTS_KEY, JSON.stringify({[k]:o[k]})); }catch(e){} }
 // Lo que ya debió llegar de una fuente de ingreso este mes (pagos cuya fecha ya pasó)
 function expectedSoFar(s){
+  const n = paydaysFrom(s, countFrom(), todayMidnight());
+  return n===null ? 0 : n;
+}
+function expectedSoFarOld(s){
   const a = Number(s.amount_cents)||0, today = todayMidnight();
   if(s.frequency==='semanal'){
     if(s.pay_weekday===null || s.pay_weekday===undefined) return 0;
@@ -4771,6 +4825,108 @@ function exportPatrimonioCSV(){
   activeAccounts().filter(isLoan).forEach(l=>{ const o=loanStats(l).owed; if(o>0){ const v=l.kind==='lent'?o:-o; prop+=v; rows.push(['Ahorro propio', l.name, l.kind==='lent'?'Te debe':'Le debes', csvNum(v), '', '']); } });
   rows.push([]); rows.push(['Total','Herencia','',csvNum(her)]); rows.push(['Total','Ahorro propio','',csvNum(prop)]); rows.push(['Total','Patrimonio neto','',csvNum(her+prop)]);
   return downloadCSV(`patrimonio-${localDate()}.csv`, rows);
+}
+
+// ── Cubetas de ahorro y reparto de ahorros ya existentes ──
+function bucketAccounts(){ return bankAccounts().filter(a=>a.kind==='savings' || a.kind==='investment'); }
+// Lo que le metiste este mes a una cuenta (sin contar repartos de ahorro que ya tenías)
+function bucketInMonth(accId, offset=0){
+  let n = 0;
+  for(const t of fin.tx){
+    if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
+    if(t.to_account_id===accId) n += Number(t.amount_cents)||0;
+    if(t.account_id===accId) n -= Number(t.amount_cents)||0;
+  }
+  return n;
+}
+function bucketsHTML(){
+  const bs = bucketAccounts();
+  if(!bs.length) return '';
+  const plan = bs.reduce((s,a)=>s+(Number(a.monthly_target_cents)||0),0);
+  const goal = savingsGoal();
+  return `<div class="task-group-label fin-section-label" style="margin-top:0"><span>Cubetas · este mes</span><button type="button" class="btn btn-primary fin-small-btn" data-fin-allocate>Repartir ahorros</button></div>
+    <div class="fin-list">${bs.map(a=>{
+      const target = Number(a.monthly_target_cents)||0, inM = bucketInMonth(a.id);
+      const pct = target>0 ? inM*100/target : 0;
+      const inv = a.kind==='investment' && accPositions(a.id).length;
+      return `<div class="fin-budget-row"><div class="fin-budget-top">
+          <div class="fin-budget-name">${escapeHTML(a.name)}</div>
+          <button type="button" class="fin-limit ${target?'':'empty'}" data-acc-monthly="${escapeAttr(a.id)}" title="Cuánto al mes">${target?fmtMoney(target)+'/mes':'Sin monto al mes'}</button>
+        </div>
+        ${target ? `<div class="fin-bar"><div class="${savingsClass(pct)}" style="width:${Math.max(0,Math.min(100,pct)).toFixed(1)}%"></div></div>` : ''}
+        <div class="fin-budget-txt">Este mes: ${fmtMoney(inM)}${target?` de ${fmtMoney(target)} (${Math.round(pct)}%)${pct>=100?' · ✓':''}`:''} · ${inv ? `aportado propio ${fmtMoney(Math.max(0,accBalance(a.id)))}` : `saldo ${fmtMoney(accountValue(a.id))}`}</div>
+      </div>`;
+    }).join('')}</div>
+    <div class="fin-hint">${goal ? `Suma de cubetas: ${fmtMoney(plan)}/mes · meta de ahorro mensual: ${fmtMoney(goal)}${plan!==goal?` (${plan<goal?'faltan '+fmtMoney(goal-plan)+' por asignar':'te pasas '+fmtMoney(plan-goal)})`:' ✓'}` : `Suma de cubetas: ${fmtMoney(plan)}/mes`}. "Repartir ahorros" mueve dinero que ya tenías y no cuenta como ahorro del mes.</div>`;
+}
+function editAccMonthlyInline(btn){
+  const a = fin.accounts.find(x=>x.id===btn.dataset.accMonthly); if(!a) return;
+  const inp = document.createElement('input');
+  inp.className = 'form-input fin-limit-input'; inp.inputMode = 'decimal'; inp.placeholder = 'Al mes'; inp.autocomplete = 'off';
+  inp.value = Number(a.monthly_target_cents) ? centsToInput(a.monthly_target_cents) : '';
+  btn.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = async (save)=>{
+    if(done) return; done = true;
+    if(save){
+      const c = inp.value.trim()==='' ? 0 : parseCents(inp.value.trim());
+      if(c===null) showToast('Escribe un monto válido','error');
+      else if(c!==Number(a.monthly_target_cents)){
+        try{ await dbPatch('accounts', {monthly_target_cents:c}, `?id=eq.${a.id}`); a.monthly_target_cents = c; }
+        catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+      }
+    }
+    renderContent();
+  };
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); commit(true); } else if(e.key==='Escape') commit(false); });
+  inp.addEventListener('blur', ()=>commit(true));
+}
+function openAllocateModal(){
+  const sources = bankAccounts().filter(a=>a.kind!=='credit');
+  const from0 = (sources.find(a=>a.name==='Plata') || sources.find(a=>a.kind==='debit') || sources[0] || {}).id;
+  const nuId = (fin.accounts.find(a=>a.name==='NU ahorro')||{}).id;
+  const colchon = fin.goals.find(g=>g.name==='Colchón');
+  const rowsHTML = from=>bucketAccounts().filter(a=>a.id!==from).map(a=>{
+    const hint = a.id===nuId && colchon && Number(colchon.target_cents) ? ` · al colchón le faltan ${fmtMoney(Math.max(0, Number(colchon.target_cents)-goalCurrent(colchon)))}` : '';
+    return `<div class="form-group"><label class="form-label" for="alloc-${escapeAttr(a.id)}">${escapeHTML(a.name)} <span style="color:var(--text3)">· tiene ${fmtMoney(a.kind==='investment'&&accPositions(a.id).length?Math.max(0,accBalance(a.id)):accountValue(a.id))}${escapeHTML(hint)}</span></label>
+      <input class="form-input fin-money" id="alloc-${escapeAttr(a.id)}" data-alloc="${escapeAttr(a.id)}" inputmode="decimal" autocomplete="off" placeholder="0.00"></div>`;
+  }).join('');
+  openFinModal('Repartir ahorros', `
+    <p class="fin-hint" style="margin:0 0 14px">Para separar dinero que <b>ya tenías</b> en tus cubetas. Haz lo mismo en tus bancos (por ejemplo, pasar de Plata a la cajita Viaje). No cuenta como ahorro del mes.</p>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="allocFrom">Sale de</label><select class="form-input form-select fin-field" id="allocFrom">${optionList(sources, from0)}</select></div>
+      <div class="form-group"><label class="form-label" for="allocDate">Fecha</label><input type="date" class="form-input" id="allocDate" value="${localDate()}"></div>
+    </div>
+    <div id="allocRows">${rowsHTML(from0)}</div>
+    <div class="wiz-sum" id="allocSum"></div>`,
+    `<button type="button" class="btn btn-primary" id="allocSave">Repartir</button>`);
+  const sum = ()=>{
+    const from = finVal('allocFrom');
+    let total = 0, bad = false;
+    document.querySelectorAll('[data-alloc]').forEach(i=>{ const v=i.value.trim(); if(!v) return; const c=parseCents(v); if(c===null) bad=true; else total+=c; });
+    const left = accountValue(from) - total;
+    document.getElementById('allocSum').innerHTML = bad ? 'Revisa los montos.' : `Total a repartir: <b>${fmtMoney(total)}</b> · ${escapeHTML(accName(from))} queda en <b style="color:${left<0?'var(--red)':'inherit'}">${fmtMoney(left)}</b>`;
+    return {total, bad, left};
+  };
+  document.getElementById('allocFrom').onchange = ()=>{ document.getElementById('allocRows').innerHTML = rowsHTML(finVal('allocFrom')); sum(); };
+  document.getElementById('finModalBody').addEventListener('input', sum);
+  sum();
+  document.getElementById('allocSave').onclick = async ()=>{
+    const from = finVal('allocFrom'), date = finVal('allocDate'), st = sum();
+    if(st.bad){ showToast('Revisa los montos','error'); return; }
+    if(!st.total){ showToast('Escribe cuánto va a cada cubeta','error'); return; }
+    if(st.left<0 && !confirm(`${accName(from)} quedaría en ${fmtMoney(st.left)}. ¿Repartir de todos modos?`)) return;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ showToast('Elige la fecha','error'); return; }
+    const btn = document.getElementById('allocSave'); btn.disabled = true;
+    try{
+      for(const i of document.querySelectorAll('[data-alloc]')){
+        const c = i.value.trim() ? parseCents(i.value.trim()) : 0; if(!c) continue;
+        const [row] = await dbPost('transactions', {type:'transfer', amount_cents:c, account_id:from, to_account_id:i.dataset.alloc, occurred_on:date, note:'Reparto de ahorro', category_id:null, is_allocation:true});
+        fin.tx.push(row);
+      }
+      sortTx(); closeFinModal(); renderContent(); showToast('Ahorros repartidos','success');
+    }catch(e){ btn.disabled = false; showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
 }
 
 // ── AUTH ─────────────────────────────────────────────────────
