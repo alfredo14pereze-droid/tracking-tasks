@@ -628,6 +628,17 @@ body.section-finance .content{padding-bottom:110px}
 .wiz-check input{width:18px;height:18px;accent-color:var(--accent)}
 .wiz-sum{background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;margin-top:12px;color:var(--text)}
 #finWizFooter{flex-wrap:nowrap}
+.fin-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.fin-mid{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-top:4px;overflow-wrap:anywhere}
+.fin-mid.pos{color:var(--green)}
+.fin-mid.neg{color:var(--red)}
+.fin-alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.fin-alert{display:flex;align-items:center;justify-content:space-between;gap:8px;border-radius:var(--radius-sm);padding:8px 8px 8px 12px;font-size:13px;border:1px solid}
+.fin-alert span{min-width:0;overflow-wrap:anywhere}
+.fin-alert.warn{background:var(--amber-bg);border-color:var(--amber);color:var(--amber)}
+.fin-alert.over{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+.form-input.fin-rev-input{width:140px;flex-shrink:0;text-align:right}
+@media(max-width:768px){ .fin-stats{grid-template-columns:repeat(2,minmax(0,1fr))} .form-input.fin-rev-input{width:120px} }
 .fin-acc-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .fin-acc-actions .fin-small-btn{margin-top:0}
 @media(max-width:768px){
@@ -2995,7 +3006,7 @@ function donutSlices(data){
 // Montos en centavos (bigint). Saldo = inicial + ingresos − gastos − transf. salientes + transf. entrantes.
 const fin = {accounts:[], categories:[], tx:[], budgets:[], goals:[], snapshots:[], positions:[], valuations:[], incomes:[], recurring:[], cards:[], assumptions:[], loaded:false, errors:[]};
 let finFilterAcc = '', finFilterCat = '', finMonthOffset = 0, finShowArchived = false, finShowClosedLoans = false, finShowClosedAcc = false;
-const FIN_TABS = {home:'Hoy', movs:'Movimientos', accounts:'Cuentas', patrimonio:'Patrimonio', loans:'Préstamos', budget:'Presupuesto', goals:'Metas'};
+const FIN_TABS = {home:'Hoy', movs:'Movimientos', accounts:'Cuentas', patrimonio:'Patrimonio', recurrentes:'Recurrentes', loans:'Préstamos', budget:'Presupuesto', goals:'Metas', revision:'Revisión'};
 const ACC_KIND = {debit:'Débito', credit:'Crédito', savings:'Ahorro', investment:'Inversión', cash:'Efectivo', lent:'Te deben', borrowed:'Debes'};
 const TX_TYPES = {expense:'Gasto', income:'Ingreso', transfer:'Transferencia'};
 const moneyFmt = new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'});
@@ -3118,7 +3129,7 @@ function renderFinance(el){
   if(!fin.loaded) body = `<div class="loading"><div class="spinner"></div><p>Cargando finanzas...</p></div>`;
   else{
     const warn = fin.errors.length ? `<div class="fin-warn">No se pudo cargar: ${escapeHTML(fin.errors.join(', '))}. Revisa tu conexión y vuelve a abrir Finanzas. Tus tareas no se ven afectadas.</div>` : '';
-    body = warn + ({home:finHomeHTML, movs:finMovsHTML, accounts:finAccountsHTML, patrimonio:finPatrimonioHTML, loans:finLoansHTML, budget:finBudgetHTML, goals:finGoalsHTML}[finView])();
+    body = warn + ({home:finHomeHTML, movs:finMovsHTML, accounts:finAccountsHTML, patrimonio:finPatrimonioHTML, recurrentes:finRecurrentesHTML, revision:finRevisionHTML, loans:finLoansHTML, budget:finBudgetHTML, goals:finGoalsHTML}[finView])();
   }
   el.innerHTML = tabs + body;
   el.querySelectorAll('[data-fin-view]').forEach(b=>b.onclick=()=>{ finView=b.dataset.finView; renderContent(); });
@@ -3159,7 +3170,7 @@ function finHomeHTML(){
         ${rem>0 ? `<button type="button" class="btn btn-primary fin-small-btn" data-income-receive="${escapeAttr(x.cat.id)}">Ya lo recibí</button>` : '<span class="fin-tx-amt income">✓</span>'}
       </div>`;
     }).join('')}</div>` : '';
-  return `<div class="fin-cards${three?' three':''}">
+  return `${alertsHTML()}<div class="fin-cards${three?' three':''}">
       <div class="fin-card fin-card-hero">
         <div class="fin-label">Te queda este mes</div>
         <div class="fin-big ${left<0?'neg':'pos'}">${fmtMoney(left)}</div>
@@ -3173,6 +3184,7 @@ function finHomeHTML(){
       </div>
       ${savingsCardHTML()}
     </div>
+    ${homeExtraHTML()}
     ${incomeHTML}
     <div class="task-group-label fin-section-label"><span>Últimos movimientos</span>${fin.tx.length>5?'<button type="button" class="btn btn-ghost fin-small-btn" data-fin-goto="movs">Ver todos</button>':''}</div>
     <div class="fin-list">${last.length ? last.map(txRowHTML).join('') : '<div class="empty"><p>Aún no hay movimientos. Usa el botón + para agregar el primero.</p></div>'}</div>`;
@@ -3202,7 +3214,7 @@ function finMovsHTML(){
       <span>${escapeHTML(monthLabel(finMonthOffset))}</span>
       <button type="button" class="btn btn-ghost" data-fin-month="1" aria-label="Mes siguiente" ${finMonthOffset>=0?'disabled':''}>›</button>
     </div>
-    <div class="fin-month-sum">Ingresos ${fmtMoney(inc)} · Gastos ${fmtMoney(exp)}</div>
+    <div class="fin-month-sum" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Ingresos ${fmtMoney(inc)} · Gastos ${fmtMoney(exp)}</span><button type="button" class="btn btn-ghost fin-small-btn" id="finExportMovs">Exportar CSV</button></div>
     <div class="fin-filters">
       <select class="form-input form-select fin-field" id="finFilterAcc" aria-label="Filtrar por cuenta"><option value="">Cuentas</option>${optionList(fin.accounts, finFilterAcc)}</select>
       <select class="form-input form-select fin-field" id="finFilterCat" aria-label="Filtrar por categoría"><option value="">Categorías</option>${optionList(cats, finFilterCat)}</select>
@@ -3241,9 +3253,11 @@ function finAccountsHTML(){
       <div class="fin-acc-head"><div class="fin-acc-name">${escapeHTML(a.name)}</div><span style="display:flex;align-items:center;gap:2px;flex-shrink:0"><span class="fin-kind">${escapeHTML(ACC_KIND[a.kind]||a.kind)}</span><button type="button" class="fin-icon-btn" data-acc-edit="${escapeAttr(a.id)}" title="Editar cuenta" aria-label="Editar cuenta"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button></span></div>
       ${a.institution ? `<div class="fin-sub">${escapeHTML(a.institution)}</div>` : ''}
       ${main}
+      ${a.kind==='credit' ? cardInfoHTML(a) : ''}
       <div class="fin-acc-actions">
         <button type="button" class="btn btn-ghost fin-small-btn" data-fin-opening="${escapeAttr(a.id)}">${isCredit?'Deuda inicial':'Saldo inicial'}: ${fmtMoney(isCredit?-opening:opening)}</button>
         ${hist}
+        ${a.kind==='credit' && cardFor(a.id) ? `<button type="button" class="btn btn-ghost fin-small-btn" data-card-edit="${escapeAttr(a.id)}">Límite y fechas</button>` : ''}
       </div>
     </div>`;
   }).join('')}</div>${closedAccountsHTML()}
@@ -3708,6 +3722,16 @@ function bindFinance(el){
     const step = x.source && x.source.frequency!=='irregular' ? Math.min(Number(x.source.amount_cents)||0, x.expected-x.received) : x.expected-x.received;
     openTxModal(null, {type:'income', category_id:x.cat.id, amount:Math.max(0,step), account_id:x.source&&x.source.account_id, title:`Recibí ${x.cat.name}`});
   });
+  el.querySelectorAll('[data-card-edit]').forEach(b=>b.onclick=()=>openCardModal(b.dataset.cardEdit));
+  el.querySelectorAll('[data-rec-edit]').forEach(b=>b.onclick=()=>openRecurringModal(b.dataset.recEdit));
+  el.querySelectorAll('[data-rec-pause]').forEach(b=>b.onclick=()=>toggleRecurringPause(b.dataset.recPause));
+  el.querySelectorAll('[data-rec-charge]').forEach(b=>b.onclick=()=>chargeRecurring(b.dataset.recCharge));
+  const nr = el.querySelector('#finNewRec'); if(nr) nr.onclick=()=>openRecurringModal();
+  el.querySelectorAll('[data-alert-hide]').forEach(b=>b.onclick=()=>{ hideAlert(b.dataset.alertHide); renderContent(); });
+  el.querySelectorAll('[data-rev-month]').forEach(b=>b.onclick=()=>{ finReviewOffset=Math.min(0, finReviewOffset+Number(b.dataset.revMonth)); renderContent(); });
+  const sr = el.querySelector('#finSaveReview'); if(sr) sr.onclick=saveReview;
+  const em = el.querySelector('#finExportMovs'); if(em) em.onclick=exportMovsCSV;
+  const ep = el.querySelector('#finExportPat'); if(ep) ep.onclick=exportPatrimonioCSV;
   el.querySelectorAll('[data-src-edit]').forEach(b=>b.onclick=()=>openSourceModal(b.dataset.srcEdit));
   el.querySelectorAll('[data-src-new]').forEach(b=>b.onclick=()=>openSourceModal());
   el.querySelectorAll('[data-acc-edit]').forEach(b=>b.onclick=()=>openAccountModal(b.dataset.accEdit));
@@ -3754,7 +3778,7 @@ function openTxModal(id, preset){
     <div class="form-group"><label class="form-label" for="txDate">Fecha</label>
       <input type="date" class="form-input" id="txDate" value="${escapeAttr(t?t.occurred_on:localDate())}"></div>
     <div class="form-group" style="margin-bottom:0"><label class="form-label" for="txNote">Nota (opcional)</label>
-      <input class="form-input" id="txNote" maxlength="200" autocomplete="off" value="${escapeAttr(t&&t.note||'')}"></div>`;
+      <input class="form-input" id="txNote" maxlength="200" autocomplete="off" value="${escapeAttr(t ? (t.note||'') : (preset.note||''))}"></div>`;
   const footer = `${t?'<button type="button" class="btn btn-ghost fin-modal-del" id="txDelete">Eliminar</button>':''}<button type="button" class="btn btn-primary" id="txSave">Guardar</button>`;
   openFinModal(t ? 'Editar movimiento' : (preset.title || 'Nuevo movimiento'), body, footer);
 
@@ -4015,7 +4039,8 @@ function finPatrimonioHTML(){
         <div class="fin-list" style="margin-top:12px">${rows.map(r=>line(r.name, escapeHTML(r.sub), r.v)).join('')}</div>
       </div>
     </div>
-    <div class="fin-hint">Los fondos usan el último valor capturado (asistente o revisión mensual).</div>`;
+    <div class="fin-hint">Los fondos usan el último valor capturado (asistente o revisión mensual).</div>
+    <button type="button" class="btn btn-ghost fin-add-btn" id="finExportPat">Exportar CSV</button>`;
 }
 
 // Fuentes de ingreso (editar desde Presupuesto)
@@ -4435,6 +4460,317 @@ async function wizFinish(){
     btn.disabled = false; btn.textContent = 'Terminar';
     showToast('No se pudo guardar todo: '+finErr(e)+'. Tu avance sigue guardado; intenta de nuevo.','error');
   }
+}
+
+// ── FINANZAS v2 (entrega 2): tarjeta, recurrentes, alertas, revisión mensual, CSV ──
+let finReviewOffset = 0;
+function todayMidnight(){ const t=new Date(); t.setHours(0,0,0,0); return t; }
+// Próxima fecha (hoy o después) con ese día del mes; si el mes es más corto, usa su último día.
+function nextDateForDay(day, from){
+  const f = from || todayMidnight();
+  for(let k=0;k<3;k++){
+    const d = new Date(f.getFullYear(), f.getMonth()+k, 1);
+    const len = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    d.setDate(Math.min(Number(day), len));
+    if(d>=f) return d;
+  }
+  return null;
+}
+function daysUntil(d){ return Math.round((d - todayMidnight())/86400000); }
+function fmtDay(d){ return d.toLocaleDateString('es-MX',{day:'numeric', month:'short'}); }
+function inDaysTxt(n){ return n===0 ? 'hoy' : n===1 ? 'mañana' : `en ${n} días`; }
+function cardFor(accId){ return fin.cards.find(c=>c.account_id===accId); }
+function cardDebt(accId){ return Math.max(0, -accBalance(accId)); }
+
+// Tarjeta dentro de Cuentas
+function cardInfoHTML(a){
+  const c = cardFor(a.id);
+  if(!c) return `<div class="fin-sub">Sin límite ni fechas. <button type="button" class="btn btn-ghost fin-small-btn" data-card-edit="${escapeAttr(a.id)}">Agregar datos</button></div>`;
+  const debt = cardDebt(a.id), lim = Number(c.credit_limit_cents)||0, pct = lim ? debt*100/lim : 0;
+  const cut = nextDateForDay(c.cut_day), pay = nextDateForDay(c.pay_day);
+  return `<div class="fin-bar"><div class="${pct>30?'over':'ok'}" style="width:${Math.min(100,pct).toFixed(1)}%"></div></div>
+    <div class="fin-budget-txt ${pct>30?'over':''}">Uso ${pct.toFixed(1)}% de ${fmtMoney(lim)}${pct>30?' · ⚠ arriba de 30%':''}</div>
+    <div class="fin-sub">Corte: ${fmtDay(cut)} (día ${c.cut_day}) · Pago: ${fmtDay(pay)} (día ${c.pay_day}, ${inDaysTxt(daysUntil(pay))})</div>`;
+}
+function openCardModal(accId){
+  const a = fin.accounts.find(x=>x.id===accId); if(!a) return;
+  const c = cardFor(accId);
+  openFinModal(`Tarjeta · ${a.name}`, `
+    <div class="form-group"><label class="form-label" for="cardLimit">Límite de crédito</label><input class="form-input fin-money" id="cardLimit" inputmode="decimal" value="${c?centsToInput(c.credit_limit_cents):''}" placeholder="0.00"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="cardCut">Día de corte</label><input class="form-input fin-money" id="cardCut" inputmode="numeric" maxlength="2" value="${c?c.cut_day:''}" placeholder="1–31"></div>
+      <div class="form-group"><label class="form-label" for="cardPay">Día límite de pago</label><input class="form-input fin-money" id="cardPay" inputmode="numeric" maxlength="2" value="${c?c.pay_day:''}" placeholder="1–31"></div>
+    </div>
+    <div class="fin-hint">Lo que debes se cambia con "Deuda inicial" o con tus movimientos.</div>`,
+    `<button type="button" class="btn btn-primary" id="cardSave">Guardar</button>`);
+  document.getElementById('cardSave').onclick = async ()=>{
+    const lim = parseCents(finVal('cardLimit')), cut = Number(finVal('cardCut')), pay = Number(finVal('cardPay'));
+    if(lim===null){ showToast('Escribe el límite','error'); return; }
+    if(!(Number.isInteger(cut)&&cut>=1&&cut<=31) || !(Number.isInteger(pay)&&pay>=1&&pay<=31)){ showToast('Los días deben ser entre 1 y 31','error'); return; }
+    try{ await upsertRow('card_settings', c, {account_id:accId, credit_limit_cents:lim, cut_day:cut, pay_day:pay, updated_at:new Date().toISOString()}, fin.cards); closeFinModal(); renderContent(); showToast('Tarjeta guardada','success'); }
+    catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
+}
+
+// Recurrentes
+const REC_KIND = {suscripcion:'Suscripción', pago_tarjeta:'Pago de tarjeta', otro:'Gasto fijo'};
+function recChargedThisMonth(r){ return fin.tx.some(t=>t.type==='expense' && txInMonth(t,0) && t.note===`Cobro · ${r.name}`); }
+function finRecurrentesHTML(){
+  const items = fin.recurring.slice().sort((a,b)=>{
+    if(!!a.paused!==!!b.paused) return a.paused?1:-1;
+    const da = a.day_of_month ? nextDateForDay(a.day_of_month) : null, db = b.day_of_month ? nextDateForDay(b.day_of_month) : null;
+    if(!da||!db) return da?-1:db?1:0; return da-db;
+  });
+  const total = fin.recurring.filter(r=>!r.paused).reduce((s,r)=>s+(Number(r.amount_cents)||0),0);
+  return `<div class="fin-month-sum">Total fijo activo: ${fmtMoney(total)} al mes</div>
+    <div class="fin-list">${items.length ? items.map(r=>{
+      const next = r.day_of_month ? nextDateForDay(r.day_of_month) : null;
+      const charged = recChargedThisMonth(r);
+      return `<div class="fin-budget-row" style="${r.paused?'opacity:.55':''}">
+        <div class="fin-budget-top">
+          <div class="fin-budget-name">${escapeHTML(r.name)} <span class="fin-kind">${escapeHTML(REC_KIND[r.kind]||r.kind)}</span></div>
+          <span class="fin-tx-amt">${fmtMoney(r.amount_cents)}</span>
+        </div>
+        <div class="fin-budget-txt">${r.paused ? 'En pausa' : next ? `Próximo cobro: ${fmtDay(next)} (${inDaysTxt(daysUntil(next))})` : 'Día de cobro por confirmar'}${r.account_id?` · ${escapeHTML(accName(r.account_id))}`:''}${charged?' · ✓ registrado este mes':''}</div>
+        <div class="fin-acc-actions">
+          ${!r.paused && !charged ? `<button type="button" class="btn btn-primary fin-small-btn" data-rec-charge="${escapeAttr(r.id)}">Registrar cobro</button>` : ''}
+          <button type="button" class="btn btn-ghost fin-small-btn" data-rec-edit="${escapeAttr(r.id)}">Editar</button>
+          <button type="button" class="btn btn-ghost fin-small-btn" data-rec-pause="${escapeAttr(r.id)}">${r.paused?'Reanudar':'Pausar'}</button>
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty"><p>No tienes gastos fijos registrados.</p></div>'}</div>
+    <button type="button" class="btn btn-ghost fin-add-btn" id="finNewRec">+ Nuevo gasto fijo</button>`;
+}
+function openRecurringModal(id){
+  const r = id ? fin.recurring.find(x=>x.id===id) : null;
+  const v = r || {name:'', amount_cents:0, day_of_month:null, kind:'suscripcion', account_id:(bankAccounts().find(a=>a.kind==='credit')||{}).id, category_id:(activeCats('expense').find(c=>/suscrip/i.test(c.name))||{}).id};
+  openFinModal(r ? 'Editar gasto fijo' : 'Nuevo gasto fijo', `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="recName">Nombre</label><input class="form-input" id="recName" maxlength="40" style="font-size:16px" value="${escapeAttr(v.name)}"></div>
+      <div class="form-group"><label class="form-label" for="recAmount">Monto</label><input class="form-input fin-money" id="recAmount" inputmode="decimal" value="${v.amount_cents?centsToInput(v.amount_cents):''}" placeholder="0.00"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="recDay">Día de cobro</label><input class="form-input fin-money" id="recDay" inputmode="numeric" maxlength="2" value="${v.day_of_month||''}" placeholder="1–31 (vacío = por confirmar)"></div>
+      <div class="form-group"><label class="form-label" for="recKind">Tipo</label><select class="form-input form-select fin-field" id="recKind">${Object.entries(REC_KIND).map(([k,l])=>`<option value="${k}" ${v.kind===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="recAcc">Se cobra en</label><select class="form-input form-select fin-field" id="recAcc">${optionList(bankAccounts(), v.account_id)}</select></div>
+      <div class="form-group"><label class="form-label" for="recCat">Categoría</label><select class="form-input form-select fin-field" id="recCat"><option value="">—</option>${optionList(activeCats('expense'), v.category_id)}</select></div>
+    </div>`,
+    `${r?'<button type="button" class="btn btn-ghost fin-modal-del" id="recDelete">Eliminar</button>':''}<button type="button" class="btn btn-primary" id="recSave">Guardar</button>`);
+  document.getElementById('recSave').onclick = async ()=>{
+    const name = finVal('recName'), amount = parseCents(finVal('recAmount')), day = finVal('recDay');
+    if(!name){ showToast('Escribe el nombre','error'); return; }
+    if(amount===null){ showToast('Escribe un monto válido','error'); return; }
+    if(day && !(Number.isInteger(Number(day)) && Number(day)>=1 && Number(day)<=31)){ showToast('El día debe ser entre 1 y 31','error'); return; }
+    try{ await upsertRow('recurring_items', r, {name, amount_cents:amount, day_of_month:day?Number(day):null, kind:finVal('recKind'), account_id:finVal('recAcc')||null, category_id:finVal('recCat')||null}, fin.recurring); closeFinModal(); renderContent(); showToast('Guardado','success'); }
+    catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
+  if(r) document.getElementById('recDelete').onclick = async ()=>{
+    if(!confirm(`¿Eliminar "${r.name}"? Los cobros ya registrados no se borran.`)) return;
+    try{ await dbDelete('recurring_items', `?id=eq.${r.id}`); fin.recurring = fin.recurring.filter(x=>x!==r); closeFinModal(); renderContent(); }
+    catch(e){ showToast('No se pudo eliminar: '+finErr(e),'error'); }
+  };
+}
+async function toggleRecurringPause(id){
+  const r = fin.recurring.find(x=>x.id===id); if(!r) return;
+  try{ await dbPatch('recurring_items', {paused:!r.paused}, `?id=eq.${id}`); r.paused = !r.paused; renderContent(); }
+  catch(e){ showToast('No se pudo actualizar: '+finErr(e),'error'); }
+}
+function chargeRecurring(id){
+  const r = fin.recurring.find(x=>x.id===id); if(!r) return;
+  openTxModal(null, {type:'expense', amount:Number(r.amount_cents)||0, category_id:r.category_id, account_id:r.account_id, note:`Cobro · ${r.name}`, title:`Cobro de ${r.name}`});
+}
+
+// Próximos pagos (suscripciones y tarjeta)
+function upcomingPayments(days){
+  const out = [];
+  fin.recurring.filter(r=>!r.paused && r.day_of_month && r.kind!=='pago_tarjeta').forEach(r=>{
+    const d = nextDateForDay(r.day_of_month); if(d && daysUntil(d)<=days) out.push({name:r.name, amount:Number(r.amount_cents)||0, date:d, sub:accName(r.account_id)});
+  });
+  fin.cards.forEach(c=>{
+    const a = fin.accounts.find(x=>x.id===c.account_id); if(!a || a.archived) return;
+    const debt = cardDebt(a.id); const d = nextDateForDay(c.pay_day);
+    if(debt>0 && d && daysUntil(d)<=days) out.push({name:`Pago ${a.name}`, amount:debt, date:d, sub:'Deuda actual'});
+  });
+  return out.sort((a,b)=>a.date-b.date);
+}
+
+// Alertas (solo dentro de la app). Se pueden ocultar por el mes.
+const ALERTS_KEY = 'finAlertsOff';
+function alertsOff(){ try{ const o=JSON.parse(localStorage.getItem(ALERTS_KEY)||'{}'); return o[monthStartStr(0)] || []; }catch(e){ return []; } }
+function hideAlert(id){ try{ const o=JSON.parse(localStorage.getItem(ALERTS_KEY)||'{}'); const k=monthStartStr(0); o[k]=[...(o[k]||[]), id]; localStorage.setItem(ALERTS_KEY, JSON.stringify({[k]:o[k]})); }catch(e){} }
+// Lo que ya debió llegar de una fuente de ingreso este mes (pagos cuya fecha ya pasó)
+function expectedSoFar(s){
+  const a = Number(s.amount_cents)||0, today = todayMidnight();
+  if(s.frequency==='semanal'){
+    if(s.pay_weekday===null || s.pay_weekday===undefined) return 0;
+    let n=0; const d=new Date(today.getFullYear(), today.getMonth(), 1);
+    while(d<today){ if(d.getDay()===Number(s.pay_weekday)) n++; d.setDate(d.getDate()+1); }
+    return n*a;
+  }
+  if(!s.pay_day) return 0;
+  if(s.frequency==='mensual') return today.getDate()>s.pay_day ? a : 0;
+  if(s.frequency==='quincenal') return ((today.getDate()>s.pay_day)?1:0) + ((today.getDate()>s.pay_day+15)?1:0) > 0 ? a*(((today.getDate()>s.pay_day)?1:0)+((today.getDate()>s.pay_day+15)?1:0)) : 0;
+  return 0;
+}
+function finAlerts(){
+  const out = [];
+  activeCats('expense').forEach(c=>{
+    const b = currentBudget(c.id); if(!b) return;
+    const lim = Number(b.amount_cents)||0; if(!lim) return;
+    const spent = fin.tx.filter(t=>t.type==='expense' && t.category_id===c.id && txInMonth(t,0)).reduce((s,t)=>s+(Number(t.amount_cents)||0),0);
+    const pct = spent*100/lim;
+    if(pct>=100) out.push({id:`cat100-${c.id}`, level:'over', text:`${c.name}: llegaste al ${Math.round(pct)}% del presupuesto (${fmtMoney(spent)} de ${fmtMoney(lim)})`});
+    else if(pct>=80) out.push({id:`cat80-${c.id}`, level:'warn', text:`${c.name}: vas en ${Math.round(pct)}% del presupuesto (${fmtMoney(spent)} de ${fmtMoney(lim)})`});
+  });
+  fin.cards.forEach(c=>{
+    const a = fin.accounts.find(x=>x.id===c.account_id); if(!a || a.archived) return;
+    const debt = cardDebt(a.id); if(!debt) return;
+    const pay = nextDateForDay(c.pay_day), n = daysUntil(pay);
+    if(n<5) out.push({id:`card-${a.id}-${localDate(pay)}`, level:'over', text:`Pago de ${a.name} ${inDaysTxt(n)} (${fmtDay(pay)}): debes ${fmtMoney(debt)}`});
+  });
+  fin.incomes.filter(s=>s.active && s.counts_for_budget && s.category_id).forEach(s=>{
+    const due = expectedSoFar(s), rec = receivedInMonth(s.category_id);
+    if(due>rec) out.push({id:`inc-${s.id}-${due}`, level:'warn', text:`${s.name}: ya debió llegar ${fmtMoney(due)} este mes y has registrado ${fmtMoney(rec)}. Si ya te pagaron, usa "Ya lo recibí".`});
+  });
+  const off = alertsOff();
+  return out.filter(a=>!off.includes(a.id));
+}
+function alertsHTML(){
+  const al = finAlerts();
+  if(!al.length) return '';
+  return `<div class="fin-alerts">${al.map(a=>`<div class="fin-alert ${a.level}"><span>${escapeHTML(a.text)}</span><button type="button" class="fin-icon-btn" data-alert-hide="${escapeAttr(a.id)}" title="Ocultar este mes" aria-label="Ocultar este mes">✕</button></div>`).join('')}</div>`;
+}
+
+// Hoy: ingreso base contra gasto, excedente, tasa de ahorro real y próximos pagos
+function homeExtraHTML(){
+  const {inc, exp} = monthTotals(0);
+  const base = fin.incomes.filter(s=>s.active && s.counts_for_budget).reduce((t,s)=>t+sourceMonthly(s,false),0);
+  const saved = savedInMonth(0);
+  const rate = inc>0 ? saved*100/inc : null;
+  const stats = base ? `<div class="fin-card" style="margin-top:12px"><div class="fin-stats">
+      <div><div class="fin-label">Ingreso base</div><div class="fin-mid">${fmtMoney(base)}</div><div class="fin-sub">al mes</div></div>
+      <div><div class="fin-label">Gasto del mes</div><div class="fin-mid">${fmtMoney(exp)}</div><div class="fin-sub">${base?Math.round(exp*100/base)+'% del ingreso base':''}</div></div>
+      <div><div class="fin-label">Excedente</div><div class="fin-mid ${base-exp<0?'neg':'pos'}">${fmtMoney(base-exp)}</div><div class="fin-sub">base − gastos</div></div>
+      <div><div class="fin-label">Tasa de ahorro real</div><div class="fin-mid">${rate===null?'—':rate.toFixed(0)+'%'}</div><div class="fin-sub">${fmtMoney(saved)} ahorrado de ${fmtMoney(inc)} recibido</div></div>
+    </div></div>` : '';
+  const up = upcomingPayments(7);
+  const upHTML = up.length ? `<div class="task-group-label fin-section-label"><span>Próximos pagos (7 días)</span></div>
+    <div class="fin-list">${up.map(p=>`<div class="fin-tx" style="cursor:default"><div class="fin-tx-main"><div class="fin-tx-title">${escapeHTML(p.name)}</div><div class="fin-tx-sub">${fmtDay(p.date)} · ${inDaysTxt(daysUntil(p.date))} · ${escapeHTML(p.sub)}</div></div><div class="fin-tx-amt expense">${fmtMoney(p.amount)}</div></div>`).join('')}</div>` : '';
+  return stats + upHTML;
+}
+
+// Revisión mensual: capturar saldos reales del cierre y valores de fondos
+function accBalanceBefore(id, endExclusive){
+  const a = fin.accounts.find(x=>x.id===id);
+  let b = Number(a && a.opening_balance_cents)||0;
+  for(const t of fin.tx){
+    if(t.occurred_on >= endExclusive) continue;
+    const amt = Number(t.amount_cents)||0;
+    if(t.account_id===id) b += t.type==='income' ? amt : -amt;
+    if(t.type==='transfer' && t.to_account_id===id) b += amt;
+  }
+  return b;
+}
+function netDepositsInMonth(accId, offset){
+  let n = 0;
+  for(const t of fin.tx){ if(t.type!=='transfer' || !txInMonth(t,offset)) continue; if(t.to_account_id===accId) n += Number(t.amount_cents)||0; if(t.account_id===accId) n -= Number(t.amount_cents)||0; }
+  return n;
+}
+function monthStats(off){
+  const {inc, exp} = monthTotals(off); const saved = savedInMonth(off);
+  return {inc, exp, saved, rate: inc>0 ? saved*100/inc : null};
+}
+function finRevisionHTML(){
+  const off = finReviewOffset, ms = monthStartStr(off), end = monthStartStr(off+1);
+  const accs = bankAccounts().filter(a=>!accPositions(a.id).length);
+  const funds = fin.positions.filter(p=>!p.archived);
+  const cur = monthStats(off), prev = monthStats(off-1);
+  const cmp = (a,b,fmt,goodUp=true)=>{ if(a===null||b===null) return '<span class="fin-sub">—</span>'; const d=a-b; const good = goodUp ? d>=0 : d<=0; return `<span style="color:${d===0?'var(--text3)':good?'var(--green)':'var(--red)'}">${d>0?'▲':d<0?'▼':'='} ${fmt(Math.abs(d))}</span>`; };
+  const pctF = v=>v.toFixed(0)+' pts';
+  const snapFor = id=>fin.snapshots.find(s=>s.account_id===id && s.month===ms);
+  const valFor = p=>fin.valuations.find(v=>v.position_id===p.id && v.month===ms);
+  return `<div class="fin-month-nav">
+      <button type="button" class="btn btn-ghost" data-rev-month="-1" aria-label="Mes anterior">‹</button>
+      <span>Revisión · ${escapeHTML(monthLabel(off))}</span>
+      <button type="button" class="btn btn-ghost" data-rev-month="1" aria-label="Mes siguiente" ${off>=0?'disabled':''}>›</button>
+    </div>
+    <div class="fin-card"><div class="fin-stats">
+      <div><div class="fin-label">Ingresos</div><div class="fin-mid">${fmtMoney(cur.inc)}</div><div class="fin-sub">${cmp(cur.inc, prev.inc, fmtMoney)} vs mes anterior</div></div>
+      <div><div class="fin-label">Gastos</div><div class="fin-mid">${fmtMoney(cur.exp)}</div><div class="fin-sub">${cmp(cur.exp, prev.exp, fmtMoney, false)} vs mes anterior</div></div>
+      <div><div class="fin-label">Ahorrado</div><div class="fin-mid">${fmtMoney(cur.saved)}</div><div class="fin-sub">${cmp(cur.saved, prev.saved, fmtMoney)} vs mes anterior</div></div>
+      <div><div class="fin-label">Tasa de ahorro</div><div class="fin-mid">${cur.rate===null?'—':cur.rate.toFixed(0)+'%'}</div><div class="fin-sub">${cmp(cur.rate, prev.rate, pctF)} vs mes anterior</div></div>
+    </div></div>
+    <div class="task-group-label fin-section-label"><span>Saldos reales al cierre</span></div>
+    <div class="fin-hint" style="margin:-2px 0 10px">Copia el saldo de la app de cada banco. Si no coincide con el calculado, te falta registrar algún movimiento.</div>
+    <div class="fin-list">${accs.map(a=>{
+      const calc = accBalanceBefore(a.id, end), credit = a.kind==='credit', s = snapFor(a.id);
+      const val = s ? (credit ? -Number(s.balance_cents) : Number(s.balance_cents)) : (credit ? Math.max(0,-calc) : calc);
+      const diff = s ? Number(s.balance_cents) - calc : null;
+      return `<div class="fin-budget-row"><div class="fin-budget-top">
+          <div class="fin-budget-name">${escapeHTML(a.name)} <span class="fin-kind">${credit?'Deuda':escapeHTML(ACC_KIND[a.kind]||a.kind)}</span></div>
+          <input class="form-input fin-money fin-rev-input" data-rev-acc="${escapeAttr(a.id)}" inputmode="decimal" autocomplete="off" value="${centsToInput(val)}">
+        </div>
+        <div class="fin-budget-txt">Calculado: ${fmtMoney(credit?Math.max(0,-calc):calc)}${diff===null?'':diff===0?' · ✓ cuadra':` · <span style="color:var(--amber)">diferencia ${fmtMoney(credit?-diff:diff)}</span>`}${s?' · guardado':''}</div></div>`;
+    }).join('')}</div>
+    ${funds.length ? `<div class="task-group-label fin-section-label"><span>Fondos (valor al cierre)</span></div>
+    <div class="fin-list">${funds.map(p=>{ const v=valFor(p); const prevV=positionValue(p, off-1); const shown = v ? Number(v.value_cents) : (positionValue(p, off) || 0);
+      return `<div class="fin-budget-row"><div class="fin-budget-top">
+          <div class="fin-budget-name">${escapeHTML(p.fund_name)} <span class="fin-kind">${p.origin==='heredado'?'Heredado':'Propio'}</span></div>
+          <input class="form-input fin-money fin-rev-input" data-rev-pos="${escapeAttr(p.id)}" inputmode="decimal" autocomplete="off" value="${centsToInput(shown)}">
+        </div><div class="fin-budget-txt">${prevV===null?'Sin valor del mes anterior':`Mes anterior: ${fmtMoney(prevV)}`}${v?' · guardado':''}</div></div>`; }).join('')}</div>` : ''}
+    <button type="button" class="btn btn-primary fin-add-btn" id="finSaveReview">Guardar revisión de ${escapeHTML(monthLabel(off))}</button>`;
+}
+async function saveReview(){
+  const off = finReviewOffset, ms = monthStartStr(off);
+  const btn = document.getElementById('finSaveReview'); btn.disabled = true;
+  try{
+    for(const inp of document.querySelectorAll('[data-rev-acc]')){
+      const a = fin.accounts.find(x=>x.id===inp.dataset.revAcc); const c = parseCents(inp.value.trim()||'0');
+      if(c===null){ showToast(`Monto inválido en ${a.name}`,'error'); btn.disabled=false; return; }
+      const value = a.kind==='credit' ? -c : c;
+      await upsertRow('balance_snapshots', fin.snapshots.find(s=>s.account_id===a.id && s.month===ms), {account_id:a.id, month:ms, balance_cents:value, net_deposits_cents:netDepositsInMonth(a.id, off)}, fin.snapshots);
+    }
+    for(const inp of document.querySelectorAll('[data-rev-pos]')){
+      const p = fin.positions.find(x=>x.id===inp.dataset.revPos); const c = parseCents(inp.value.trim()||'0');
+      if(c===null){ showToast(`Monto inválido en ${p.fund_name}`,'error'); btn.disabled=false; return; }
+      await upsertRow('position_valuations', fin.valuations.find(v=>v.position_id===p.id && v.month===ms), {position_id:p.id, month:ms, value_cents:c}, fin.valuations);
+    }
+    // cuentas de inversión con fondos: guardar también su total del mes para el historial
+    for(const a of bankAccounts().filter(x=>accPositions(x.id).length)){
+      const total = accPositions(a.id).reduce((s,p)=>{ const v=fin.valuations.find(x=>x.position_id===p.id && x.month===ms); return s + (v?Number(v.value_cents):0); },0);
+      await upsertRow('balance_snapshots', fin.snapshots.find(s=>s.account_id===a.id && s.month===ms), {account_id:a.id, month:ms, balance_cents:total, net_deposits_cents:netDepositsInMonth(a.id, off)}, fin.snapshots);
+    }
+    renderContent(); showToast('Revisión guardada','success');
+  }catch(e){ btn.disabled = false; showToast('No se pudo guardar: '+finErr(e),'error'); }
+}
+
+// Exportar CSV (UTF-8 con BOM para Excel)
+function downloadCSV(filename, rows){
+  const esc = v=>{ let s = v===null||v===undefined ? '' : String(v); if(/^[=+@\t\r]/.test(s)) s = "'"+s; return /[",\r\n;]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const csv = '﻿' + rows.map(r=>r.map(esc).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  return csv;
+}
+const csvNum = c=>((Number(c)||0)/100).toFixed(2);
+function exportMovsCSV(){
+  const list = fin.tx.filter(t=>txInMonth(t, finMonthOffset)).slice().sort((a,b)=>a.occurred_on<b.occurred_on?-1:1);
+  const rows = [['Fecha','Tipo','Categoría','Cuenta','Cuenta destino','Monto (MXN)','Nota']];
+  list.forEach(t=>rows.push([t.occurred_on, TX_TYPES[t.type]||t.type, t.type==='transfer'?'':catName(t.category_id), accName(t.account_id), t.to_account_id?accName(t.to_account_id):'', (t.type==='expense'?'-':'')+csvNum(t.amount_cents), t.note||'']));
+  return downloadCSV(`movimientos-${monthStartStr(finMonthOffset).slice(0,7)}.csv`, rows);
+}
+function exportPatrimonioCSV(){
+  const rows = [['Sección','Concepto','Tipo','Valor (MXN)','Aportado (MXN)','Rendimiento (MXN)']];
+  let her=0, prop=0;
+  fin.positions.filter(p=>!p.archived).forEach(p=>{ const v=positionValue(p)||0, c=Number(p.cost_basis_cents)||0; if(p.origin==='heredado') her+=v; else prop+=v;
+    rows.push([p.origin==='heredado'?'Herencia':'Ahorro propio', p.fund_name, 'Fondo'+(p.fund_key?' '+p.fund_key:''), csvNum(v), csvNum(c), csvNum(v-c)]); });
+  bankAccounts().filter(a=>!accPositions(a.id).length).forEach(a=>{ const v=accBalance(a.id); prop+=v; rows.push(['Ahorro propio', a.name, ACC_KIND[a.kind]||a.kind, csvNum(v), '', '']); });
+  activeAccounts().filter(isLoan).forEach(l=>{ const o=loanStats(l).owed; if(o>0){ const v=l.kind==='lent'?o:-o; prop+=v; rows.push(['Ahorro propio', l.name, l.kind==='lent'?'Te debe':'Le debes', csvNum(v), '', '']); } });
+  rows.push([]); rows.push(['Total','Herencia','',csvNum(her)]); rows.push(['Total','Ahorro propio','',csvNum(prop)]); rows.push(['Total','Patrimonio neto','',csvNum(her+prop)]);
+  return downloadCSV(`patrimonio-${localDate()}.csv`, rows);
 }
 
 // ── AUTH ─────────────────────────────────────────────────────
