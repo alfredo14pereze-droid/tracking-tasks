@@ -2973,7 +2973,7 @@ function donutSlices(data){
 // ── FINANZAS ─────────────────────────────────────────────────
 // Montos en centavos (bigint). Saldo = inicial + ingresos − gastos − transf. salientes + transf. entrantes.
 const fin = {accounts:[], categories:[], tx:[], budgets:[], goals:[], snapshots:[], loaded:false, errors:[]};
-let finFilterAcc = '', finFilterCat = '', finMonthOffset = 0, finShowArchived = false, finShowClosedLoans = false;
+let finFilterAcc = '', finFilterCat = '', finMonthOffset = 0, finShowArchived = false, finShowClosedLoans = false, finShowClosedAcc = false;
 const FIN_TABS = {home:'Hoy', movs:'Movimientos', accounts:'Cuentas', loans:'Préstamos', budget:'Presupuesto', goals:'Metas'};
 const ACC_KIND = {debit:'Débito', credit:'Crédito', savings:'Ahorro', investment:'Inversión', cash:'Efectivo', lent:'Te deben', borrowed:'Debes'};
 const TX_TYPES = {expense:'Gasto', income:'Ingreso', transfer:'Transferencia'};
@@ -3019,6 +3019,10 @@ function savedInMonth(offset=0){
   }
   return s;
 }
+function receivedInMonth(catId, offset=0){ return fin.tx.filter(t=>t.type==='income' && t.category_id===catId && txInMonth(t,offset)).reduce((s,t)=>s+(Number(t.amount_cents)||0),0); }
+function expectedIncomes(){
+  return activeCats('income').map(c=>{ const b=currentBudget(c.id); return b ? {cat:c, expected:Number(b.amount_cents)||0, received:receivedInMonth(c.id)} : null; }).filter(Boolean);
+}
 function savingsGoal(){ return activeCats('savings').reduce((s,c)=>{ const b=currentBudget(c.id); return s + (b ? Number(b.amount_cents)||0 : 0); }, 0); }
 function savingsClass(pct){ return pct>=100 ? 'ok' : pct>=80 ? 'warn' : 'over'; }
 function monthTotals(offset=0){
@@ -3038,7 +3042,12 @@ function accLabel(a){ return isLoan(a) ? `${a.name} (préstamo)` : a.name; }
 function activeAccounts(){ return fin.accounts.filter(a=>!a.archived).sort((a,b)=>((a.sort_order||0)-(b.sort_order||0)) || a.name.localeCompare(b.name,'es')); }
 function activeCats(kind){ return fin.categories.filter(c=>!c.archived && (!kind || c.kind===kind)).sort((a,b)=>a.name.localeCompare(b.name,'es')); }
 function sortTx(){ fin.tx.sort((a,b)=> a.occurred_on<b.occurred_on ? 1 : a.occurred_on>b.occurred_on ? -1 : String(b.created_at||'').localeCompare(String(a.created_at||''))); }
-function currentBudget(catId){ const ms=monthStartStr(0); return fin.budgets.find(b=>b.category_id===catId && b.month===ms); }
+// Presupuesto vigente: el del mes actual o, si no hay, el último que pusiste antes (se repite cada mes). 0 = sin presupuesto.
+function currentBudget(catId){
+  const ms = monthStartStr(0);
+  const b = fin.budgets.filter(x=>x.category_id===catId && x.month<=ms).sort((a,c)=>a.month<c.month?1:-1)[0];
+  return b && Number(b.amount_cents)>0 ? b : null;
+}
 function optionList(items, selected, labelFn){ return items.map(x=>`<option value="${escapeAttr(x.id)}" ${x.id===selected?'selected':''}>${escapeHTML(labelFn?labelFn(x):x.name)}</option>`).join(''); }
 
 async function loadFinance(){
@@ -3109,11 +3118,23 @@ function finHomeHTML(){
   const left = inc - exp;
   const last = fin.tx.slice(0,5);
   const three = !!savingsCardHTML();
+  const incomes = expectedIncomes();
+  const pendingIncome = incomes.reduce((s,x)=>s+Math.max(0, x.expected-x.received),0);
+  const incomeHTML = incomes.length ? `<div class="task-group-label fin-section-label"><span>Ingresos del mes</span></div>
+    <div class="fin-list">${incomes.map(x=>{
+      const rem = x.expected - x.received;
+      return `<div class="fin-tx" style="cursor:default">
+        <div class="fin-tx-main"><div class="fin-tx-title">${escapeHTML(x.cat.name)}</div>
+          <div class="fin-tx-sub">${rem>0 ? (x.received>0 ? `Recibido ${fmtMoney(x.received)} · faltan ${fmtMoney(rem)}` : `Esperado ${fmtMoney(x.expected)}`) : `✓ Recibido ${fmtMoney(x.received)}`}</div></div>
+        ${rem>0 ? `<button type="button" class="btn btn-primary fin-small-btn" data-income-receive="${escapeAttr(x.cat.id)}">Ya lo recibí</button>` : '<span class="fin-tx-amt income">✓</span>'}
+      </div>`;
+    }).join('')}</div>` : '';
   return `<div class="fin-cards${three?' three':''}">
       <div class="fin-card fin-card-hero">
         <div class="fin-label">Te queda este mes</div>
         <div class="fin-big ${left<0?'neg':'pos'}">${fmtMoney(left)}</div>
         <div class="fin-sub">Ingresos ${fmtMoney(inc)} − gastos ${fmtMoney(exp)}</div>
+        ${pendingIncome>0 ? `<div class="fin-sub">Por recibir: ${fmtMoney(pendingIncome)}</div>` : ''}
       </div>
       <div class="fin-card">
         <div class="fin-label">Gastos del mes</div>
@@ -3122,6 +3143,7 @@ function finHomeHTML(){
       </div>
       ${savingsCardHTML()}
     </div>
+    ${incomeHTML}
     <div class="task-group-label fin-section-label"><span>Últimos movimientos</span>${fin.tx.length>5?'<button type="button" class="btn btn-ghost fin-small-btn" data-fin-goto="movs">Ver todos</button>':''}</div>
     <div class="fin-list">${last.length ? last.map(txRowHTML).join('') : '<div class="empty"><p>Aún no hay movimientos. Usa el botón + para agregar el primero.</p></div>'}</div>`;
 }
@@ -3186,7 +3208,7 @@ function finAccountsHTML(){
         <button type="button" class="btn btn-ghost fin-small-btn" data-acc-history="${escapeAttr(a.id)}">Historial mensual${rows.length?` (${rows.length})`:''}</button>`;
     }
     return `<div class="fin-card fin-acc">
-      <div class="fin-acc-head"><div class="fin-acc-name">${escapeHTML(a.name)}</div><span class="fin-kind">${escapeHTML(ACC_KIND[a.kind]||a.kind)}</span></div>
+      <div class="fin-acc-head"><div class="fin-acc-name">${escapeHTML(a.name)}</div><span style="display:flex;align-items:center;gap:2px;flex-shrink:0"><span class="fin-kind">${escapeHTML(ACC_KIND[a.kind]||a.kind)}</span><button type="button" class="fin-icon-btn" data-acc-edit="${escapeAttr(a.id)}" title="Editar cuenta" aria-label="Editar cuenta"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button></span></div>
       ${a.institution ? `<div class="fin-sub">${escapeHTML(a.institution)}</div>` : ''}
       ${main}
       <div class="fin-acc-actions">
@@ -3194,7 +3216,66 @@ function finAccountsHTML(){
         ${hist}
       </div>
     </div>`;
-  }).join('')}</div>`;
+  }).join('')}</div>${closedAccountsHTML()}
+    <button type="button" class="btn btn-ghost fin-add-btn" id="finNewAcc">+ Nueva cuenta</button>`;
+}
+function closedAccountsHTML(){
+  const closed = fin.accounts.filter(a=>a.archived && !isLoan(a));
+  if(!closed.length) return '';
+  return `<div class="task-group-label fin-section-label"><span>Archivadas (${closed.length})</span><button type="button" class="btn btn-ghost fin-small-btn" id="finToggleClosedAcc">${finShowClosedAcc?'Ocultar':'Ver'}</button></div>
+    ${finShowClosedAcc ? `<div class="fin-list">${closed.map(a=>`<div class="fin-budget-row"><div class="fin-budget-top"><div class="fin-budget-name">${escapeHTML(a.name)} <span class="fin-kind">${escapeHTML(ACC_KIND[a.kind]||a.kind)}</span></div><span class="fin-budget-txt" style="margin:0">${fmtMoney(accBalance(a.id))}</span><button type="button" class="fin-icon-btn" data-acc-restore="${escapeAttr(a.id)}">Restaurar</button></div></div>`).join('')}</div>` : ''}`;
+}
+const NEW_ACC_KINDS = ['savings','debit','investment','cash','credit'];
+function openAccountModal(id){
+  const a = id ? fin.accounts.find(x=>x.id===id) : null;
+  if(id && !a) return;
+  const kindOpts = NEW_ACC_KINDS.map(k=>`<option value="${k}" ${(a?a.kind:'savings')===k?'selected':''}>${ACC_KIND[k]}</option>`).join('');
+  const hasTx = a && fin.tx.some(t=>t.account_id===a.id || t.to_account_id===a.id);
+  const body = `
+    <div class="form-group"><label class="form-label" for="accName">Nombre</label>
+      <input class="form-input" id="accName" maxlength="40" autocomplete="off" style="font-size:16px" placeholder="Ej. Viaje" value="${escapeAttr(a?a.name:'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="accKind">Tipo</label>
+        <select class="form-input form-select fin-field" id="accKind" ${hasTx?'disabled':''}>${kindOpts}</select></div>
+      <div class="form-group"><label class="form-label" for="accInst">Banco (opcional)</label>
+        <input class="form-input" id="accInst" maxlength="40" autocomplete="off" style="font-size:16px" placeholder="Ej. NU" value="${escapeAttr(a&&a.institution||'')}"></div>
+    </div>
+    ${a ? (hasTx ? '<div class="fin-hint">El tipo no se puede cambiar porque la cuenta ya tiene movimientos.</div>' : '') : `
+    <div class="form-group" style="margin-bottom:0"><label class="form-label" for="accOpen">Saldo actual (opcional)</label>
+      <input class="form-input fin-money" id="accOpen" inputmode="decimal" autocomplete="off" placeholder="0.00">
+      <div class="fin-hint">Si es una cuenta nueva sin dinero, déjalo vacío y aparta dinero con una transferencia desde Plata.</div></div>`}`;
+  const footer = `${a?'<button type="button" class="btn btn-ghost fin-modal-del" id="accArchive">Archivar</button>':''}<button type="button" class="btn btn-primary" id="accSave">Guardar</button>`;
+  openFinModal(a ? 'Editar cuenta' : 'Nueva cuenta', body, footer);
+  if(!a) setTimeout(()=>document.getElementById('accName').focus(), 50);
+  document.getElementById('accSave').onclick = async ()=>{
+    const name = finVal('accName');
+    if(!name){ showToast('Escribe un nombre','error'); return; }
+    const kind = finVal('accKind');
+    const payload = {name, institution: finVal('accInst') || null};
+    if(!hasTx) payload.kind = kind;
+    try{
+      if(a){ await dbPatch('accounts', payload, `?id=eq.${a.id}`); Object.assign(a, payload); }
+      else{
+        const raw = finVal('accOpen');
+        const c = raw==='' ? 0 : parseCents(raw);
+        if(c===null){ showToast('Revisa el saldo','error'); return; }
+        payload.opening_balance_cents = kind==='credit' ? -c : c;
+        payload.sort_order = 50;
+        const [row] = await dbPost('accounts', payload); fin.accounts.push(row);
+      }
+      closeFinModal(); renderContent(); showToast('Cuenta guardada','success');
+    }catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
+  if(a) document.getElementById('accArchive').onclick = ()=>{
+    const bal = accBalance(a.id);
+    if(bal!==0 && !confirm(`"${a.name}" todavía tiene ${fmtMoney(bal)}. ¿Archivarla de todos modos? Su saldo deja de verse en Cuentas.`)) return;
+    closeFinModal(); setAccountArchived(a.id, true);
+  };
+}
+async function setAccountArchived(id, archived){
+  const a = fin.accounts.find(x=>x.id===id); if(!a) return;
+  try{ await dbPatch('accounts', {archived}, `?id=eq.${id}`); a.archived = archived; renderContent(); showToast(archived?`"${a.name}" archivada`:`"${a.name}" restaurada`,'success'); }
+  catch(e){ showToast('No se pudo actualizar: '+finErr(e),'error'); }
 }
 
 // Historial mensual (inversiones): rendimiento = valor − valor anterior − depósitos netos del mes
@@ -3489,18 +3570,30 @@ function finBudgetHTML(){
     <div class="fin-list">${savRows}</div>
     <div class="fin-hint" style="margin-bottom:6px">Cuenta lo que transfieres a tus cuentas de ahorro e inversión (NU, GBM) este mes, menos lo que sacas.</div>
     <div class="task-group-label fin-section-label"><span>Gastos</span></div>` : '';
-  const incRows = activeCats('income').map(c=>`<div class="fin-budget-row"><div class="fin-budget-top">
+  const incRows = activeCats('income').map(c=>{
+    const b = currentBudget(c.id);
+    const rec = receivedInMonth(c.id);
+    let detail;
+    if(b){
+      const exp = Number(b.amount_cents)||0;
+      const pct = exp>0 ? rec*100/exp : 0;
+      detail = `<div class="fin-bar"><div class="${pct>=100?'ok':'goal'}" style="width:${Math.min(100,pct).toFixed(1)}%"></div></div>
+        <div class="fin-budget-txt">Recibido ${fmtMoney(rec)} de ${fmtMoney(exp)}${pct>=100?' · ✓ Completo':''}</div>`;
+    } else detail = `<div class="fin-budget-txt">Recibido este mes: ${fmtMoney(rec)}</div>`;
+    return `<div class="fin-budget-row"><div class="fin-budget-top">
       <div class="fin-budget-name">${escapeHTML(c.name)}</div>
+      <button type="button" class="fin-limit ${b?'':'empty'}" data-fin-limit="${escapeAttr(c.id)}" title="Monto esperado al mes">${b?fmtMoney(b.amount_cents):'Sin monto esperado'}</button>
       <button type="button" class="fin-icon-btn" data-cat-rename="${escapeAttr(c.id)}" title="Renombrar" aria-label="Renombrar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
       <button type="button" class="fin-icon-btn" data-cat-archive="${escapeAttr(c.id)}" title="Archivar" aria-label="Archivar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 001 1h12a1 1 0 001-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg></button>
-    </div></div>`).join('');
+    </div>${detail}</div>`;
+  }).join('');
   const archived = fin.categories.filter(c=>c.archived);
   const archivedHTML = archived.length ? `<div class="task-group-label fin-section-label"><span>Archivadas (${archived.length})</span><button type="button" class="btn btn-ghost fin-small-btn" id="finToggleArchived">${finShowArchived?'Ocultar':'Ver'}</button></div>
     ${finShowArchived ? `<div class="fin-list">${archived.map(c=>`<div class="fin-budget-row"><div class="fin-budget-top"><div class="fin-budget-name">${escapeHTML(c.name)} <span class="fin-kind">${c.kind==='income'?'Ingreso':c.kind==='savings'?'Ahorro':'Gasto'}</span></div><button type="button" class="fin-icon-btn" data-cat-restore="${escapeAttr(c.id)}">Restaurar</button></div></div>`).join('')}</div>` : ''}` : '';
   return `<div class="fin-month-sum">${escapeHTML(monthLabel(0))} · Gastado ${fmtMoney(totalSpent)} de ${fmtMoney(totalLim)} presupuestado</div>
     ${savHTML}
     <div class="fin-list">${rows || '<div class="empty"><p>No hay categorías de gasto.</p></div>'}</div>
-    ${incRows ? `<div class="task-group-label fin-section-label"><span>Categorías de ingreso</span></div><div class="fin-list">${incRows}</div>` : ''}
+    ${incRows ? `<div class="task-group-label fin-section-label"><span>Ingresos esperados al mes</span></div><div class="fin-list">${incRows}</div><div class="fin-hint">No se registran solos: cuando te paguen, usa "Ya lo recibí" en Hoy.</div>` : ''}
     ${archivedHTML}
     <button type="button" class="btn btn-ghost fin-add-btn" id="finNewCat">+ Nueva categoría</button>`;
 }
@@ -3568,6 +3661,14 @@ function bindFinance(el){
   el.querySelectorAll('[data-loan-reopen]').forEach(b=>b.onclick=()=>setLoanClosed(b.dataset.loanReopen, false));
   const nl = el.querySelector('#finNewLoan'); if(nl) nl.onclick=()=>openLoanModal();
   const tl = el.querySelector('#finToggleLoans'); if(tl) tl.onclick=()=>{ finShowClosedLoans=!finShowClosedLoans; renderContent(); };
+  el.querySelectorAll('[data-income-receive]').forEach(b=>b.onclick=()=>{
+    const x = expectedIncomes().find(i=>i.cat.id===b.dataset.incomeReceive); if(!x) return;
+    openTxModal(null, {type:'income', category_id:x.cat.id, amount:Math.max(0,x.expected-x.received), title:`Recibí ${x.cat.name}`});
+  });
+  el.querySelectorAll('[data-acc-edit]').forEach(b=>b.onclick=()=>openAccountModal(b.dataset.accEdit));
+  const na = el.querySelector('#finNewAcc'); if(na) na.onclick=()=>openAccountModal();
+  const tc = el.querySelector('#finToggleClosedAcc'); if(tc) tc.onclick=()=>{ finShowClosedAcc=!finShowClosedAcc; renderContent(); };
+  el.querySelectorAll('[data-acc-restore]').forEach(b=>b.onclick=()=>setAccountArchived(b.dataset.accRestore, false));
   el.querySelectorAll('[data-acc-history]').forEach(b=>b.onclick=()=>openHistoryModal(b.dataset.accHistory));
   el.querySelectorAll('[data-fin-goto-loans]').forEach(b=>b.onclick=()=>{ finView='loans'; renderContent(); });
 }
@@ -3586,16 +3687,17 @@ function finVal(id){ const e=document.getElementById(id); return e ? e.value.tri
 function finErr(e){ return String((e && e.message) || e).slice(0,140); }
 
 // Movimiento: crear / editar / eliminar
-function openTxModal(id){
+function openTxModal(id, preset){
   const t = id ? fin.tx.find(x=>x.id===id) : null;
   if(id && !t) return;
-  let type = t ? t.type : 'expense';
+  preset = preset || {};
+  let type = t ? t.type : (preset.type || 'expense');
   const accs = fin.accounts.filter(a=>!a.archived || (t && (a.id===t.account_id || a.id===t.to_account_id)));
   const firstAcc = (activeAccounts().find(a=>a.kind==='debit') || accs[0] || {}).id;
   const body = `
     <div class="fin-type-btns">${Object.entries(TX_TYPES).map(([k,v])=>`<button type="button" class="fin-type-btn ${k}" data-type="${k}">${v}</button>`).join('')}</div>
     <div class="form-group"><label class="form-label" for="txAmount">Monto</label>
-      <input class="form-input fin-money" id="txAmount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${t?centsToInput(t.amount_cents):''}"></div>
+      <input class="form-input fin-money" id="txAmount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${t?centsToInput(t.amount_cents):(preset.amount?centsToInput(preset.amount):'')}"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label" for="txAccount" id="txAccLabel">Cuenta</label>
         <select class="form-input form-select fin-field" id="txAccount">${optionList(accs, t?t.account_id:firstAcc, accLabel)}</select></div>
@@ -3609,7 +3711,7 @@ function openTxModal(id){
     <div class="form-group" style="margin-bottom:0"><label class="form-label" for="txNote">Nota (opcional)</label>
       <input class="form-input" id="txNote" maxlength="200" autocomplete="off" value="${escapeAttr(t&&t.note||'')}"></div>`;
   const footer = `${t?'<button type="button" class="btn btn-ghost fin-modal-del" id="txDelete">Eliminar</button>':''}<button type="button" class="btn btn-primary" id="txSave">Guardar</button>`;
-  openFinModal(t ? 'Editar movimiento' : 'Nuevo movimiento', body, footer);
+  openFinModal(t ? 'Editar movimiento' : (preset.title || 'Nuevo movimiento'), body, footer);
 
   const applyType = ()=>{
     document.querySelectorAll('.fin-type-btn').forEach(b=>b.classList.toggle('active', b.dataset.type===type));
@@ -3619,7 +3721,7 @@ function openTxModal(id){
     document.getElementById('txAccLabel').textContent = isT ? 'Desde' : 'Cuenta';
     if(!isT){
       const sel = document.getElementById('txCategory');
-      const keep = sel.value || (t && t.category_id);
+      const keep = sel.value || (t && t.category_id) || preset.category_id;
       const cats = fin.categories.filter(c=>c.kind===type && (!c.archived || c.id===keep)).sort((a,b)=>a.name.localeCompare(b.name,'es'));
       sel.innerHTML = optionList(cats, keep);
     }
@@ -3706,17 +3808,15 @@ function editLimitInline(btn){
   inp.addEventListener('blur', ()=>commit(true));
 }
 async function saveBudget(catId, raw){
-  const b = currentBudget(catId);
+  const ms = monthStartStr(0);
+  const exact = fin.budgets.find(b=>b.category_id===catId && b.month===ms);
+  const inherited = currentBudget(catId);
+  const c = raw==='' ? 0 : parseCents(raw); // vacío = quitar presupuesto desde este mes
+  if(c===null){ showToast('Escribe un monto válido','error'); return; }
   try{
-    if(raw===''){ // vacío = quitar presupuesto
-      if(b){ await dbDelete('budgets', `?id=eq.${b.id}`); fin.budgets = fin.budgets.filter(x=>x!==b); }
-      return;
-    }
-    const c = parseCents(raw);
-    if(c===null){ showToast('Escribe un monto válido','error'); return; }
-    if(b){ if(Number(b.amount_cents)===c) return; await dbPatch('budgets', {amount_cents:c}, `?id=eq.${b.id}`); b.amount_cents = c; }
-    else { const [row] = await dbPost('budgets', {category_id:catId, month:monthStartStr(0), amount_cents:c}); fin.budgets.push(row); }
-  }catch(e){ showToast('No se pudo guardar el límite: '+finErr(e),'error'); }
+    if(exact){ if(Number(exact.amount_cents)===c) return; await dbPatch('budgets', {amount_cents:c}, `?id=eq.${exact.id}`); exact.amount_cents = c; }
+    else { if((inherited ? Number(inherited.amount_cents) : 0)===c) return; const [row] = await dbPost('budgets', {category_id:catId, month:ms, amount_cents:c}); fin.budgets.push(row); }
+  }catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
 }
 
 // Categorías: crear, renombrar, archivar
