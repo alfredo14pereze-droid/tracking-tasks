@@ -1703,7 +1703,7 @@ async function toggleQuickTask(id){
   const q = quickTasks.find(x=>x.id===id);
   if(!q) return;
   q.done = !q.done;
-  quickRefresh(true);
+  quickRefresh();
   if(String(q.id).startsWith('temp-')) return; // se sincroniza al terminar de guardarse
   try{ await dbPatch('quick_tasks', {done:q.done, completed_at:q.done?new Date().toISOString():null}, `?id=eq.${id}`); }
   catch(e){ q.done=!q.done; quickRefresh(); showToast('Error al actualizar','error'); }
@@ -1711,7 +1711,7 @@ async function toggleQuickTask(id){
 
 async function deleteQuickTask(id){
   quickTasks = quickTasks.filter(q=>q.id!==id);
-  quickRefresh(true);
+  quickRefresh();
   if(String(id).startsWith('temp-')) return;
   try{ await dbDelete('quick_tasks', `?id=eq.${id}`); }
   catch(e){ showToast('Error al eliminar','error'); }
@@ -1720,7 +1720,7 @@ async function deleteQuickTask(id){
 async function clearDoneQuickTasks(){
   const ids = quickTasks.filter(q=>q.done && !String(q.id).startsWith('temp-')).map(q=>q.id);
   quickTasks = quickTasks.filter(q=>!q.done);
-  quickRefresh(true);
+  quickRefresh();
   try{ for(const id of ids) await dbDelete('quick_tasks', `?id=eq.${id}`); }
   catch(e){ showToast('Error al borrar las hechas','error'); }
 }
