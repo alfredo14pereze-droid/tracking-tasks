@@ -621,6 +621,13 @@ body.section-finance .content{padding-bottom:110px}
 .form-input.fin-money, select.form-input.fin-field{font-size:16px;height:42px}
 .fin-modal-del{margin-right:auto;color:var(--red)}
 .fin-hint{font-size:12px;color:var(--text3);margin-top:6px}
+.wiz-steps{font-size:11px;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:2px}
+.wiz-item{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:10px;min-width:0}
+.wiz-item .form-group{margin-bottom:10px}
+.wiz-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer}
+.wiz-check input{width:18px;height:18px;accent-color:var(--accent)}
+.wiz-sum{background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;margin-top:12px;color:var(--text)}
+#finWizFooter{flex-wrap:nowrap}
 .fin-acc-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .fin-acc-actions .fin-small-btn{margin-top:0}
 @media(max-width:768px){
@@ -856,6 +863,20 @@ body.auth-locked .login-screen{display:flex;min-height:100vh;align-items:center;
 <button class="fin-fab" id="finFab" type="button" aria-label="Agregar movimiento">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button>
+</div>
+
+<!-- ASISTENTE DE FINANZAS -->
+<div class="modal-overlay" id="finWizard">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div style="min-width:0"><div class="wiz-steps" id="finWizStep"></div><h3 class="modal-title" id="finWizTitle"></h3></div>
+      <button class="modal-close" type="button" id="finWizClose" aria-label="Cerrar (tu avance se guarda)" title="Cerrar (tu avance se guarda)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="finWizBody"></div>
+    <div class="modal-footer" id="finWizFooter"></div>
+  </div>
 </div>
 
 <!-- FINANZAS MODAL (el contenido se arma al abrir) -->
@@ -2972,9 +2993,9 @@ function donutSlices(data){
 
 // ── FINANZAS ─────────────────────────────────────────────────
 // Montos en centavos (bigint). Saldo = inicial + ingresos − gastos − transf. salientes + transf. entrantes.
-const fin = {accounts:[], categories:[], tx:[], budgets:[], goals:[], snapshots:[], loaded:false, errors:[]};
+const fin = {accounts:[], categories:[], tx:[], budgets:[], goals:[], snapshots:[], positions:[], valuations:[], incomes:[], recurring:[], cards:[], assumptions:[], loaded:false, errors:[]};
 let finFilterAcc = '', finFilterCat = '', finMonthOffset = 0, finShowArchived = false, finShowClosedLoans = false, finShowClosedAcc = false;
-const FIN_TABS = {home:'Hoy', movs:'Movimientos', accounts:'Cuentas', loans:'Préstamos', budget:'Presupuesto', goals:'Metas'};
+const FIN_TABS = {home:'Hoy', movs:'Movimientos', accounts:'Cuentas', patrimonio:'Patrimonio', loans:'Préstamos', budget:'Presupuesto', goals:'Metas'};
 const ACC_KIND = {debit:'Débito', credit:'Crédito', savings:'Ahorro', investment:'Inversión', cash:'Efectivo', lent:'Te deben', borrowed:'Debes'};
 const TX_TYPES = {expense:'Gasto', income:'Ingreso', transfer:'Transferencia'};
 const moneyFmt = new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'});
@@ -3021,6 +3042,8 @@ function savedInMonth(offset=0){
 }
 function receivedInMonth(catId, offset=0){ return fin.tx.filter(t=>t.type==='income' && t.category_id===catId && txInMonth(t,offset)).reduce((s,t)=>s+(Number(t.amount_cents)||0),0); }
 function expectedIncomes(){
+  const srcs = fin.incomes.filter(x=>x.active);
+  if(srcs.length) return srcs.filter(x=>x.category_id).map(x=>({cat:{id:x.category_id, name:x.name}, source:x, expected:sourceMonthly(x,true), received:receivedInMonth(x.category_id)}));
   return activeCats('income').map(c=>{ const b=currentBudget(c.id); return b ? {cat:c, expected:Number(b.amount_cents)||0, received:receivedInMonth(c.id)} : null; }).filter(Boolean);
 }
 function savingsGoal(){ return activeCats('savings').reduce((s,c)=>{ const b=currentBudget(c.id); return s + (b ? Number(b.amount_cents)||0 : 0); }, 0); }
@@ -3060,6 +3083,12 @@ async function loadFinance(){
     get('budgets','budgets','?order=month.desc'),
     get('goals','money_goals','?archived=eq.false&order=created_at.asc'),
     get('snapshots','balance_snapshots','?order=month.asc'),
+    get('positions','investment_positions','?order=created_at.asc'),
+    get('valuations','position_valuations','?order=month.asc'),
+    get('incomes','income_sources','?order=created_at.asc'),
+    get('recurring','recurring_items','?order=created_at.asc'),
+    get('cards','card_settings',''),
+    get('assumptions','assumptions',''),
   ]);
   fin.errors = errs; fin.loaded = true;
 }
@@ -3077,22 +3106,23 @@ async function setSection(s){
   if(window.innerWidth<768) closeSidebar();
   renderContent();
   await loadFinance();
-  if(currentSection==='finance') renderContent();
+  if(currentSection==='finance'){ renderContent(); maybeOpenWizard(); }
 }
 document.querySelectorAll('[data-section]').forEach(b=>b.addEventListener('click', ()=>setSection(b.dataset.section)));
 document.getElementById('finFab').addEventListener('click', ()=>openTxModal());
 
 function renderFinance(el){
   document.getElementById('viewTitle').textContent = finView==='home' ? 'Finanzas' : FIN_TABS[finView];
-  const tabs = `<div class="fin-tabs">${Object.entries(FIN_TABS).map(([k,v])=>`<button type="button" class="filter-chip ${k===finView?'active':''}" data-fin-view="${k}">${v}</button>`).join('')}</div>`;
+  const tabs = `<div class="fin-tabs">${Object.entries(FIN_TABS).map(([k,v])=>`<button type="button" class="filter-chip ${k===finView?'active':''}" data-fin-view="${k}">${v}</button>`).join('')}<button type="button" class="filter-chip" id="finSetupBtn" title="Asistente de configuración">⚙ Configurar</button></div>`;
   let body;
   if(!fin.loaded) body = `<div class="loading"><div class="spinner"></div><p>Cargando finanzas...</p></div>`;
   else{
     const warn = fin.errors.length ? `<div class="fin-warn">No se pudo cargar: ${escapeHTML(fin.errors.join(', '))}. Revisa tu conexión y vuelve a abrir Finanzas. Tus tareas no se ven afectadas.</div>` : '';
-    body = warn + ({home:finHomeHTML, movs:finMovsHTML, accounts:finAccountsHTML, loans:finLoansHTML, budget:finBudgetHTML, goals:finGoalsHTML}[finView])();
+    body = warn + ({home:finHomeHTML, movs:finMovsHTML, accounts:finAccountsHTML, patrimonio:finPatrimonioHTML, loans:finLoansHTML, budget:finBudgetHTML, goals:finGoalsHTML}[finView])();
   }
   el.innerHTML = tabs + body;
   el.querySelectorAll('[data-fin-view]').forEach(b=>b.onclick=()=>{ finView=b.dataset.finView; renderContent(); });
+  el.querySelector('#finSetupBtn').onclick = ()=>openWizard();
   document.getElementById('finFab').classList.toggle('show', fin.loaded && (finView==='home' || finView==='movs'));
   if(fin.loaded) bindFinance(el);
 }
@@ -3189,7 +3219,7 @@ function finAccountsHTML(){
   loans.forEach(l=>{ const st=loanStats(l); if(l.kind==='lent') owedToMe+=st.owed; else iOwe+=st.owed; });
   const loanLine = loans.length ? `<div class="fin-month-sum">Préstamos: te deben ${fmtMoney(owedToMe)} · debes ${fmtMoney(iOwe)} <button type="button" class="btn btn-ghost fin-small-btn" data-fin-goto-loans>Ver</button></div>` : '';
   return loanLine + `<div class="fin-acc-grid">${accs.map(a=>{
-    const bal = accBalance(a.id);
+    const bal = accountValue(a.id);
     const isCredit = a.kind==='credit';
     let main;
     if(isCredit){
@@ -3593,7 +3623,9 @@ function finBudgetHTML(){
   return `<div class="fin-month-sum">${escapeHTML(monthLabel(0))} · Gastado ${fmtMoney(totalSpent)} de ${fmtMoney(totalLim)} presupuestado</div>
     ${savHTML}
     <div class="fin-list">${rows || '<div class="empty"><p>No hay categorías de gasto.</p></div>'}</div>
-    ${incRows ? `<div class="task-group-label fin-section-label"><span>Ingresos esperados al mes</span></div><div class="fin-list">${incRows}</div><div class="fin-hint">No se registran solos: cuando te paguen, usa "Ya lo recibí" en Hoy.</div>` : ''}
+    ${incomeSourcesHTML()}
+    ${fin.incomes.some(x=>x.active) ? (incRows ? `<div class="task-group-label fin-section-label"><span>Categorías de ingreso</span></div><div class="fin-list">${activeCats('income').map(c=>`<div class="fin-budget-row"><div class="fin-budget-top"><div class="fin-budget-name">${escapeHTML(c.name)}</div><button type="button" class="fin-icon-btn" data-cat-rename="${escapeAttr(c.id)}">Renombrar</button><button type="button" class="fin-icon-btn" data-cat-archive="${escapeAttr(c.id)}">Archivar</button></div></div>`).join('')}</div>` : '') :
+    incRows ? `<div class="task-group-label fin-section-label"><span>Ingresos esperados al mes</span></div><div class="fin-list">${incRows}</div><div class="fin-hint">No se registran solos: cuando te paguen, usa "Ya lo recibí" en Hoy.</div>` : ''}
     ${archivedHTML}
     <button type="button" class="btn btn-ghost fin-add-btn" id="finNewCat">+ Nueva categoría</button>`;
 }
@@ -3604,7 +3636,17 @@ function monthsUntil(due){
   const now = new Date();
   return (y-now.getFullYear())*12 + (m-1-now.getMonth());
 }
-function goalCurrent(g){ return g.account_id ? Math.max(0, accBalance(g.account_id)) : (Number(g.saved_cents)||0); }
+// Varias metas en la misma cuenta: el saldo se reparte por fecha límite (la más cercana se llena primero).
+function goalSiblings(g){ const k=x=>x.due_date||'9999-12-31'; return fin.goals.filter(x=>x.account_id===g.account_id).sort((a,b)=>k(a)<k(b)?-1:k(a)>k(b)?1:String(a.created_at).localeCompare(String(b.created_at))); }
+function goalCurrent(g){
+  if(!g.account_id) return Number(g.saved_cents)||0;
+  const pool = Math.max(0, accountValue(g.account_id));
+  const sib = goalSiblings(g);
+  if(sib.length<2) return pool;
+  let left = pool;
+  for(const x of sib){ const take = Math.min(left, Number(x.target_cents)||0); if(x.id===g.id) return take; left -= take; }
+  return 0;
+}
 function finGoalsHTML(){
   const cards = fin.goals.map(g=>{
     const target = Number(g.target_cents)||0;
@@ -3612,7 +3654,7 @@ function finGoalsHTML(){
     const pct = target>0 ? Math.min(100, cur*100/target) : 0;
     const remaining = Math.max(0, target-cur);
     const lines = [];
-    lines.push(g.account_id ? `Vive en: ${escapeHTML(accName(g.account_id))}` : 'Progreso capturado a mano');
+    lines.push(g.account_id ? `Vive en: ${escapeHTML(accName(g.account_id))}${goalSiblings(g).length>1?' (se reparte por fecha con otras metas)':''}` : 'Progreso capturado a mano');
     if(g.due_date){
       const m = monthsUntil(g.due_date);
       const when = m<0 ? 'ya venció' : m===0 ? 'vence este mes' : `faltan ${m} ${m===1?'mes':'meses'}`;
@@ -3663,8 +3705,11 @@ function bindFinance(el){
   const tl = el.querySelector('#finToggleLoans'); if(tl) tl.onclick=()=>{ finShowClosedLoans=!finShowClosedLoans; renderContent(); };
   el.querySelectorAll('[data-income-receive]').forEach(b=>b.onclick=()=>{
     const x = expectedIncomes().find(i=>i.cat.id===b.dataset.incomeReceive); if(!x) return;
-    openTxModal(null, {type:'income', category_id:x.cat.id, amount:Math.max(0,x.expected-x.received), title:`Recibí ${x.cat.name}`});
+    const step = x.source && x.source.frequency!=='irregular' ? Math.min(Number(x.source.amount_cents)||0, x.expected-x.received) : x.expected-x.received;
+    openTxModal(null, {type:'income', category_id:x.cat.id, amount:Math.max(0,step), account_id:x.source&&x.source.account_id, title:`Recibí ${x.cat.name}`});
   });
+  el.querySelectorAll('[data-src-edit]').forEach(b=>b.onclick=()=>openSourceModal(b.dataset.srcEdit));
+  el.querySelectorAll('[data-src-new]').forEach(b=>b.onclick=()=>openSourceModal());
   el.querySelectorAll('[data-acc-edit]').forEach(b=>b.onclick=()=>openAccountModal(b.dataset.accEdit));
   const na = el.querySelector('#finNewAcc'); if(na) na.onclick=()=>openAccountModal();
   const tc = el.querySelector('#finToggleClosedAcc'); if(tc) tc.onclick=()=>{ finShowClosedAcc=!finShowClosedAcc; renderContent(); };
@@ -3693,7 +3738,7 @@ function openTxModal(id, preset){
   preset = preset || {};
   let type = t ? t.type : (preset.type || 'expense');
   const accs = fin.accounts.filter(a=>!a.archived || (t && (a.id===t.account_id || a.id===t.to_account_id)));
-  const firstAcc = (activeAccounts().find(a=>a.kind==='debit') || accs[0] || {}).id;
+  const firstAcc = preset.account_id || (activeAccounts().find(a=>a.kind==='debit') || accs[0] || {}).id;
   const body = `
     <div class="fin-type-btns">${Object.entries(TX_TYPES).map(([k,v])=>`<button type="button" class="fin-type-btn ${k}" data-type="${k}">${v}</button>`).join('')}</div>
     <div class="form-group"><label class="form-label" for="txAmount">Monto</label>
@@ -3899,6 +3944,497 @@ function openGoalModal(id){
     try{ await dbDelete('money_goals', `?id=eq.${g.id}`); fin.goals = fin.goals.filter(x=>x!==g); closeFinModal(); renderContent(); showToast('Meta eliminada','success'); }
     catch(e){ showToast('No se pudo eliminar: '+finErr(e),'error'); }
   };
+}
+
+// ── FINANZAS v2: fondos, fuentes de ingreso, patrimonio, asistente ──
+function assumption(key){ const a=fin.assumptions.find(x=>x.key===key); return a && a.value!==null && a.value!==undefined ? Number(a.value) : null; }
+function positionValue(p, offset=0){
+  const ms = monthStartStr(offset);
+  const v = fin.valuations.filter(x=>x.position_id===p.id && x.month<=ms).sort((a,b)=>a.month<b.month?1:-1)[0];
+  return v ? Number(v.value_cents) : null;
+}
+function accPositions(accId){ return fin.positions.filter(p=>!p.archived && p.account_id===accId); }
+// Cuentas de inversión con fondos: su valor es la suma del último valor capturado de cada fondo.
+function accountValue(id){ const ps=accPositions(id); return ps.length ? ps.reduce((s,p)=>s+(positionValue(p)||0),0) : accBalance(id); }
+function paydaysInMonth(weekday, offset=0){
+  const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+offset);
+  const m=d.getMonth(); let n=0;
+  while(d.getMonth()===m){ if(d.getDay()===Number(weekday)) n++; d.setDate(d.getDate()+1); }
+  return n;
+}
+// Mensual "base": semanal ×4, quincenal ×2. Para lo que esperas recibir ESTE mes, semanal cuenta los días de pago reales del mes.
+function sourceMonthly(src, thisMonth){
+  const a = Number(src.amount_cents)||0;
+  if(src.frequency==='semanal') return thisMonth && src.pay_weekday!==null && src.pay_weekday!==undefined && src.pay_weekday!=='' ? a*paydaysInMonth(src.pay_weekday) : a*4;
+  if(src.frequency==='quincenal') return a*2;
+  return a;
+}
+const FREQ_LABEL = {semanal:'semanal', quincenal:'quincenal', mensual:'mensual', irregular:'irregular (promedio)'};
+const WEEKDAYS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+// Patrimonio: Herencia (fondos heredados) y Ahorro propio (cuentas, fondos propios y préstamos)
+function finPatrimonioHTML(){
+  const sum=(arr,f)=>arr.reduce((s,x)=>s+f(x),0);
+  const funds = fin.positions.filter(p=>!p.archived);
+  const fv = p=>positionValue(p)||0;
+  const fprev = p=>{ const v=positionValue(p,-1); return v===null ? fv(p) : v; };
+  const her = funds.filter(p=>p.origin==='heredado'), propF = funds.filter(p=>p.origin==='propio');
+  const herVal=sum(her,fv), herCost=sum(her,p=>Number(p.cost_basis_cents)||0), herChange=herVal-sum(her,fprev);
+  const rows = [];
+  bankAccounts().forEach(a=>{
+    if(accPositions(a.id).length) return; // sus fondos se listan aparte
+    const v = accBalance(a.id);
+    if(v!==0 || a.kind!=='investment') rows.push({name:a.name, sub:ACC_KIND[a.kind]||a.kind, v});
+  });
+  propF.forEach(p=>rows.push({name:p.fund_name, sub:`Fondo propio · aportado ${fmtMoney(p.cost_basis_cents)}`, v:fv(p)}));
+  activeAccounts().filter(isLoan).forEach(l=>{ const o=loanStats(l).owed; if(o>0) rows.push({name:l.name, sub:l.kind==='lent'?'Te debe':'Le debes', v:l.kind==='lent'?o:-o}); });
+  const propVal = sum(rows,r=>r.v);
+  const {inc, exp} = monthTotals(0);
+  const propChange = inc - exp + sum(propF,p=>fv(p)-fprev(p));
+  const total = herVal + propVal;
+  const pctTxt = (a,b)=> b>0 ? ` (${(a*100/b).toFixed(1)}%)` : '';
+  const signed = c=> `<span style="color:${c<0?'var(--red)':'var(--green)'}">${c<0?'':'+'}${fmtMoney(c)}</span>`;
+  const line = (name, sub, v, extra)=>`<div class="fin-tx" style="cursor:default"><div class="fin-tx-main"><div class="fin-tx-title">${escapeHTML(name)}</div><div class="fin-tx-sub">${sub}</div></div><div style="text-align:right;flex-shrink:0"><div class="fin-tx-amt ${v<0?'expense':''}">${fmtMoney(v)}</div>${extra||''}</div></div>`;
+  return `<div class="fin-card fin-card-hero" style="margin-bottom:12px">
+      <div class="fin-label">Patrimonio neto</div>
+      <div class="fin-big ${total<0?'neg':''}">${fmtMoney(total)}</div>
+      <div class="fin-sub">Herencia ${fmtMoney(herVal)} + Ahorro propio ${fmtMoney(propVal)}</div>
+    </div>
+    <div class="fin-acc-grid fin-pat-grid">
+      <div class="fin-card">
+        <div class="fin-acc-head"><div class="fin-acc-name">Herencia</div><span class="fin-kind">${her.length} fondo${her.length===1?'':'s'}</span></div>
+        <div class="fin-big">${fmtMoney(herVal)}</div>
+        <div class="fin-sub">Aportado ${fmtMoney(herCost)} · rendimiento ${signed(herVal-herCost)}${pctTxt(herVal-herCost, herCost)}</div>
+        <div class="fin-sub">Cambio vs mes anterior: ${signed(herChange)}</div>
+        <div class="fin-list" style="margin-top:12px">${her.length ? her.map(p=>{ const v=fv(p), c=Number(p.cost_basis_cents)||0; return line(p.fund_name, `${p.fund_key?escapeHTML(p.fund_key)+' · ':''}aportado ${fmtMoney(c)}`, v, `<div class="fin-tx-sub">${signed(v-c)}</div>`); }).join('') : '<div class="fin-hint">Sin fondos heredados. Agrégalos en ⚙ Configurar.</div>'}</div>
+      </div>
+      <div class="fin-card">
+        <div class="fin-acc-head"><div class="fin-acc-name">Ahorro propio</div><span class="fin-kind">${rows.length} concepto${rows.length===1?'':'s'}</span></div>
+        <div class="fin-big ${propVal<0?'neg':''}">${fmtMoney(propVal)}</div>
+        <div class="fin-sub">Cambio este mes: ${signed(propChange)} (ingresos − gastos + rendimiento de fondos propios)</div>
+        <div class="fin-list" style="margin-top:12px">${rows.map(r=>line(r.name, escapeHTML(r.sub), r.v)).join('')}</div>
+      </div>
+    </div>
+    <div class="fin-hint">Los fondos usan el último valor capturado (asistente o revisión mensual).</div>`;
+}
+
+// Fuentes de ingreso (editar desde Presupuesto)
+function incomeSourcesHTML(){
+  const srcs = fin.incomes.filter(x=>x.active);
+  if(!srcs.length) return '';
+  const base = srcs.filter(x=>x.counts_for_budget).reduce((t,x)=>t+sourceMonthly(x,false),0);
+  return `<div class="task-group-label fin-section-label"><span>Ingresos</span><span>Base ${fmtMoney(base)}/mes</span></div>
+    <div class="fin-list">${srcs.map(x=>{
+      const rec = x.category_id ? receivedInMonth(x.category_id) : 0, exp = sourceMonthly(x,true);
+      const pct = exp>0 ? Math.min(100, rec*100/exp) : 0;
+      const when = x.frequency==='semanal' && x.pay_weekday!==null && x.pay_weekday!==undefined ? ` · ${WEEKDAYS[x.pay_weekday].toLowerCase()}` : (x.pay_day ? ` · día ${x.pay_day}` : '');
+      return `<div class="fin-budget-row"><div class="fin-budget-top">
+          <div class="fin-budget-name">${escapeHTML(x.name)} <span class="fin-kind">${x.counts_for_budget?'Base':'Extra'}</span></div>
+          <button type="button" class="fin-limit" data-src-edit="${escapeAttr(x.id)}">${fmtMoney(x.amount_cents)} ${FREQ_LABEL[x.frequency]}</button>
+        </div>
+        <div class="fin-bar"><div class="${pct>=100?'ok':'goal'}" style="width:${pct.toFixed(1)}%"></div></div>
+        <div class="fin-budget-txt">Recibido este mes ${fmtMoney(rec)} de ${fmtMoney(exp)}${escapeHTML(when)}</div></div>`;
+    }).join('')}</div>
+    <button type="button" class="btn btn-ghost fin-add-btn" data-src-new style="margin-top:8px">+ Fuente de ingreso</button>`;
+}
+function openSourceModal(id){
+  const x = id ? fin.incomes.find(i=>i.id===id) : null;
+  const v = x || {name:'', amount_cents:0, frequency:'mensual', counts_for_budget:true, pay_weekday:null, pay_day:null, account_id:(bankAccounts().find(a=>a.kind==='debit')||{}).id};
+  openFinModal(x ? 'Editar ingreso' : 'Nueva fuente de ingreso', `
+    <div class="form-group"><label class="form-label" for="srcName">Nombre</label><input class="form-input" id="srcName" maxlength="40" style="font-size:16px" value="${escapeAttr(v.name)}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="srcAmount">Monto por pago</label><input class="form-input fin-money" id="srcAmount" inputmode="decimal" value="${v.amount_cents?centsToInput(v.amount_cents):''}" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label" for="srcFreq">Frecuencia</label><select class="form-input form-select fin-field" id="srcFreq">${Object.keys(FREQ_LABEL).map(f=>`<option value="${f}" ${v.frequency===f?'selected':''}>${FREQ_LABEL[f]}</option>`).join('')}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="srcWeekday">Día de pago (semanal)</label><select class="form-input form-select fin-field" id="srcWeekday"><option value="">—</option>${WEEKDAYS.map((w,i)=>`<option value="${i}" ${String(v.pay_weekday)===String(i)?'selected':''}>${w}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label" for="srcDay">Día del mes</label><input class="form-input fin-money" id="srcDay" inputmode="numeric" maxlength="2" value="${v.pay_day||''}" placeholder="1–31"></div>
+    </div>
+    <div class="form-group"><label class="form-label" for="srcAcc">¿A qué cuenta llega?</label><select class="form-input form-select fin-field" id="srcAcc">${optionList(bankAccounts(), v.account_id)}</select></div>
+    <label class="wiz-check" style="margin-bottom:0"><input type="checkbox" id="srcCounts" ${v.counts_for_budget?'checked':''}> Cuenta para presupuesto (ingreso base)</label>`,
+    `${x?'<button type="button" class="btn btn-ghost fin-modal-del" id="srcOff">Quitar</button>':''}<button type="button" class="btn btn-primary" id="srcSave">Guardar</button>`);
+  document.getElementById('srcSave').onclick = async ()=>{
+    const name=finVal('srcName'), amount=parseCents(finVal('srcAmount')), day=finVal('srcDay');
+    if(!name){ showToast('Escribe el nombre','error'); return; }
+    if(amount===null){ showToast('Escribe un monto válido','error'); return; }
+    if(day && !(Number(day)>=1 && Number(day)<=31)){ showToast('El día debe ser entre 1 y 31','error'); return; }
+    try{
+      const cat = await ensureCategory(name, 'income');
+      const payload = {name, amount_cents:amount, frequency:finVal('srcFreq'), pay_weekday: finVal('srcWeekday')===''?null:Number(finVal('srcWeekday')), pay_day: day?Number(day):null, account_id: finVal('srcAcc')||null, counts_for_budget: document.getElementById('srcCounts').checked, category_id: cat.id};
+      await upsertRow('income_sources', x, payload, fin.incomes);
+      closeFinModal(); renderContent(); showToast('Ingreso guardado','success');
+    }catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
+  if(x) document.getElementById('srcOff').onclick = async ()=>{
+    if(!confirm(`¿Quitar "${x.name}" de tus ingresos? Lo ya registrado no se borra.`)) return;
+    try{ await dbPatch('income_sources',{active:false},`?id=eq.${x.id}`); x.active=false; closeFinModal(); renderContent(); }
+    catch(e){ showToast('No se pudo actualizar: '+finErr(e),'error'); }
+  };
+}
+
+// Utilidades de guardado
+async function upsertRow(table, row, payload, list){
+  if(row){ const [r] = await dbPatch(table, payload, `?id=eq.${row.id}`); Object.assign(row, r||payload); return row; }
+  const [r] = await dbPost(table, payload); list.push(r); return r;
+}
+// Ajusta el saldo inicial para que el saldo calculado de hoy sea exactamente "cents".
+async function setBalanceTo(acc, cents){
+  const effect = accBalance(acc.id) - (Number(acc.opening_balance_cents)||0);
+  const opening = cents - effect;
+  if(opening !== Number(acc.opening_balance_cents)){ await dbPatch('accounts', {opening_balance_cents:opening}, `?id=eq.${acc.id}`); acc.opening_balance_cents = opening; }
+}
+async function ensureCategory(name, kind){
+  let c = fin.categories.find(x=>x.kind===kind && x.name.trim().toLowerCase()===name.trim().toLowerCase());
+  if(!c){ [c] = await dbPost('categories', {name, kind}); fin.categories.push(c); }
+  else if(c.archived){ await dbPatch('categories', {archived:false}, `?id=eq.${c.id}`); c.archived = false; }
+  return c;
+}
+async function ensureAccount(name, kind, institution){
+  let a = fin.accounts.find(x=>!isLoan(x) && x.name.trim().toLowerCase()===name.trim().toLowerCase());
+  if(!a){ [a] = await dbPost('accounts', {name, kind, institution, sort_order:50}); fin.accounts.push(a); }
+  else if(a.archived){ await dbPatch('accounts', {archived:false}, `?id=eq.${a.id}`); a.archived = false; }
+  return a;
+}
+async function setAssumption(key, value){ await upsertRow('assumptions', fin.assumptions.find(x=>x.key===key), {key, value, updated_at:new Date().toISOString()}, fin.assumptions); }
+async function upsertGoal(name, account_id, target, due){
+  const g = fin.goals.find(x=>x.name===name);
+  if(!target){ return; }
+  await upsertRow('money_goals', g, {name, account_id, target_cents:target, due_date:due||null}, fin.goals);
+}
+
+// ── ASISTENTE ──
+const WIZ_KEY = 'finWizardV1';
+const WIZ_TITLES = ['Ingresos','Gastos fijos y suscripciones','Tarjeta de crédito','Saldos actuales','Presupuesto de gastos variables','Metas de ahorro','Colchón','Supuestos','Resumen'];
+const WIZ_SUGGESTED = {comida:'4000', transporte:'2000', ocio:'2000', ropa:'1000', salud:'500', otros:'2500'};
+let wiz = null;
+function wizSave(){ try{ localStorage.setItem(WIZ_KEY, JSON.stringify(wiz)); }catch(e){} }
+function wizLoad(){ try{ const j=localStorage.getItem(WIZ_KEY); return j ? JSON.parse(j) : null; }catch(e){ return null; } }
+function maybeOpenWizard(){
+  if(fin.errors.length || fin.incomes.length || assumption('setup_completed')!==null) return;
+  try{ if(sessionStorage.getItem('finWizSkip')) return; }catch(e){}
+  openWizard();
+}
+function openWizard(){
+  if(fin.errors.length){ showToast('Faltan tablas de finanzas: corre el SQL v2 primero','error'); return; }
+  wiz = wizLoad() || {step:0, d:wizDefaults()};
+  renderWizard();
+  document.getElementById('finWizard').classList.add('open');
+}
+function closeWizard(){
+  wizSave();
+  document.getElementById('finWizard').classList.remove('open');
+  try{ sessionStorage.setItem('finWizSkip','1'); }catch(e){}
+}
+function wizAcc(test){ return fin.accounts.find(a=>!a.archived && !isLoan(a) && test(a)); }
+function wizDefaults(){
+  const money = c=> c ? centsToInput(c) : '';
+  const plata = wizAcc(a=>a.name==='Plata') || wizAcc(a=>a.kind==='debit');
+  const nu = wizAcc(a=>a.name==='NU ahorro');
+  const credit = wizAcc(a=>a.kind==='credit');
+  const viaje = wizAcc(a=>a.kind==='savings' && /viaje/i.test(a.name));
+  const futuro = wizAcc(a=>a.kind==='savings' && /futuro/i.test(a.name));
+  const card = credit && fin.cards.find(c=>c.account_id===credit.id);
+  const srcs = fin.incomes.filter(x=>x.active);
+  const ahorro = activeCats('savings')[0];
+  const trips = viaje ? fin.goals.filter(g=>g.account_id===viaje.id).map(g=>({id:g.id, name:g.name, amount:money(g.target_cents), date:g.due_date||''})) : [];
+  while(trips.length<4) trips.push({name:['Viaje grande 1','Viaje grande 2','Viaje pequeño 1','Viaje pequeño 2'][trips.length], amount:'', date:''});
+  const goalBy = n=>fin.goals.find(g=>g.name===n);
+  const boda = goalBy('Boda y casa'), largo = goalBy('Largo plazo');
+  const funds = fin.positions.filter(p=>!p.archived).map(p=>({id:p.id, name:p.fund_name, key:p.fund_key||'', origin:p.origin, value:money(positionValue(p)), cost:money(p.cost_basis_cents)}));
+  if(!funds.length) for(let i=0;i<5;i++) funds.push({name:'', key:'', origin:'heredado', value:'', cost:''});
+  const A = k=>{ const v=assumption(k); return v===null ? '' : String(v); };
+  return {
+    date: localDate(),
+    incomes: srcs.length ? srcs.map(x=>({id:x.id, name:x.name, amount:money(x.amount_cents), frequency:x.frequency, counts:!!x.counts_for_budget, pay_weekday:x.pay_weekday===null||x.pay_weekday===undefined?'':String(x.pay_weekday), pay_day:x.pay_day?String(x.pay_day):'', account_id:x.account_id||''}))
+      : [{name:'Sueldo', amount:'4500.00', frequency:'semanal', counts:true, pay_weekday:'', pay_day:'', account_id:plata?plata.id:''},
+         {name:'Apoyo papá', amount:'6000.00', frequency:'mensual', counts:false, pay_weekday:'', pay_day:'', account_id:plata?plata.id:''}],
+    recurring: fin.recurring.length ? fin.recurring.map(r=>({id:r.id, name:r.name, amount:money(r.amount_cents), day:r.day_of_month?String(r.day_of_month):'', kind:r.kind, account_id:r.account_id||''}))
+      : [{name:'YouTube Premium', amount:'159.00', day:'', kind:'suscripcion', account_id:credit?credit.id:''},
+         {name:'Claude', amount:'399.00', day:'', kind:'suscripcion', account_id:credit?credit.id:''}],
+    card: {limit: card?money(card.credit_limit_cents):'', owed: credit?money(Math.max(0,-accBalance(credit.id))):'', cut: card?String(card.cut_day):'17', pay: card?String(card.pay_day):'16'},
+    balances: {plata: plata?money(Math.max(0,accBalance(plata.id))):'', nu: nu?money(Math.max(0,accBalance(nu.id))):''},
+    funds,
+    budget: Object.fromEntries(activeCats('expense').map(c=>{ const b=currentBudget(c.id); return [c.id, b?centsToInput(b.amount_cents):'']; })),
+    savings: {monthly: ahorro && currentBudget(ahorro.id) ? centsToInput(currentBudget(ahorro.id).amount_cents) : '',
+      viaje: {balance: viaje?money(Math.max(0,accBalance(viaje.id))):'', trips},
+      futuro: {balance: futuro?money(Math.max(0,accBalance(futuro.id))):'', amount: boda?money(boda.target_cents):'', date: boda&&boda.due_date||''},
+      largo: {amount: largo?money(largo.target_cents):'', date: largo&&largo.due_date||''}},
+    assume: {inflation:A('inflation'), expected_return:A('expected_return'), retirement_age:A('retirement_age'), years_to_retirement:A('years_to_retirement')},
+    removed: {incomes:[], recurring:[], funds:[]},
+  };
+}
+// Cálculos sobre lo capturado en el asistente
+const wc = v=>{ const c=parseCents(v); return c===null?0:c; };
+function wizMonthly(i){ const a=wc(i.amount); return i.frequency==='semanal'?a*4 : i.frequency==='quincenal'?a*2 : a; }
+function wizIncomeTotals(){ const d=wiz.d; return {base:d.incomes.filter(i=>i.counts).reduce((t,i)=>t+wizMonthly(i),0), total:d.incomes.reduce((t,i)=>t+wizMonthly(i),0)}; }
+function wizBudgetTotal(){ return Object.values(wiz.d.budget).reduce((t,v)=>t+wc(v),0); }
+function wizSubsTotal(){ return wiz.d.recurring.reduce((t,r)=>t+wc(r.amount),0); }
+function wizColchonGoal(){ return 3*(wizBudgetTotal()+wizSubsTotal()); }
+function wizSummary(){
+  const d=wiz.d;
+  const her = d.funds.filter(f=>f.name.trim() && f.origin==='heredado').reduce((t,f)=>t+wc(f.value),0);
+  const propFunds = d.funds.filter(f=>f.name.trim() && f.origin==='propio').reduce((t,f)=>t+wc(f.value),0);
+  let loansNet = 0; activeAccounts().filter(isLoan).forEach(l=>{ const o=loanStats(l).owed; loansNet += l.kind==='lent'?o:-o; });
+  const prop = wc(d.balances.plata)+wc(d.balances.nu)+wc(d.savings.viaje.balance)+wc(d.savings.futuro.balance)+propFunds-wc(d.card.owed)+loansNet;
+  return {her, prop, propFunds, loansNet, total:her+prop};
+}
+function wizDate(){ return finDate(wiz.d.date); }
+
+// Campos (data-w = ruta dentro de wiz.d)
+const wv = v=>escapeAttr(v===null||v===undefined?'':String(v));
+function wMoney(path, val, ph){ return `<input class="form-input fin-money" data-w="${path}" inputmode="decimal" autocomplete="off" placeholder="${escapeAttr(ph||'0.00')}" value="${wv(val)}">`; }
+function wText(path, val, ph){ return `<input class="form-input" style="font-size:16px;height:42px" data-w="${path}" autocomplete="off" maxlength="60" placeholder="${escapeAttr(ph||'')}" value="${wv(val)}">`; }
+function wNum(path, val, ph){ return `<input class="form-input fin-money" data-w="${path}" inputmode="numeric" autocomplete="off" maxlength="3" placeholder="${escapeAttr(ph||'')}" value="${wv(val)}">`; }
+function wDate(path, val){ return `<input type="date" class="form-input" data-w="${path}" value="${wv(val)}">`; }
+function wSelect(path, val, opts, rerender){ return `<select class="form-input form-select fin-field" data-w="${path}" ${rerender?'data-wrender':''}>${opts.map(([v,l])=>`<option value="${escapeAttr(v)}" ${String(val)===String(v)?'selected':''}>${escapeHTML(l)}</option>`).join('')}</select>`; }
+function wField(label, input, hint){ return `<div class="form-group"><label class="form-label">${label}</label>${input}${hint?`<div class="fin-hint">${hint}</div>`:''}</div>`; }
+const accOpts = ()=>bankAccounts().map(a=>[a.id, a.name]);
+
+function wizStepHTML(){
+  const d = wiz.d, st = wiz.step;
+  if(st===0){
+    const t = wizIncomeTotals();
+    return `<p class="fin-hint" style="margin:0 0 14px">Tus ingresos no se registran solos: en Hoy aparecerán como "por recibir" hasta que digas "Ya lo recibí".</p>
+      ${d.incomes.map((i,k)=>`<div class="wiz-item">
+        ${wField('Nombre', wText(`incomes.${k}.name`, i.name, 'Ej. Sueldo'))}
+        <div class="form-row">${wField('Monto por pago', wMoney(`incomes.${k}.amount`, i.amount))}${wField('Frecuencia', wSelect(`incomes.${k}.frequency`, i.frequency, Object.entries(FREQ_LABEL), true))}</div>
+        <div class="form-row">
+          ${i.frequency==='semanal' ? wField('Día de pago', wSelect(`incomes.${k}.pay_weekday`, i.pay_weekday, [['','No sé'],...WEEKDAYS.map((w,n)=>[String(n),w])])) : i.frequency==='irregular' ? '<div></div>' : wField('Día del mes', wNum(`incomes.${k}.pay_day`, i.pay_day, '1–31'))}
+          ${wField('Llega a', wSelect(`incomes.${k}.account_id`, i.account_id, accOpts()))}
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><label class="wiz-check"><input type="checkbox" data-w="incomes.${k}.counts" data-wrender ${i.counts?'checked':''}> Cuenta para presupuesto</label>
+        <button type="button" class="fin-icon-btn" data-wdel="incomes.${k}">Quitar</button></div>
+      </div>`).join('')}
+      <button type="button" class="btn btn-ghost fin-small-btn" data-wadd="incomes">+ Agregar ingreso</button>
+      <div class="wiz-sum" id="wizLive">Ingreso base: <b>${fmtMoney(t.base)}</b>/mes · total con extras: <b>${fmtMoney(t.total)}</b>/mes<br><span class="fin-hint">Semanal se cuenta ×4 (meses con 5 pagos traen uno extra).</span></div>`;
+  }
+  if(st===1){
+    return `${d.recurring.map((r,k)=>`<div class="wiz-item">
+        <div class="form-row">${wField('Nombre', wText(`recurring.${k}.name`, r.name))}${wField('Monto', wMoney(`recurring.${k}.amount`, r.amount))}</div>
+        <div class="form-row">${wField('Día de cobro', wNum(`recurring.${k}.day`, r.day, '1–31'), r.day?'':'Si no lo sabes, déjalo vacío y lo confirmas después.')}${wField('Se cobra en', wSelect(`recurring.${k}.account_id`, r.account_id, accOpts()))}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">${wSelect(`recurring.${k}.kind`, r.kind, [['suscripcion','Suscripción'],['otro','Otro gasto fijo']])}<button type="button" class="fin-icon-btn" data-wdel="recurring.${k}">Quitar</button></div>
+      </div>`).join('')}
+      <button type="button" class="btn btn-ghost fin-small-btn" data-wadd="recurring">+ Agregar</button>
+      <div class="wiz-sum" id="wizLive">Total fijo al mes: <b>${fmtMoney(wizSubsTotal())}</b></div>`;
+  }
+  if(st===2){
+    const credit = wizAcc(a=>a.kind==='credit');
+    if(!credit) return '<div class="fin-hint">No tienes una cuenta de crédito. Puedes crearla en Cuentas y volver a este paso.</div>';
+    return `<p class="fin-hint" style="margin:0 0 14px">${escapeHTML(credit.name)}. El límite y lo que debes son cosas distintas.</p>
+      <div class="form-row">${wField('Límite de crédito', wMoney('card.limit', d.card.limit))}${wField(`Lo que debes al ${escapeHTML(wizDate())}`, wMoney('card.owed', d.card.owed))}</div>
+      <div class="form-row">${wField('Día de corte', wNum('card.cut', d.card.cut, '1–31'))}${wField('Día límite de pago', wNum('card.pay', d.card.pay, '1–31'))}</div>
+      <div class="wiz-sum" id="wizLive">${wc(d.card.limit)>0 ? `Uso del límite: <b>${(wc(d.card.owed)*100/wc(d.card.limit)).toFixed(1)}%</b>${wc(d.card.owed)*100/wc(d.card.limit)>30?' · conviene mantenerlo abajo de 30%':''}` : 'Escribe el límite para ver el uso.'}</div>`;
+  }
+  if(st===3){
+    return `${wField('Fecha de corte de estos saldos', wDate('date', d.date), 'Los movimientos se cuentan a partir de aquí.')}
+      <div class="form-row">${wField(`Plata · saldo al ${escapeHTML(wizDate())}`, wMoney('balances.plata', d.balances.plata))}${wField(`NU ahorro · saldo al ${escapeHTML(wizDate())}`, wMoney('balances.nu', d.balances.nu))}</div>
+      <div class="task-group-label fin-section-label"><span>Fondos en GBM · valor al ${escapeHTML(wizDate())}</span></div>
+      ${d.funds.map((f,k)=>`<div class="wiz-item">
+        <div class="form-row">${wField('Fondo', wText(`funds.${k}.name`, f.name, 'Nombre del fondo'))}${wField('Clave GBM (opcional)', wText(`funds.${k}.key`, f.key))}</div>
+        <div class="form-row">${wField('Valor actual', wMoney(`funds.${k}.value`, f.value))}${wField('Aportado en total', wMoney(`funds.${k}.cost`, f.cost))}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">${wSelect(`funds.${k}.origin`, f.origin, [['heredado','Heredado'],['propio','Propio']])}<button type="button" class="fin-icon-btn" data-wdel="funds.${k}">Quitar</button></div>
+      </div>`).join('')}
+      <button type="button" class="btn btn-ghost fin-small-btn" data-wadd="funds">+ Agregar fondo propio</button>
+      <div class="fin-hint">Las filas sin nombre se ignoran.</div>`;
+  }
+  if(st===4){
+    const cats = activeCats('expense');
+    const total = wizBudgetTotal(), diff = 1200000 - total;
+    return `<p class="fin-hint" style="margin:0 0 14px">Tus límites actuales ya vienen puestos. Cámbialos si quieres; vacío = sin presupuesto.</p>
+      ${cats.map(c=>`<div class="form-row" style="align-items:end">${wField(escapeHTML(c.name), wMoney(`budget.${c.id}`, d.budget[c.id], WIZ_SUGGESTED[c.name.trim().toLowerCase().split(' ')[0]] ? 'Sugerido '+WIZ_SUGGESTED[c.name.trim().toLowerCase().split(' ')[0]] : '0.00'))}<div></div></div>`).join('')}
+      <div class="wiz-sum" id="wizLive">Total: <b>${fmtMoney(total)}</b> · ${diff>=0 ? `te quedan ${fmtMoney(diff)} contra $12,000` : `te pasas ${fmtMoney(-diff)} de $12,000`}</div>`;
+  }
+  if(st===5){
+    const t = wizIncomeTotals();
+    if(!d.savings.monthly && t.total) d.savings.monthly = centsToInput(Math.round(t.total/2/10000)*10000);
+    const pct = t.total ? wc(d.savings.monthly)*100/t.total : 0;
+    return `${wField('Meta de ahorro mensual (monto fijo)', wMoney('savings.monthly', d.savings.monthly), `Tus ingresos totales: ${fmtMoney(t.total)}/mes. Debe quedar entre 30% y 70%.`)}
+      <div class="wiz-sum" id="wizLive">Equivale a <b>${pct.toFixed(0)}%</b> de tus ingresos.</div>
+      <div class="task-group-label fin-section-label"><span>Cubetas</span></div>
+      <div class="wiz-item"><b>Colchón</b> · vive en NU ahorro. Su meta se calcula en el paso siguiente.</div>
+      <div class="wiz-item"><b>Viaje</b> · cajita propia
+        ${wField(`Saldo al ${escapeHTML(wizDate())}`, wMoney('savings.viaje.balance', d.savings.viaje.balance))}
+        ${d.savings.viaje.trips.map((tr,k)=>`<div class="form-row">${wField(k<2?'Viaje grande':'Viaje pequeño', wText(`savings.viaje.trips.${k}.name`, tr.name))}<div class="form-row" style="gap:8px">${wField('Monto', wMoney(`savings.viaje.trips.${k}.amount`, tr.amount))}${wField('Fecha', wDate(`savings.viaje.trips.${k}.date`, tr.date))}</div></div>`).join('')}
+        <div class="fin-hint">El saldo de Viaje se reparte entre los viajes por fecha: el más cercano se llena primero.</div></div>
+      <div class="wiz-item"><b>Futuro</b> (boda y casa) · cajita propia
+        <div class="form-row">${wField(`Saldo al ${escapeHTML(wizDate())}`, wMoney('savings.futuro.balance', d.savings.futuro.balance))}<div></div></div>
+        <div class="form-row">${wField('Meta (opcional)', wMoney('savings.futuro.amount', d.savings.futuro.amount))}${wField('Fecha (opcional)', wDate('savings.futuro.date', d.savings.futuro.date))}</div></div>
+      <div class="wiz-item"><b>Largo plazo</b> · GBM
+        <div class="form-row">${wField('Meta (opcional)', wMoney('savings.largo.amount', d.savings.largo.amount))}${wField('Fecha (opcional)', wDate('savings.largo.date', d.savings.largo.date))}</div></div>`;
+  }
+  if(st===6){
+    const goal = wizColchonGoal(), have = wc(d.balances.nu);
+    const pct = goal ? Math.min(100, have*100/goal) : 0;
+    return `<p class="fin-hint" style="margin:0 0 14px">Meta = 3 × (gastos variables ${fmtMoney(wizBudgetTotal())} + fijos ${fmtMoney(wizSubsTotal())}).</p>
+      <div class="fin-card"><div class="fin-label">Meta del colchón</div><div class="fin-big">${fmtMoney(goal)}</div>
+      <div class="fin-bar"><div class="${pct>=100?'ok':'goal'}" style="width:${pct.toFixed(1)}%"></div></div>
+      <div class="fin-sub" id="wizLive">Llevas ${fmtMoney(have)} (${pct.toFixed(0)}%)${goal>have?` · faltan ${fmtMoney(goal-have)}`:' · ¡completo!'}</div></div>
+      <div style="margin-top:14px">${wField(`Saldo líquido en NU ahorro al ${escapeHTML(wizDate())}`, wMoney('balances.nu', d.balances.nu), 'Es el mismo saldo del paso 4; si lo cambias aquí, se actualiza allá.')}</div>`;
+  }
+  if(st===7){
+    return `<p class="fin-hint" style="margin:0 0 14px">Son <b>supuestos</b> para proyecciones, no datos reales. Deja vacío lo que no sepas; los puedes cambiar después.</p>
+      <div class="form-row">${wField('Inflación anual (%)', wMoney('assume.inflation', d.assume.inflation, 'Ej. 4'))}${wField('Rendimiento esperado anual (%)', wMoney('assume.expected_return', d.assume.expected_return, 'Supuesto'))}</div>
+      <div class="form-row">${wField('Edad de retiro', wNum('assume.retirement_age', d.assume.retirement_age, 'Ej. 60'))}${wField('Años para el retiro', wNum('assume.years_to_retirement', d.assume.years_to_retirement, 'Ej. 35'))}</div>`;
+  }
+  const sm = wizSummary();
+  return `<div class="fin-card fin-card-hero"><div class="fin-label">Patrimonio neto al ${escapeHTML(wizDate())}</div><div class="fin-big">${fmtMoney(sm.total)}</div></div>
+    <div class="fin-acc-grid" style="margin-top:12px">
+      <div class="fin-card"><div class="fin-label">Herencia</div><div class="fin-big">${fmtMoney(sm.her)}</div><div class="fin-sub">Fondos heredados en GBM</div></div>
+      <div class="fin-card"><div class="fin-label">Ahorro propio</div><div class="fin-big ${sm.prop<0?'neg':''}">${fmtMoney(sm.prop)}</div><div class="fin-sub">Plata + NU + Viaje + Futuro + fondos propios − tarjeta${sm.loansNet?` ${sm.loansNet>0?'+':'−'} préstamos`:''}</div></div>
+    </div>
+    <p class="fin-hint" style="margin-top:14px">Al terminar se guardan tus ingresos, fijos, tarjeta, saldos, fondos, presupuesto, metas y supuestos. Puedes volver a este asistente desde ⚙ Configurar.</p>`;
+}
+function wizValidate(){
+  const d = wiz.d, st = wiz.step;
+  const money = (v, label, req)=>{ if(v===''||v===null||v===undefined) return req ? `Falta: ${label}` : ''; return parseCents(v)===null ? `Monto inválido: ${label}` : ''; };
+  const day = (v, label, req)=>{ if(v===''||v===null||v===undefined) return req ? `Falta: ${label}` : ''; const n=Number(v); return Number.isInteger(n)&&n>=1&&n<=31 ? '' : `${label} debe ser entre 1 y 31`; };
+  const errs = [];
+  if(st===0){
+    if(!d.incomes.length) errs.push('Agrega al menos un ingreso');
+    d.incomes.forEach(i=>{ if(!i.name.trim()) errs.push('Falta el nombre de un ingreso'); errs.push(money(i.amount, i.name||'ingreso', true)); if(i.frequency==='mensual'||i.frequency==='quincenal') errs.push(day(i.pay_day, `Día de ${i.name}`, false)); });
+    if(!d.incomes.some(i=>i.counts)) errs.push('Marca al menos un ingreso como base para el presupuesto');
+  }
+  if(st===1) d.recurring.forEach(r=>{ if(!r.name.trim()) errs.push('Falta el nombre de un gasto fijo'); errs.push(money(r.amount, r.name, true)); errs.push(day(r.day, `Día de ${r.name}`, false)); });
+  if(st===2 && wizAcc(a=>a.kind==='credit')){ errs.push(money(d.card.limit,'límite de crédito',true)); errs.push(money(d.card.owed,'lo que debes',false)); errs.push(day(d.card.cut,'Día de corte',true)); errs.push(day(d.card.pay,'Día de pago',true)); }
+  if(st===3){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) errs.push('Elige la fecha de corte');
+    errs.push(money(d.balances.plata,'Plata',false)); errs.push(money(d.balances.nu,'NU ahorro',false));
+    d.funds.filter(f=>f.name.trim()).forEach(f=>{ errs.push(money(f.value, `valor de ${f.name}`, true)); errs.push(money(f.cost, `aportado de ${f.name}`, false)); });
+  }
+  if(st===4) Object.values(d.budget).forEach(v=>errs.push(money(v,'presupuesto',false)));
+  if(st===5){
+    const t = wizIncomeTotals().total;
+    const e = money(d.savings.monthly,'meta de ahorro mensual',true); errs.push(e);
+    if(!e && t){ const pct = wc(d.savings.monthly)*100/t; if(pct<30||pct>70) errs.push(`La meta debe estar entre 30% y 70% de tus ingresos: entre ${fmtMoney(t*0.3)} y ${fmtMoney(t*0.7)}`); }
+    [d.savings.viaje.balance, d.savings.futuro.balance, d.savings.futuro.amount, d.savings.largo.amount, ...d.savings.viaje.trips.map(x=>x.amount)].forEach(v=>errs.push(money(v,'monto',false)));
+  }
+  if(st===6) errs.push(money(d.balances.nu,'saldo de NU',false));
+  if(st===7){
+    const num = (v,label,min,max)=>{ if(v==='') return ''; const n=Number(String(v).replace(',','.')); return isFinite(n)&&n>=min&&n<=max ? '' : `${label} fuera de rango`; };
+    errs.push(num(d.assume.inflation,'Inflación',0,100)); errs.push(num(d.assume.expected_return,'Rendimiento esperado',-50,100));
+    errs.push(num(d.assume.retirement_age,'Edad de retiro',18,100)); errs.push(num(d.assume.years_to_retirement,'Años para el retiro',0,80));
+  }
+  return errs.filter(Boolean)[0] || '';
+}
+function renderWizard(){
+  const st = wiz.step, last = WIZ_TITLES.length-1;
+  document.getElementById('finWizTitle').textContent = WIZ_TITLES[st];
+  document.getElementById('finWizStep').textContent = `Paso ${st+1} de ${WIZ_TITLES.length}`;
+  const body = document.getElementById('finWizBody');
+  body.innerHTML = wizStepHTML();
+  body.scrollTop = 0;
+  document.getElementById('finWizFooter').innerHTML = `${st>0?'<button type="button" class="btn btn-ghost" id="wizBack">Atrás</button>':''}<span style="flex:1"></span><button type="button" class="btn btn-primary" id="wizNext">${st===last?'Terminar':'Siguiente'}</button>`;
+  if(st>0) document.getElementById('wizBack').onclick = ()=>{ wiz.step--; wizSave(); renderWizard(); };
+  document.getElementById('wizNext').onclick = async ()=>{
+    const err = wizValidate(); if(err){ showToast(err,'error'); return; }
+    if(st===last){ await wizFinish(); return; }
+    wiz.step++; wizSave(); renderWizard();
+  };
+}
+function wizSetPath(path, val){ const ks=path.split('.'); let o=wiz.d; for(let i=0;i<ks.length-1;i++) o=o[ks[i]]; o[ks[ks.length-1]]=val; wizSave(); }
+(function bindWizard(){
+  const body = document.getElementById('finWizBody');
+  const onInput = e=>{
+    const el = e.target; if(!el.dataset || !el.dataset.w) return;
+    wizSetPath(el.dataset.w, el.type==='checkbox' ? el.checked : el.value);
+    if(el.hasAttribute('data-wrender') || el.dataset.w==='date'){ if(e.type==='change') renderWizard(); return; }
+    const live = document.getElementById('wizLive');
+    if(live){ const tmp=document.createElement('div'); tmp.innerHTML=wizStepHTML(); const nl=tmp.querySelector('#wizLive'); if(nl) live.innerHTML=nl.innerHTML; }
+  };
+  body.addEventListener('input', onInput);
+  body.addEventListener('change', onInput);
+  body.addEventListener('click', e=>{
+    const add = e.target.closest('[data-wadd]'), del = e.target.closest('[data-wdel]');
+    if(add){
+      const k = add.dataset.wadd;
+      const blank = {incomes:{name:'', amount:'', frequency:'mensual', counts:false, pay_weekday:'', pay_day:'', account_id:(wizAcc(a=>a.kind==='debit')||{}).id||''},
+        recurring:{name:'', amount:'', day:'', kind:'suscripcion', account_id:(wizAcc(a=>a.kind==='credit')||{}).id||''},
+        funds:{name:'', key:'', origin:'propio', value:'', cost:''}}[k];
+      wiz.d[k].push(blank); wizSave(); renderWizard();
+    }
+    if(del){
+      const [k, i] = del.dataset.wdel.split('.');
+      const row = wiz.d[k][Number(i)];
+      if(row && row.id) wiz.d.removed[k].push(row.id);
+      wiz.d[k].splice(Number(i),1); wizSave(); renderWizard();
+    }
+  });
+  document.getElementById('finWizClose').addEventListener('click', closeWizard);
+})();
+async function wizFinish(){
+  const d = wiz.d;
+  const btn = document.getElementById('wizNext'); btn.disabled = true; btn.textContent = 'Guardando…';
+  try{
+    // 1) Ingresos
+    for(const i of d.incomes){
+      const cat = await ensureCategory(i.name.trim(), 'income');
+      const payload = {name:i.name.trim(), amount_cents:wc(i.amount), frequency:i.frequency, counts_for_budget:!!i.counts,
+        pay_weekday: i.frequency==='semanal' && i.pay_weekday!=='' ? Number(i.pay_weekday) : null,
+        pay_day: (i.frequency==='mensual'||i.frequency==='quincenal') && i.pay_day ? Number(i.pay_day) : null,
+        account_id: i.account_id||null, category_id: cat.id, active:true};
+      const row = await upsertRow('income_sources', i.id && fin.incomes.find(x=>x.id===i.id), payload, fin.incomes); i.id = row.id; wizSave();
+    }
+    for(const id of d.removed.incomes){ await dbPatch('income_sources',{active:false},`?id=eq.${id}`); const x=fin.incomes.find(r=>r.id===id); if(x) x.active=false; }
+    // 2) Fijos y suscripciones
+    const subsCat = await ensureCategory('Suscripciones','expense');
+    for(const r of d.recurring){
+      const payload = {name:r.name.trim(), amount_cents:wc(r.amount), day_of_month: r.day?Number(r.day):null, kind:r.kind, account_id:r.account_id||null, category_id: r.kind==='suscripcion'?subsCat.id:null};
+      const row = await upsertRow('recurring_items', r.id && fin.recurring.find(x=>x.id===r.id), payload, fin.recurring); r.id = row.id; wizSave();
+    }
+    for(const id of d.removed.recurring){ await dbDelete('recurring_items',`?id=eq.${id}`); fin.recurring = fin.recurring.filter(x=>x.id!==id); }
+    // 3) Tarjeta
+    const credit = wizAcc(a=>a.kind==='credit');
+    if(credit){
+      await upsertRow('card_settings', fin.cards.find(c=>c.account_id===credit.id), {account_id:credit.id, credit_limit_cents:wc(d.card.limit), cut_day:Number(d.card.cut), pay_day:Number(d.card.pay), updated_at:new Date().toISOString()}, fin.cards);
+      await setBalanceTo(credit, -wc(d.card.owed));
+    }
+    // 4) Saldos y fondos
+    const plata = wizAcc(a=>a.name==='Plata') || wizAcc(a=>a.kind==='debit');
+    const nu = wizAcc(a=>a.name==='NU ahorro');
+    if(plata) await setBalanceTo(plata, wc(d.balances.plata));
+    if(nu) await setBalanceTo(nu, wc(d.balances.nu));
+    const gbm = wizAcc(a=>a.kind==='investment');
+    const ms = monthStartStr(0);
+    for(const f of d.funds.filter(x=>x.name.trim())){
+      const pos = await upsertRow('investment_positions', f.id && fin.positions.find(p=>p.id===f.id), {account_id:gbm?gbm.id:null, fund_name:f.name.trim(), fund_key:f.key.trim()||null, origin:f.origin, cost_basis_cents:wc(f.cost)}, fin.positions);
+      f.id = pos.id; wizSave();
+      await upsertRow('position_valuations', fin.valuations.find(v=>v.position_id===pos.id && v.month===ms), {position_id:pos.id, month:ms, value_cents:wc(f.value)}, fin.valuations);
+    }
+    for(const id of d.removed.funds){ await dbPatch('investment_positions',{archived:true},`?id=eq.${id}`); const p=fin.positions.find(x=>x.id===id); if(p) p.archived=true; }
+    // 5) Presupuesto
+    for(const [catId, v] of Object.entries(d.budget)) await saveBudget(catId, String(v||'').trim());
+    // 6) Ahorro: meta mensual, cajitas y metas
+    const ahorro = activeCats('savings')[0] || await ensureCategory('Ahorro','savings');
+    await saveBudget(ahorro.id, d.savings.monthly);
+    const viaje = await ensureAccount('Viaje','savings','NU');
+    const futuro = await ensureAccount('Futuro','savings','NU');
+    await setBalanceTo(viaje, wc(d.savings.viaje.balance));
+    await setBalanceTo(futuro, wc(d.savings.futuro.balance));
+    for(const tr of d.savings.viaje.trips){
+      if(!wc(tr.amount) || !tr.name.trim()) continue;
+      const g = await upsertRow('money_goals', tr.id && fin.goals.find(x=>x.id===tr.id), {name:tr.name.trim(), account_id:viaje.id, target_cents:wc(tr.amount), due_date:tr.date||null}, fin.goals);
+      tr.id = g.id; wizSave();
+    }
+    await upsertGoal('Boda y casa', futuro.id, wc(d.savings.futuro.amount), d.savings.futuro.date);
+    if(gbm) await upsertGoal('Largo plazo', gbm.id, wc(d.savings.largo.amount), d.savings.largo.date);
+    // 7) Colchón
+    if(nu) await upsertGoal('Colchón', nu.id, wizColchonGoal(), null);
+    // 8) Supuestos
+    for(const k of ['inflation','expected_return','retirement_age','years_to_retirement']){
+      const v = String(d.assume[k]||'').replace(',','.').trim();
+      await setAssumption(k, v==='' ? null : Number(v));
+    }
+    await setAssumption('setup_completed', Number(localDate().replace(/-/g,'')));
+    try{ localStorage.removeItem(WIZ_KEY); }catch(e){}
+    document.getElementById('finWizard').classList.remove('open');
+    wiz = null;
+    await loadFinance();
+    finView = 'home'; renderContent();
+    showToast('¡Listo! Tus finanzas quedaron configuradas','success');
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Terminar';
+    showToast('No se pudo guardar todo: '+finErr(e)+'. Tu avance sigue guardado; intenta de nuevo.','error');
+  }
 }
 
 // ── AUTH ─────────────────────────────────────────────────────
