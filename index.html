@@ -620,6 +620,8 @@ body.section-finance .content{padding-bottom:110px}
 .form-input.fin-money, select.form-input.fin-field{font-size:16px;height:42px}
 .fin-modal-del{margin-right:auto;color:var(--red)}
 .fin-hint{font-size:12px;color:var(--text3);margin-top:6px}
+.fin-acc-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.fin-acc-actions .fin-small-btn{margin-top:0}
 @media(max-width:768px){
   .section-switch.top{display:none}
   .bottom-tabs{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:80;background:var(--bg2);border-top:1px solid var(--border);padding:6px 12px calc(6px + env(safe-area-inset-bottom));gap:8px}
@@ -2969,10 +2971,10 @@ function donutSlices(data){
 
 // ── FINANZAS ─────────────────────────────────────────────────
 // Montos en centavos (bigint). Saldo = inicial + ingresos − gastos − transf. salientes + transf. entrantes.
-const fin = {accounts:[], categories:[], tx:[], budgets:[], goals:[], loaded:false, errors:[]};
-let finFilterAcc = '', finFilterCat = '', finMonthOffset = 0, finShowArchived = false;
-const FIN_TABS = {home:'Hoy', movs:'Movimientos', accounts:'Cuentas', budget:'Presupuesto', goals:'Metas'};
-const ACC_KIND = {debit:'Débito', credit:'Crédito', savings:'Ahorro', investment:'Inversión', cash:'Efectivo'};
+const fin = {accounts:[], categories:[], tx:[], budgets:[], goals:[], snapshots:[], loaded:false, errors:[]};
+let finFilterAcc = '', finFilterCat = '', finMonthOffset = 0, finShowArchived = false, finShowClosedLoans = false;
+const FIN_TABS = {home:'Hoy', movs:'Movimientos', accounts:'Cuentas', loans:'Préstamos', budget:'Presupuesto', goals:'Metas'};
+const ACC_KIND = {debit:'Débito', credit:'Crédito', savings:'Ahorro', investment:'Inversión', cash:'Efectivo', lent:'Te deben', borrowed:'Debes'};
 const TX_TYPES = {expense:'Gasto', income:'Ingreso', transfer:'Transferencia'};
 const moneyFmt = new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'});
 
@@ -3014,6 +3016,9 @@ function monthTotals(offset=0){
 }
 function catName(id){ const c=fin.categories.find(x=>x.id===id); return c ? c.name : 'Sin categoría'; }
 function accName(id){ const a=fin.accounts.find(x=>x.id===id); return a ? a.name : '—'; }
+function isLoan(a){ return a && (a.kind==='lent' || a.kind==='borrowed'); }
+function bankAccounts(){ return activeAccounts().filter(a=>!isLoan(a)); }
+function accLabel(a){ return isLoan(a) ? `${a.name} (préstamo)` : a.name; }
 function activeAccounts(){ return fin.accounts.filter(a=>!a.archived).sort((a,b)=>((a.sort_order||0)-(b.sort_order||0)) || a.name.localeCompare(b.name,'es')); }
 function activeCats(kind){ return fin.categories.filter(c=>!c.archived && (!kind || c.kind===kind)).sort((a,b)=>a.name.localeCompare(b.name,'es')); }
 function sortTx(){ fin.tx.sort((a,b)=> a.occurred_on<b.occurred_on ? 1 : a.occurred_on>b.occurred_on ? -1 : String(b.created_at||'').localeCompare(String(a.created_at||''))); }
@@ -3029,6 +3034,7 @@ async function loadFinance(){
     get('tx','transactions','?order=occurred_on.desc,created_at.desc'),
     get('budgets','budgets','?order=month.desc'),
     get('goals','money_goals','?archived=eq.false&order=created_at.asc'),
+    get('snapshots','balance_snapshots','?order=month.asc'),
   ]);
   fin.errors = errs; fin.loaded = true;
 }
@@ -3058,7 +3064,7 @@ function renderFinance(el){
   if(!fin.loaded) body = `<div class="loading"><div class="spinner"></div><p>Cargando finanzas...</p></div>`;
   else{
     const warn = fin.errors.length ? `<div class="fin-warn">No se pudo cargar: ${escapeHTML(fin.errors.join(', '))}. Revisa tu conexión y vuelve a abrir Finanzas. Tus tareas no se ven afectadas.</div>` : '';
-    body = warn + ({home:finHomeHTML, movs:finMovsHTML, accounts:finAccountsHTML, budget:finBudgetHTML, goals:finGoalsHTML}[finView])();
+    body = warn + ({home:finHomeHTML, movs:finMovsHTML, accounts:finAccountsHTML, loans:finLoansHTML, budget:finBudgetHTML, goals:finGoalsHTML}[finView])();
   }
   el.innerHTML = tabs + body;
   el.querySelectorAll('[data-fin-view]').forEach(b=>b.onclick=()=>{ finView=b.dataset.finView; renderContent(); });
@@ -3124,9 +3130,13 @@ function finMovsHTML(){
 
 // c) Cuentas
 function finAccountsHTML(){
-  const accs = activeAccounts();
+  const accs = bankAccounts();
   if(!accs.length) return '<div class="empty"><p>No hay cuentas.</p></div>';
-  return `<div class="fin-acc-grid">${accs.map(a=>{
+  const loans = activeAccounts().filter(isLoan);
+  let owedToMe = 0, iOwe = 0;
+  loans.forEach(l=>{ const st=loanStats(l); if(l.kind==='lent') owedToMe+=st.owed; else iOwe+=st.owed; });
+  const loanLine = loans.length ? `<div class="fin-month-sum">Préstamos: te deben ${fmtMoney(owedToMe)} · debes ${fmtMoney(iOwe)} <button type="button" class="btn btn-ghost fin-small-btn" data-fin-goto-loans>Ver</button></div>` : '';
+  return loanLine + `<div class="fin-acc-grid">${accs.map(a=>{
     const bal = accBalance(a.id);
     const isCredit = a.kind==='credit';
     let main;
@@ -3137,13 +3147,269 @@ function finAccountsHTML(){
         : `<div class="fin-big">${fmtMoney(-debt)}</div><div class="fin-sub">${debt<0?'Saldo a favor':'Sin deuda'}</div>`;
     } else main = `<div class="fin-big ${bal<0?'neg':''}">${fmtMoney(bal)}</div>`;
     const opening = Number(a.opening_balance_cents)||0;
+    let hist = '';
+    if(a.kind==='investment'){
+      const rows = snapshotRows(a.id);
+      const last = rows[rows.length-1];
+      const total = rows.reduce((s,r)=>s+(r.gain===null?0:r.gain),0);
+      hist = `${last ? `<div class="fin-sub">Último corte (${escapeHTML(monthName(last.month))}): ${fmtMoney(last.balance_cents)} · rendimiento acumulado <span style="color:${total<0?'var(--red)':'var(--green)'}">${fmtMoney(total)}</span></div>` : ''}
+        <button type="button" class="btn btn-ghost fin-small-btn" data-acc-history="${escapeAttr(a.id)}">Historial mensual${rows.length?` (${rows.length})`:''}</button>`;
+    }
     return `<div class="fin-card fin-acc">
       <div class="fin-acc-head"><div class="fin-acc-name">${escapeHTML(a.name)}</div><span class="fin-kind">${escapeHTML(ACC_KIND[a.kind]||a.kind)}</span></div>
       ${a.institution ? `<div class="fin-sub">${escapeHTML(a.institution)}</div>` : ''}
       ${main}
-      <button type="button" class="btn btn-ghost fin-small-btn" data-fin-opening="${escapeAttr(a.id)}">${isCredit?'Deuda inicial':'Saldo inicial'}: ${fmtMoney(isCredit?-opening:opening)}</button>
+      <div class="fin-acc-actions">
+        <button type="button" class="btn btn-ghost fin-small-btn" data-fin-opening="${escapeAttr(a.id)}">${isCredit?'Deuda inicial':'Saldo inicial'}: ${fmtMoney(isCredit?-opening:opening)}</button>
+        ${hist}
+      </div>
     </div>`;
   }).join('')}</div>`;
+}
+
+// Historial mensual (inversiones): rendimiento = valor − valor anterior − depósitos netos del mes
+function monthName(m){ const d=new Date(m.slice(0,7)+'-15T12:00:00'); const s=d.toLocaleDateString('es-MX',{month:'short',year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); }
+function snapshotRows(accId){
+  const rows = fin.snapshots.filter(x=>x.account_id===accId).sort((a,b)=>a.month<b.month?-1:1);
+  return rows.map((r,i)=>{
+    const prev = rows[i-1];
+    const gain = prev ? Number(r.balance_cents) - Number(prev.balance_cents) - (Number(r.net_deposits_cents)||0) : null;
+    return {...r, gain};
+  });
+}
+function parseSignedCents(s){ s=String(s||'').trim(); const neg=s.startsWith('-'); const c=parseCents(neg?s.slice(1):s); return c===null?null:(neg?-c:c); }
+function openHistoryModal(accId, editId){
+  const a = fin.accounts.find(x=>x.id===accId); if(!a) return;
+  const rows = snapshotRows(accId);
+  const ed = editId ? rows.find(r=>r.id===editId) : null;
+  const table = rows.length ? `<div class="fin-list" style="margin-top:16px">${rows.slice().reverse().map(r=>`
+      <div class="fin-tx" data-snap="${escapeAttr(r.id)}">
+        <div class="fin-tx-main"><div class="fin-tx-title">${escapeHTML(monthName(r.month))}</div>
+          <div class="fin-tx-sub">Depósitos netos ${fmtMoney(r.net_deposits_cents)}</div></div>
+        <div style="text-align:right;flex-shrink:0"><div class="fin-tx-amt">${fmtMoney(r.balance_cents)}</div>
+          <div class="fin-tx-sub" style="color:${r.gain===null?'var(--text3)':r.gain<0?'var(--red)':'var(--green)'}">${r.gain===null?'—':(r.gain<0?'':'+')+fmtMoney(r.gain)}</div></div>
+      </div>`).join('')}</div>` : '<div class="fin-hint" style="margin-top:12px">Aún no hay meses capturados.</div>';
+  const body = `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="snapMonth">Mes</label>
+        <input type="month" class="form-input fin-money" id="snapMonth" value="${escapeAttr(ed?ed.month.slice(0,7):monthStartStr(-1).slice(0,7))}"></div>
+      <div class="form-group"><label class="form-label" for="snapValue">Valor al cierre</label>
+        <input class="form-input fin-money" id="snapValue" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${ed?centsToInput(ed.balance_cents):''}"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:0"><label class="form-label" for="snapDeposits">Depósitos netos del mes (retiros en negativo)</label>
+      <input class="form-input fin-money" id="snapDeposits" inputmode="text" autocomplete="off" placeholder="0.00" value="${ed&&Number(ed.net_deposits_cents)?(Number(ed.net_deposits_cents)<0?'-':'')+centsToInput(ed.net_deposits_cents):''}">
+      <div class="fin-hint">Rendimiento del mes = valor − valor del mes anterior − depósitos netos.</div></div>
+    ${table}`;
+  const footer = `${ed?'<button type="button" class="btn btn-ghost fin-modal-del" id="snapDelete">Eliminar mes</button>':''}<button type="button" class="btn btn-primary" id="snapSave">${ed?'Guardar cambios':'Agregar mes'}</button>`;
+  openFinModal(`Historial · ${a.name}`, body, footer);
+  document.querySelectorAll('[data-snap]').forEach(r=>r.onclick=()=>openHistoryModal(accId, r.dataset.snap));
+  document.getElementById('snapSave').onclick = async ()=>{
+    const m = finVal('snapMonth');
+    const value = parseCents(finVal('snapValue'));
+    const depRaw = finVal('snapDeposits');
+    const dep = depRaw==='' ? 0 : parseSignedCents(depRaw);
+    if(!/^\d{4}-\d{2}$/.test(m)){ showToast('Elige el mes','error'); return; }
+    if(value===null){ showToast('Escribe el valor al cierre','error'); return; }
+    if(dep===null){ showToast('Revisa los depósitos','error'); return; }
+    const month = m+'-01';
+    const payload = {account_id:accId, month, balance_cents:value, net_deposits_cents:dep};
+    const existing = fin.snapshots.find(x=>x.account_id===accId && x.month===month && (!ed || x.id!==ed.id));
+    if(existing && !confirm(`Ya hay un valor para ${monthName(month)}. ¿Reemplazarlo?`)) return;
+    try{
+      const target = (ed && fin.snapshots.find(x=>x.id===ed.id)) || existing;
+      if(target){ const [row] = await dbPatch('balance_snapshots', payload, `?id=eq.${target.id}`); Object.assign(target, row||payload); }
+      else { const [row] = await dbPost('balance_snapshots', payload); fin.snapshots.push(row); }
+      openHistoryModal(accId); renderContent(); showToast('Mes guardado','success');
+    }catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
+  if(ed) document.getElementById('snapDelete').onclick = async ()=>{
+    if(!confirm(`¿Eliminar ${monthName(ed.month)} del historial?`)) return;
+    try{ await dbDelete('balance_snapshots', `?id=eq.${ed.id}`); fin.snapshots = fin.snapshots.filter(x=>x.id!==ed.id); openHistoryModal(accId); renderContent(); }
+    catch(e){ showToast('No se pudo eliminar: '+finErr(e),'error'); }
+  };
+}
+
+// Préstamos: cada préstamo es una cuenta especial ('lent' = te deben, 'borrowed' = debes).
+// Prestar / recibir / abonar = transferencias entre tu cuenta y la del préstamo, así no cuentan como gasto.
+function loanStats(a){
+  const opening = Number(a.opening_balance_cents)||0;
+  let tin=0, tout=0, inc=0, exp=0;
+  for(const t of fin.tx){
+    const amt = Number(t.amount_cents)||0;
+    if(t.account_id===a.id){ if(t.type==='transfer') tout+=amt; else if(t.type==='income') inc+=amt; else exp+=amt; }
+    if(t.type==='transfer' && t.to_account_id===a.id) tin+=amt;
+  }
+  const bal = opening + tin + inc - tout - exp;
+  if(a.kind==='lent') return {principal: Math.max(0,opening)+tin, paid: tout, forgiven: exp, owed: bal};
+  return {principal: Math.max(0,-opening)+tout, paid: tin, forgiven: inc, owed: -bal};
+}
+function loanCardHTML(a){
+  const st = loanStats(a);
+  const lent = a.kind==='lent';
+  const pct = st.principal>0 ? Math.min(100, (st.paid+st.forgiven)*100/st.principal) : 0;
+  const lines = [];
+  if(a.due_date && st.owed>0){
+    const m = monthsUntil(a.due_date);
+    const late = a.due_date < localDate() && st.owed>0;
+    lines.push(`<span class="${late?'warn':''}">Fecha para pagar: ${escapeHTML(finDate(a.due_date))}${late?' · vencido':m>0?` · faltan ${m} ${m===1?'mes':'meses'}`:''}</span>`);
+  }
+  if(st.forgiven>0) lines.push(`${lent?'Perdonado':'Te condonaron'}: ${fmtMoney(st.forgiven)}`);
+  if(a.note) lines.push(escapeHTML(a.note));
+  return `<div class="fin-card">
+    <div class="fin-acc-head"><div class="fin-acc-name">${escapeHTML(a.name)}</div><span class="fin-kind">${lent?'Te debe':'Le debes'}</span></div>
+    <div class="fin-big ${st.owed>0?(lent?'':'neg'):'pos'}">${fmtMoney(Math.max(0,st.owed))}</div>
+    <div class="fin-bar"><div class="${st.owed<=0?'ok':'goal'}" style="width:${pct.toFixed(1)}%"></div></div>
+    <div class="fin-budget-txt">${lent?'Te ha pagado':'Has pagado'} ${fmtMoney(st.paid)} de ${fmtMoney(st.principal)}</div>
+    ${lines.length?`<div class="fin-goal-lines">${lines.map(l=>`<div>${l}</div>`).join('')}</div>`:''}
+    <div class="fin-acc-actions">
+      ${a.archived
+        ? `<button type="button" class="btn btn-ghost fin-small-btn" data-loan-reopen="${escapeAttr(a.id)}">Reabrir</button>`
+        : `${st.owed>0?`<button type="button" class="btn btn-primary fin-small-btn" data-loan-pay="${escapeAttr(a.id)}">Registrar abono</button>`:`<button type="button" class="btn btn-primary fin-small-btn" data-loan-close="${escapeAttr(a.id)}">Marcar liquidado</button>`}
+           <button type="button" class="btn btn-ghost fin-small-btn" data-loan-edit="${escapeAttr(a.id)}">Editar</button>`}
+    </div>
+  </div>`;
+}
+function finLoansHTML(){
+  const open = activeAccounts().filter(isLoan);
+  const closed = fin.accounts.filter(a=>isLoan(a) && a.archived);
+  const group = (kind, title)=>{
+    const list = open.filter(a=>a.kind===kind);
+    if(!list.length) return '';
+    const total = list.reduce((s,a)=>s+Math.max(0,loanStats(a).owed),0);
+    return `<div class="task-group-label fin-section-label"><span>${title}</span><span>${fmtMoney(total)}</span></div>
+      <div class="fin-acc-grid">${list.map(loanCardHTML).join('')}</div>`;
+  };
+  const body = group('lent','Te deben') + group('borrowed','Debes');
+  const closedHTML = closed.length ? `<div class="task-group-label fin-section-label"><span>Liquidados (${closed.length})</span><button type="button" class="btn btn-ghost fin-small-btn" id="finToggleLoans">${finShowClosedLoans?'Ocultar':'Ver'}</button></div>
+    ${finShowClosedLoans?`<div class="fin-acc-grid">${closed.map(loanCardHTML).join('')}</div>`:''}` : '';
+  return (body || '<div class="empty"><p>No tienes préstamos activos.</p></div>') + closedHTML +
+    `<button type="button" class="btn btn-ghost fin-add-btn" id="finNewLoan">+ Nuevo préstamo</button>`;
+}
+function openLoanModal(){
+  let kind = 'lent';
+  const body = `
+    <div class="fin-type-btns" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <button type="button" class="fin-type-btn income" data-lk="lent">Yo presté</button>
+      <button type="button" class="fin-type-btn expense" data-lk="borrowed">Me prestaron</button>
+    </div>
+    <div class="form-group"><label class="form-label" for="loanName" id="loanNameLabel">¿A quién?</label>
+      <input class="form-input" id="loanName" maxlength="40" autocomplete="off" style="font-size:16px" placeholder="Ej. Mamá"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="loanAmount">Monto</label>
+        <input class="form-input fin-money" id="loanAmount" inputmode="decimal" autocomplete="off" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label" for="loanDate">Fecha</label>
+        <input type="date" class="form-input" id="loanDate" value="${localDate()}"></div>
+    </div>
+    <div class="form-group"><label class="form-label" for="loanAccount" id="loanAccLabel">¿De qué cuenta salió?</label>
+      <select class="form-input form-select fin-field" id="loanAccount">${optionList(bankAccounts(), (bankAccounts().find(a=>a.kind==='debit')||{}).id)}<option value="">Ya está descontado de mis saldos (solo registrar)</option></select>
+      <div class="fin-hint" id="loanAccHint"></div></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="loanDue">Fecha para pagar (opcional)</label>
+        <input type="date" class="form-input" id="loanDue"></div>
+      <div class="form-group"><label class="form-label" for="loanNote">Nota (opcional)</label>
+        <input class="form-input" id="loanNote" maxlength="120" autocomplete="off" style="font-size:16px"></div>
+    </div>`;
+  openFinModal('Nuevo préstamo', body, `<button type="button" class="btn btn-primary" id="loanSave">Guardar</button>`);
+  const sync = ()=>{
+    document.querySelectorAll('[data-lk]').forEach(b=>b.classList.toggle('active', b.dataset.lk===kind));
+    const lent = kind==='lent';
+    document.getElementById('loanNameLabel').textContent = lent ? '¿A quién le prestaste?' : '¿Quién te prestó?';
+    document.getElementById('loanAccLabel').textContent = lent ? '¿De qué cuenta salió?' : '¿A qué cuenta llegó?';
+    const opt = document.querySelector('#loanAccount option[value=""]');
+    opt.textContent = lent ? 'Ya está descontado de mis saldos (solo registrar)' : 'Ya está sumado en mis saldos (solo registrar)';
+    document.getElementById('loanAccHint').textContent = lent
+      ? 'Si eliges una cuenta, se le resta el monto. Si ya capturaste el saldo actual sin ese dinero, elige "solo registrar".'
+      : 'Si eliges una cuenta, se le suma el monto. Si ya capturaste el saldo actual con ese dinero, elige "solo registrar".';
+  };
+  document.querySelectorAll('[data-lk]').forEach(b=>b.onclick=()=>{ kind=b.dataset.lk; sync(); });
+  sync();
+  setTimeout(()=>document.getElementById('loanName').focus(), 50);
+  document.getElementById('loanSave').onclick = async ()=>{
+    const name = finVal('loanName');
+    const amount = parseCents(finVal('loanAmount'));
+    const date = finVal('loanDate');
+    const acc = finVal('loanAccount');
+    if(!name){ showToast('Escribe el nombre','error'); return; }
+    if(!amount){ showToast('Escribe un monto válido','error'); return; }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ showToast('Elige la fecha','error'); return; }
+    const lent = kind==='lent';
+    const btn = document.getElementById('loanSave'); btn.disabled = true;
+    let loan;
+    try{
+      [loan] = await dbPost('accounts', {name, kind, opening_balance_cents: acc ? 0 : (lent ? amount : -amount), due_date: finVal('loanDue') || null, note: finVal('loanNote') || null, sort_order: 100});
+      fin.accounts.push(loan);
+      if(acc){
+        const tx = {type:'transfer', amount_cents:amount, occurred_on:date, note:`Préstamo · ${name}`, category_id:null,
+          account_id: lent ? acc : loan.id, to_account_id: lent ? loan.id : acc};
+        const [row] = await dbPost('transactions', tx); fin.tx.push(row); sortTx();
+      }
+      closeFinModal(); finView='loans'; renderContent(); showToast('Préstamo registrado','success');
+    }catch(e){
+      if(loan){ try{ await dbDelete('accounts', `?id=eq.${loan.id}`); }catch(_){} fin.accounts = fin.accounts.filter(a=>a!==loan); }
+      btn.disabled = false; showToast('No se pudo guardar: '+finErr(e),'error');
+    }
+  };
+}
+function openLoanPaymentModal(id){
+  const a = fin.accounts.find(x=>x.id===id); if(!a) return;
+  const lent = a.kind==='lent';
+  const st = loanStats(a);
+  openFinModal(`Abono · ${a.name}`, `
+    <div class="fin-hint" style="margin:0 0 14px">Falta: ${fmtMoney(st.owed)}</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="payAmount">Monto</label>
+        <input class="form-input fin-money" id="payAmount" inputmode="decimal" autocomplete="off" value="${centsToInput(st.owed)}"></div>
+      <div class="form-group"><label class="form-label" for="payDate">Fecha</label>
+        <input type="date" class="form-input" id="payDate" value="${localDate()}"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:0"><label class="form-label" for="payAccount">${lent?'¿A qué cuenta llegó?':'¿De qué cuenta salió?'}</label>
+      <select class="form-input form-select fin-field" id="payAccount">${optionList(bankAccounts(), (bankAccounts().find(x=>x.kind==='debit')||{}).id)}</select></div>`,
+    `<button type="button" class="btn btn-primary" id="paySave">Guardar abono</button>`);
+  document.getElementById('paySave').onclick = async ()=>{
+    const amount = parseCents(finVal('payAmount'));
+    const date = finVal('payDate'), acc = finVal('payAccount');
+    if(!amount){ showToast('Escribe un monto válido','error'); return; }
+    if(amount > st.owed){ showToast(`El abono es mayor que lo que falta (${fmtMoney(st.owed)})`,'error'); return; }
+    if(!acc || !/^\d{4}-\d{2}-\d{2}$/.test(date)){ showToast('Elige cuenta y fecha','error'); return; }
+    const tx = {type:'transfer', amount_cents:amount, occurred_on:date, note:`Abono préstamo · ${a.name}`, category_id:null,
+      account_id: lent ? a.id : acc, to_account_id: lent ? acc : a.id};
+    try{ const [row] = await dbPost('transactions', tx); fin.tx.push(row); sortTx(); closeFinModal(); renderContent(); showToast('Abono registrado','success'); }
+    catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
+}
+function openLoanEditModal(id){
+  const a = fin.accounts.find(x=>x.id===id); if(!a) return;
+  const lent = a.kind==='lent';
+  const st = loanStats(a);
+  openFinModal('Editar préstamo', `
+    <div class="form-group"><label class="form-label" for="leName">Nombre</label>
+      <input class="form-input" id="leName" maxlength="40" autocomplete="off" style="font-size:16px" value="${escapeAttr(a.name)}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label" for="leDue">Fecha para pagar</label>
+        <input type="date" class="form-input" id="leDue" value="${escapeAttr(a.due_date||'')}"></div>
+      <div class="form-group"><label class="form-label" for="leNote">Nota</label>
+        <input class="form-input" id="leNote" maxlength="120" autocomplete="off" style="font-size:16px" value="${escapeAttr(a.note||'')}"></div>
+    </div>
+    <div class="fin-hint">Los movimientos del préstamo aparecen en Movimientos y se editan ahí.</div>`,
+    `${st.owed>0?`<button type="button" class="btn btn-ghost fin-modal-del" id="leForgive">${lent?'Perdonar lo que falta':'Me condonaron lo que falta'}</button>`:''}<button type="button" class="btn btn-primary" id="leSave">Guardar</button>`);
+  document.getElementById('leSave').onclick = async ()=>{
+    const payload = {name: finVal('leName'), due_date: finVal('leDue') || null, note: finVal('leNote') || null};
+    if(!payload.name){ showToast('Escribe el nombre','error'); return; }
+    try{ await dbPatch('accounts', payload, `?id=eq.${a.id}`); Object.assign(a, payload); closeFinModal(); renderContent(); showToast('Préstamo actualizado','success'); }
+    catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
+  if(st.owed>0) document.getElementById('leForgive').onclick = async ()=>{
+    const msg = lent ? `¿Perdonar ${fmtMoney(st.owed)} a ${a.name}? Se registra como gasto de hoy.` : `¿Registrar que ${a.name} te condonó ${fmtMoney(st.owed)}? Se registra como ingreso de hoy.`;
+    if(!confirm(msg)) return;
+    const tx = {type: lent?'expense':'income', amount_cents: st.owed, account_id: a.id, to_account_id:null, category_id:null, occurred_on: localDate(), note: lent?`Préstamo perdonado · ${a.name}`:`Préstamo condonado · ${a.name}`};
+    try{ const [row] = await dbPost('transactions', tx); fin.tx.push(row); sortTx(); closeFinModal(); renderContent(); showToast('Registrado','success'); }
+    catch(e){ showToast('No se pudo guardar: '+finErr(e),'error'); }
+  };
+}
+async function setLoanClosed(id, archived){
+  const a = fin.accounts.find(x=>x.id===id); if(!a) return;
+  try{ await dbPatch('accounts', {archived}, `?id=eq.${id}`); a.archived = archived; renderContent(); showToast(archived?'Préstamo liquidado':'Préstamo reabierto','success'); }
+  catch(e){ showToast('No se pudo actualizar: '+finErr(e),'error'); }
 }
 
 // d) Presupuesto
@@ -3243,6 +3509,14 @@ function bindFinance(el){
   const nc = el.querySelector('#finNewCat'); if(nc) nc.onclick=()=>openCategoryModal();
   el.querySelectorAll('[data-goal]').forEach(c=>c.onclick=()=>openGoalModal(c.dataset.goal));
   const ng = el.querySelector('#finNewGoal'); if(ng) ng.onclick=()=>openGoalModal();
+  el.querySelectorAll('[data-loan-pay]').forEach(b=>b.onclick=()=>openLoanPaymentModal(b.dataset.loanPay));
+  el.querySelectorAll('[data-loan-edit]').forEach(b=>b.onclick=()=>openLoanEditModal(b.dataset.loanEdit));
+  el.querySelectorAll('[data-loan-close]').forEach(b=>b.onclick=()=>setLoanClosed(b.dataset.loanClose, true));
+  el.querySelectorAll('[data-loan-reopen]').forEach(b=>b.onclick=()=>setLoanClosed(b.dataset.loanReopen, false));
+  const nl = el.querySelector('#finNewLoan'); if(nl) nl.onclick=()=>openLoanModal();
+  const tl = el.querySelector('#finToggleLoans'); if(tl) tl.onclick=()=>{ finShowClosedLoans=!finShowClosedLoans; renderContent(); };
+  el.querySelectorAll('[data-acc-history]').forEach(b=>b.onclick=()=>openHistoryModal(b.dataset.accHistory));
+  el.querySelectorAll('[data-fin-goto-loans]').forEach(b=>b.onclick=()=>{ finView='loans'; renderContent(); });
 }
 
 // Modal genérico de finanzas
@@ -3271,9 +3545,9 @@ function openTxModal(id){
       <input class="form-input fin-money" id="txAmount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${t?centsToInput(t.amount_cents):''}"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label" for="txAccount" id="txAccLabel">Cuenta</label>
-        <select class="form-input form-select fin-field" id="txAccount">${optionList(accs, t?t.account_id:firstAcc)}</select></div>
+        <select class="form-input form-select fin-field" id="txAccount">${optionList(accs, t?t.account_id:firstAcc, accLabel)}</select></div>
       <div class="form-group" id="txToWrap"><label class="form-label" for="txTo">Hacia</label>
-        <select class="form-input form-select fin-field" id="txTo">${optionList(accs, t&&t.to_account_id ? t.to_account_id : (activeAccounts().find(a=>a.kind==='credit')||{}).id)}</select></div>
+        <select class="form-input form-select fin-field" id="txTo">${optionList(accs, t&&t.to_account_id ? t.to_account_id : (activeAccounts().find(a=>a.kind==='credit')||{}).id, accLabel)}</select></div>
     </div>
     <div class="form-group" id="txCatWrap"><label class="form-label" for="txCategory">Categoría</label>
       <select class="form-input form-select fin-field" id="txCategory"></select></div>
@@ -3423,7 +3697,7 @@ async function setCategoryArchived(id, archived){
 function openGoalModal(id){
   const g = id ? fin.goals.find(x=>x.id===id) : null;
   if(id && !g) return;
-  const accs = activeAccounts().filter(a=>a.kind!=='credit');
+  const accs = bankAccounts().filter(a=>a.kind!=='credit');
   const body = `
     <div class="form-group"><label class="form-label" for="goalName">Nombre</label>
       <input class="form-input" id="goalName" maxlength="60" autocomplete="off" style="font-size:16px" value="${escapeAttr(g?g.name:'')}"></div>
