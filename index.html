@@ -415,6 +415,8 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 .remind-btn{width:100%}
 .remind-btn:disabled{opacity:.45;cursor:default}
 .remind-section{margin-bottom:6px}
+.task-due.worked{color:var(--teal)}
+.task-action-btn.btn-worked:hover,.task-action-btn.btn-worked.on{background:var(--teal-bg);color:var(--teal)}
 .day-options{display:flex;gap:6px;margin-top:8px}
 .day-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s}
 .day-btn.active{background:var(--accent);border-color:var(--accent);color:white}
@@ -1215,6 +1217,7 @@ function dedupeRecurring(list){
 function isTodayTask(t, today){
   if(isRangeTask(t) && t.status!=='done' && t.status!=='missed'){
     if(rangeHidden(t)) return false;
+    if(workedToday(t)) return false; // "✓ Avancé hoy": regresa mañana
     return daysUntilStr(t.due_date) <= 7; // a 7 días o menos (o vencida) va en Hoy; si no, en "Tareas a futuro"
   }
   if(t.status==='in_progress') return true;
@@ -1227,7 +1230,7 @@ function getFilteredTasks(){
   const today = localDate();
   const tomorrow = localDateOffset(1);
   let list = tasks.filter(t=>!rangeHidden(t)); // antes de su inicio no aparece en ninguna vista
-  if(currentView==='today') list = list.filter(t=>isTodayTask(t,today) || isFutureRange(t));
+  if(currentView==='today') list = list.filter(t=>isTodayTask(t,today) || isFutureRange(t) || workedTodayRange(t));
   else if(currentView==='tomorrow'){
     list = list.filter(t=>t.status!=='done' && t.due_date===tomorrow);
   }
@@ -1286,7 +1289,8 @@ function renderContent(){
   const today = localDate();
   list.forEach(t=>{
     let g = currentView==='today' ? '📅 Hoy' : 'Sin fecha'; // en Hoy ya no hay sección "Sin fecha"
-    if(currentView==='today' && isFutureRange(t)) g = '🔭 Tareas a futuro';
+    if(currentView==='today' && workedTodayRange(t)) g = '✓ Avanzaste hoy';
+    else if(currentView==='today' && isFutureRange(t)) g = '🔭 Tareas a futuro';
     else if(currentView==='today' && t.is_recurring) g = '🔄 Tareas recurrentes';
     else if(t.status==='done') g = '✅ Completadas hoy';
     else if(t.status==='missed') g = '❌ No completadas';
@@ -1301,7 +1305,7 @@ function renderContent(){
   });
 
   if(groups['🔭 Tareas a futuro']) groups['🔭 Tareas a futuro'].sort((a,b)=>a.due_date.localeCompare(b.due_date));
-  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','🔄 Tareas recurrentes','🔭 Tareas a futuro','Sin fecha','❌ No completadas','✅ Completadas hoy'];
+  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','🔄 Tareas recurrentes','🔭 Tareas a futuro','Sin fecha','❌ No completadas','✓ Avanzaste hoy','✅ Completadas hoy'];
   let html = quickHTML+'<div class="tasks-list">';
   order.forEach(g=>{
     if(!groups[g]) return;
@@ -1324,6 +1328,7 @@ function bindTaskCards(el){
   el.querySelectorAll('.btn-edit').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();openTaskModal(el.dataset.id);}; });
   el.querySelectorAll('.btn-delete').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();deleteTask(el.dataset.id);}; });
   el.querySelectorAll('.btn-progress').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();markInProgress(el.dataset.id);}; });
+  el.querySelectorAll('.btn-worked').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();toggleWorkedToday(el.dataset.id);}; });
   el.querySelectorAll('.btn-missed').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();markMissed(el.dataset.id);}; });
   el.querySelectorAll('.btn-tomorrow').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();moveToTomorrow(el.dataset.id);}; });
   el.querySelectorAll('.btn-duplicate').forEach(el=>{ el.onclick=(e)=>{e.stopPropagation();duplicateToTomorrow(el.dataset.id);}; });
@@ -1348,7 +1353,8 @@ function taskCardHTML(t){
   const tagsHTML = (t.tags||[]).map(tag=>`<span class="task-tag">${tag}</span>`).join('');
   const projHTML = p?`<span class="task-project-tag" style="background:${p.color}20;color:${p.color}">${p.name}</span>`:'';
   const subHTML = subs.length?`<span class="subtask-progress"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>${doneSubs}/${subs.length}</span>`:'';
-  const recurHTML = (t.is_recurring?`<span class="task-tag">🔄 ${recurrenceLabel(t.recurrence)}</span>`:'') + (t.remind_day_before?'<span class="task-tag" title="Te lo recuerdo el día anterior">🔔</span>':'');
+  const workedHTML = workedLabel(t) ? `<span class="task-due worked">${workedLabel(t)}</span>` : '';
+  const recurHTML = workedHTML + (t.is_recurring?`<span class="task-tag">🔄 ${recurrenceLabel(t.recurrence)}</span>`:'') + (t.remind_day_before?'<span class="task-tag" title="Te lo recuerdo el día anterior">🔔</span>':'');
   const estHTML = t.estimated_minutes?`<span class="task-due"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${t.estimated_minutes}m</span>`:'';
   const statusBadge = t.status==='in_progress' ? `<span class="status-badge in_progress">⏳ En progreso</span>` : t.status==='missed' ? `<span class="status-badge missed">❌ No completada</span>` : '';
   const isClosed = t.status==='done'||t.status==='missed';
@@ -1366,6 +1372,7 @@ function taskCardHTML(t){
       <div class="task-meta">${priorityFlag}${projHTML}${statusBadge}${tagsHTML}${dueHTML}${subHTML}${recurHTML}${estHTML}</div>
     </div>
     <div class="task-actions">
+      ${rangeActive(t) ? `<button class="task-action-btn btn-worked ${workedToday(t)?'on':''}" data-id="${t.id}" title="${workedToday(t)?'Quitar el avance de hoy':'Avancé hoy (no la termina)'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><polyline points="14 7 21 7 21 14"/></svg></button>` : ''}
       <button class="task-action-btn btn-progress" data-id="${t.id}" title="Marcar en progreso" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
       <button class="task-action-btn btn-missed" data-id="${t.id}" title="No la completé (no se repite)" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></button>
       <button class="task-action-btn btn-tomorrow" data-id="${t.id}" title="Pasar a mañana" style="${isClosed?'display:none':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
@@ -1691,6 +1698,31 @@ async function toggleHabitDay(habitId, dayIdx){
   }
 }
 
+// ── AVANCÉ HOY ───────────────────────────────────────────────
+// En tareas con fecha límite: "✓ Avancé hoy" guarda el día en worked_dates sin terminar la tarea.
+// La tarea sale de Hoy por el resto del día y regresa mañana; la palomita sigue siendo "terminada".
+function workedToday(t){ return (t.worked_dates||[]).includes(todayLocalStr()); }
+function workedTodayRange(t){ return rangeActive(t) && workedToday(t); }
+function workedLabel(t){
+  const ds = (t.worked_dates||[]).slice().sort();
+  if(!ds.length) return '';
+  const shown = ds.slice(-5).map(d=>new Date(d+'T12:00:00').toLocaleDateString('es-MX',{weekday:'short', day:'numeric'}).replace('.',''));
+  return `✓ Avanzaste: ${shown.join(', ')}${ds.length>5?` (+${ds.length-5})`:''}`;
+}
+async function toggleWorkedToday(id){
+  const t = tasks.find(x=>x.id===id); if(!t) return;
+  const today = todayLocalStr(), prev = (t.worked_dates||[]).slice();
+  const next = prev.includes(today) ? prev.filter(d=>d!==today) : [...prev, today].sort();
+  t.worked_dates = next; renderAll();
+  try{
+    await dbPatch('tasks', {worked_dates:next}, `?id=eq.${id}`);
+    showToast(next.includes(today) ? '✓ Avance de hoy guardado. Vuelve a salir mañana.' : '↩️ Quité el avance de hoy', next.includes(today)?'success':'info');
+  }catch(e){
+    t.worked_dates = prev; renderAll();
+    showToast(String(e.message).includes('worked_dates') ? 'Falta la columna worked_dates (corre migrations/2026-10-25-worked-dates.sql)' : 'No se pudo guardar el avance','error');
+  }
+}
+
 // ── RECORDAR EL DÍA ANTERIOR ─────────────────────────────────
 // Tareas con remind_day_before cuya fecha es mañana (hora de Monterrey). Solo aviso dentro de la app.
 function tomorrowReminders(){
@@ -1726,7 +1758,7 @@ function rangePriority(t){
 const rangeOpen = t=>isRangeTask(t) && t.status!=='done' && t.status!=='missed';
 function rangeHidden(t){ return rangeOpen(t) && todayLocalStr() < t.start_date; }   // antes de su inicio
 function rangeActive(t){ return rangeOpen(t) && todayLocalStr() >= t.start_date; }
-function isFutureRange(t){ return rangeActive(t) && daysUntilStr(t.due_date) > 7; }  // sección "Tareas a futuro"
+function isFutureRange(t){ return rangeActive(t) && !workedToday(t) && daysUntilStr(t.due_date) > 7; }  // sección "Tareas a futuro"
 function effPriority(t){ return rangeActive(t) ? rangePriority(t) : t.priority; }
 function rangeDueText(t){
   const n = daysUntilStr(t.due_date);
@@ -2255,7 +2287,7 @@ function updateCounts(){
   const today = localDate();
   const tomorrow = localDateOffset(1);
   const shown = tasks.filter(t=>!rangeHidden(t));
-  document.getElementById('countToday').textContent = shown.filter(t=>t.status!=='done'&&t.status!=='missed'&&(isRangeTask(t) ? daysUntilStr(t.due_date)<=7 : (!t.due_date||t.due_date<=today))).length;
+  document.getElementById('countToday').textContent = shown.filter(t=>t.status!=='done'&&t.status!=='missed'&&(isRangeTask(t) ? daysUntilStr(t.due_date)<=7 && !workedToday(t) : (!t.due_date||t.due_date<=today))).length;
   document.getElementById('countAll').textContent = dedupeRecurring(shown.filter(t=>t.status!=='done'&&t.status!=='missed')).length;
   document.getElementById('countTomorrow').textContent = shown.filter(t=>t.status!=='done'&&t.status!=='missed'&&t.due_date===tomorrow).length;
   const missed = tasks.filter(t=>t.status!=='done'&&t.status!=='missed'&&t.due_date&&t.due_date<today).length;
