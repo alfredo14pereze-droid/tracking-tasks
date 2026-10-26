@@ -409,6 +409,12 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 .recur-options{display:flex;gap:6px;flex-wrap:wrap}
 .recur-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s}
 .recur-btn.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent2)}
+.mode-btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.mode-btn,.remind-btn{padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;text-align:center}
+.mode-btn.active,.remind-btn.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent2)}
+.remind-btn{width:100%}
+.remind-btn:disabled{opacity:.45;cursor:default}
+.remind-section{margin-bottom:6px}
 .day-options{display:flex;gap:6px;margin-top:8px}
 .day-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s}
 .day-btn.active{background:var(--accent);border-color:var(--accent);color:white}
@@ -938,9 +944,16 @@ body.auth-locked .login-screen{display:flex;min-height:100vh;align-items:center;
           <button class="priority-btn" data-p="low" onclick="setPriority('low')">🟢 Baja</button>
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">¿Qué tipo de fecha?</label>
+        <div class="mode-btns">
+          <button type="button" class="mode-btn active" data-m="exact">📌 Día exacto</button>
+          <button type="button" class="mode-btn" data-m="deadline">⏳ Con fecha límite</button>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Fecha</label>
+          <label class="form-label" id="taskDueLabel">Fecha</label>
           <input type="date" class="form-input" id="taskDue">
         </div>
         <div class="form-group">
@@ -948,9 +961,12 @@ body.auth-locked .login-screen{display:flex;min-height:100vh;align-items:center;
           <input type="time" class="form-input" id="taskTime">
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label" for="taskStart">Inicio <span style="color:var(--text3);font-weight:400">— opcional; con inicio, la Fecha de arriba es la fecha límite</span></label>
+      <div class="form-group" id="taskStartRow" style="display:none">
+        <label class="form-label" for="taskStart">Empiezo a trabajarla desde <span style="color:var(--text3);font-weight:400">— antes de esta fecha no aparece</span></label>
         <input type="date" class="form-input" id="taskStart">
+      </div>
+      <div class="form-group">
+        <button type="button" class="remind-btn" id="remindBtn">🔔 Recordarme el día anterior</button>
       </div>
       <div class="form-group">
         <label class="form-label">Recurrencia</label>
@@ -1069,6 +1085,7 @@ let currentSection = 'tasks', finView = 'home'; // sección Tareas / Finanzas
 let editingReminderId = null, editingNoteId = null, expandedHabitHistory = {};
 let currentView = 'today', currentFilter = 'all', searchQ = '';
 let editingTaskId = null, currentTags = [], currentPriority = '', currentRecur = '', currentCustomDays = [];
+let currentDateMode = 'exact', currentRemind = false;
 let undoStack = [];
 
 // API helpers
@@ -1262,8 +1279,8 @@ function renderContent(){
 
   const list = getFilteredTasks();
   updateProgress(currentView==='today' ? list.filter(t=>!isFutureRange(t)) : list);
-  const quickHTML = currentView==='today' ? quickTodayHTML() : '';
-  if(!list.length){ el.innerHTML=quickHTML+`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No hay tareas aquí</p></div>`; bindQuick(el); return; }
+  const quickHTML = currentView==='today' ? quickTodayHTML() + remindTomorrowHTML() : '';
+  if(!list.length){ el.innerHTML=quickHTML+`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No hay tareas aquí</p></div>`; bindQuick(el); bindTaskCards(el); return; }
 
   const groups = {};
   const today = localDate();
@@ -1294,6 +1311,10 @@ function renderContent(){
   html+='</div>';
   el.innerHTML=html;
   bindQuick(el);
+  bindTaskCards(el);
+}
+
+function bindTaskCards(el){
   el.querySelectorAll('.task-check').forEach(el=>{
     el.onclick=(e)=>{e.stopPropagation();toggleTask(el.dataset.id);};
   });
@@ -1316,17 +1337,18 @@ function taskCardHTML(t){
   let dueHTML='';
   if(rangeActive(t)){
     const n = daysUntilStr(t.due_date);
-    dueHTML=`<span class="task-due ${n<0?'overdue':n<=1?'today':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Límite ${formatDate(t.due_date)} · ${rangeDueText(t)}</span>`;
+    dueHTML=`<span class="task-due ${n<0?'overdue':n<=1?'today':''}">⏳ Límite ${formatDate(t.due_date)} · ${rangeDueText(t)}</span>`;
   } else if(t.due_date){
     const cls = t.due_date<today?'overdue':t.due_date===today?'today':'';
-    const startLabel = t.due_date===today?'Hoy':t.due_date<today?'Vencida':formatDate(t.due_date);
+    const startLabel = t.due_date===today?'Hoy':t.due_date<today?'Vencida':t.due_date===localDateOffset(1)?'📌 Mañana':'📌 '+formatDate(t.due_date);
     const endLabel = t.end_date ? ` → ${formatDate(t.end_date)}` : '';
-    dueHTML=`<span class="task-due ${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${startLabel}${t.due_time?' '+t.due_time.slice(0,5):''}${endLabel}</span>`;
+    const calIcon = startLabel.startsWith('📌') ? '' : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+    dueHTML=`<span class="task-due ${cls}">${calIcon}${startLabel}${t.due_time?' '+t.due_time.slice(0,5):''}${endLabel}</span>`;
   }
   const tagsHTML = (t.tags||[]).map(tag=>`<span class="task-tag">${tag}</span>`).join('');
   const projHTML = p?`<span class="task-project-tag" style="background:${p.color}20;color:${p.color}">${p.name}</span>`:'';
   const subHTML = subs.length?`<span class="subtask-progress"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>${doneSubs}/${subs.length}</span>`:'';
-  const recurHTML = t.is_recurring?`<span class="task-tag">🔄 ${recurrenceLabel(t.recurrence)}</span>`:'';
+  const recurHTML = (t.is_recurring?`<span class="task-tag">🔄 ${recurrenceLabel(t.recurrence)}</span>`:'') + (t.remind_day_before?'<span class="task-tag" title="Te lo recuerdo el día anterior">🔔</span>':'');
   const estHTML = t.estimated_minutes?`<span class="task-due"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${t.estimated_minutes}m</span>`:'';
   const statusBadge = t.status==='in_progress' ? `<span class="status-badge in_progress">⏳ En progreso</span>` : t.status==='missed' ? `<span class="status-badge missed">❌ No completada</span>` : '';
   const isClosed = t.status==='done'||t.status==='missed';
@@ -1667,6 +1689,18 @@ async function toggleHabitDay(habitId, dayIdx){
       showToast('Error al guardar el hábito (¿ya corriste el SQL de días?)','error');
     }
   }
+}
+
+// ── RECORDAR EL DÍA ANTERIOR ─────────────────────────────────
+// Tareas con remind_day_before cuya fecha es mañana (hora de Monterrey). Solo aviso dentro de la app.
+function tomorrowReminders(){
+  return tasks.filter(t=>t.remind_day_before && t.due_date && t.status!=='done' && t.status!=='missed'
+    && daysUntilStr(t.due_date)===1 && !rangeActive(t)); // las de fecha límite que ya empezaron ya están en Hoy
+}
+function remindTomorrowHTML(){
+  const list = tomorrowReminders();
+  if(!list.length) return '';
+  return `<div class="remind-section"><div class="task-group-label">🔔 Mañana</div><div class="tasks-list">${list.map(taskCardHTML).join('')}</div></div>`;
 }
 
 // ── TAREAS A FUTURO ──────────────────────────────────────────
@@ -2415,6 +2449,8 @@ function openTaskModal(id=null){
     document.getElementById('taskTitle').value=t.title;
     document.getElementById('taskDue').value=t.due_date||'';
     document.getElementById('taskStart').value=t.start_date||'';
+    setDateMode(isRangeTask(t) ? 'deadline' : 'exact');
+    setRemind(t.remind_day_before);
     document.getElementById('taskTime').value=t.due_time?t.due_time.slice(0,5):'';
     document.getElementById('taskEndDate').value=t.end_date||'';
     document.getElementById('endDateRow').style.display = (t.recurrence) ? 'block' : 'none';
@@ -2442,6 +2478,7 @@ function openTaskModal(id=null){
     document.getElementById('taskTitle').value='';
     document.getElementById('taskDue').value='';
     document.getElementById('taskStart').value='';
+    setDateMode('exact'); setRemind(false);
     document.getElementById('taskTime').value='';
     document.getElementById('taskEndDate').value='';
     document.getElementById('endDateRow').style.display='none';
@@ -2454,6 +2491,27 @@ function openTaskModal(id=null){
   modal.classList.add('open');
   setTimeout(()=>document.getElementById('taskTitle').focus(),100);
 }
+
+// Día exacto: solo "Fecha". Con fecha límite: "Fecha límite" + "Empiezo a trabajarla desde" (start_date).
+function setDateMode(m){
+  currentDateMode = m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.m===m));
+  const deadline = m==='deadline';
+  document.getElementById('taskStartRow').style.display = deadline ? '' : 'none';
+  document.getElementById('taskDueLabel').textContent = deadline ? 'Fecha límite' : 'Fecha';
+  if(deadline && !document.getElementById('taskStart').value) document.getElementById('taskStart').value = todayLocalStr();
+}
+function setRemind(on){
+  currentRemind = !!on;
+  const b = document.getElementById('remindBtn');
+  b.classList.toggle('active', currentRemind);
+  b.textContent = currentRemind ? '🔔 Te lo recuerdo el día anterior ✓' : '🔔 Recordarme el día anterior';
+}
+document.querySelectorAll('.mode-btn').forEach(b=>b.addEventListener('click', ()=>setDateMode(b.dataset.m)));
+document.getElementById('remindBtn').addEventListener('click', ()=>{
+  if(!currentRemind && !document.getElementById('taskDue').value){ showToast('Primero pon la fecha de la tarea','error'); return; }
+  setRemind(!currentRemind);
+});
 
 function closeTaskModal(){ document.getElementById('taskModal').classList.remove('open'); }
 
@@ -2502,8 +2560,10 @@ async function saveTask(){
   if(!currentPriority){ showToast('Elige una prioridad','error'); return; }
   if(currentRecur==='custom' && !currentCustomDays.length){ showToast('Elige al menos un día para la recurrencia personalizada','error'); return; }
   const due=document.getElementById('taskDue').value;
-  const start=document.getElementById('taskStart').value;
-  if(start && !due){ showToast('Para una tarea a futuro pon también la Fecha (fecha límite)','error'); return; }
+  const start = currentDateMode==='deadline' ? document.getElementById('taskStart').value : '';
+  if(currentDateMode==='deadline' && !due){ showToast('Pon la fecha límite','error'); return; }
+  if(currentDateMode==='deadline' && !start){ showToast('Pon desde cuándo empiezas a trabajarla','error'); return; }
+  if(currentRemind && !due){ showToast('Para recordarte el día anterior, la tarea necesita fecha','error'); return; }
   if(start && due && start>due){ showToast('El inicio no puede ser después de la fecha límite','error'); return; }
   if(start && currentRecur){ showToast('Una tarea recurrente no puede tener inicio; quita uno de los dos','error'); return; }
   const time=document.getElementById('taskTime').value;
@@ -2530,6 +2590,8 @@ async function saveTask(){
   const editingTask = editingTaskId ? tasks.find(t=>t.id===editingTaskId) : null;
   if(start) body.start_date = start;
   else if(editingTask && editingTask.start_date) body.start_date = null;
+  if(currentRemind) body.remind_day_before = true;
+  else if(editingTask && editingTask.remind_day_before) body.remind_day_before = false;
 
   // Helper: attempt POST/PATCH, retry without end_date if column missing
   async function attempt(b, retried){
@@ -2550,6 +2612,7 @@ async function saveTask(){
     } catch(e){
       // If error mentions end_date column, retry without it
       if('start_date' in b && e.message.includes('start_date')) throw new Error('falta la columna start_date (corre migrations/2026-10-25-start-date.sql)');
+      if('remind_day_before' in b && e.message.includes('remind_day_before')) throw new Error('falta la columna remind_day_before (corre migrations/2026-10-25-remind-day-before.sql)');
       if(!retried && (e.message.includes('end_date') || e.message.includes('category') || e.message.includes('column'))){
         const {end_date, category, ...safe}=b;
         // keep category as a tag-like workaround if needed
