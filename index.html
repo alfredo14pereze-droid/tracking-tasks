@@ -146,6 +146,8 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .priority-flag{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid transparent;cursor:default}
 .priority-flag.high{background:var(--blue-bg);color:var(--blue);border-color:rgba(96,165,250,0.35)}
 .priority-flag.critical{background:var(--purple-bg);color:var(--purple);border-color:rgba(168,85,247,0.4)}
+.priority-flag.medium{background:var(--amber-bg);color:var(--amber);border-color:rgba(251,191,36,0.35)}
+.priority-flag.low{background:var(--green-bg);color:var(--green);border-color:rgba(74,222,128,0.35)}
 .status-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
 .status-badge.in_progress{background:var(--amber-bg);color:var(--amber)}
 .status-badge.missed{background:var(--red-bg);color:var(--red)}
@@ -930,13 +932,17 @@ body.auth-locked .login-screen{display:flex;min-height:100vh;align-items:center;
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Fecha inicio</label>
+          <label class="form-label">Fecha</label>
           <input type="date" class="form-input" id="taskDue">
         </div>
         <div class="form-group">
           <label class="form-label">Hora</label>
           <input type="time" class="form-input" id="taskTime">
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="taskStart">Inicio <span style="color:var(--text3);font-weight:400">— opcional; con inicio, la Fecha de arriba es la fecha límite</span></label>
+        <input type="date" class="form-input" id="taskStart">
       </div>
       <div class="form-group">
         <label class="form-label">Recurrencia</label>
@@ -1182,6 +1188,10 @@ function dedupeRecurring(list){
 
 // Qué tareas pertenecen a "Hoy" (la pestaña "Orden del día" usa el mismo criterio)
 function isTodayTask(t, today){
+  if(isRangeTask(t) && t.status!=='done' && t.status!=='missed'){
+    if(rangeHidden(t)) return false;
+    return daysUntilStr(t.due_date) <= 7; // a 7 días o menos (o vencida) va en Hoy; si no, en "Tareas a futuro"
+  }
   if(t.status==='in_progress') return true;
   if(t.status==='done'||t.status==='missed') return t.completed_at && localDate(new Date(t.completed_at))===today;
   if(!t.due_date) return true;
@@ -1191,8 +1201,8 @@ function isTodayTask(t, today){
 function getFilteredTasks(){
   const today = localDate();
   const tomorrow = localDateOffset(1);
-  let list = [...tasks];
-  if(currentView==='today') list = list.filter(t=>isTodayTask(t,today));
+  let list = tasks.filter(t=>!rangeHidden(t)); // antes de su inicio no aparece en ninguna vista
+  if(currentView==='today') list = list.filter(t=>isTodayTask(t,today) || isFutureRange(t));
   else if(currentView==='tomorrow'){
     list = list.filter(t=>t.status!=='done' && t.due_date===tomorrow);
   }
@@ -1211,7 +1221,7 @@ function getFilteredTasks(){
   // "Mañana" y "Sin completar" sí necesitan cada ocurrencia por separado
   // (son días concretos que hay que resolver uno por uno).
   if(currentView==='all' || currentView==='upcoming' || currentView.startsWith('project_')) list = dedupeRecurring(list);
-  if(currentFilter!=='all') list = list.filter(t=>t.priority===currentFilter);
+  if(currentFilter!=='all') list = list.filter(t=>effPriority(t)===currentFilter);
   if(searchQ) list = list.filter(t=>t.title.toLowerCase().includes(searchQ)||((t.description||'').toLowerCase().includes(searchQ)));
   list = sortByPriority(list);
   return list;
@@ -1221,7 +1231,7 @@ function getFilteredTasks(){
 // dentro de cada prioridad (sort estable) para no revolver tareas del mismo nivel.
 const PRIORITY_RANK = {critical:0, high:1, medium:2, low:3};
 function sortByPriority(list){
-  return [...list].sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3));
+  return [...list].sort((a,b)=>(PRIORITY_RANK[effPriority(a)]??3)-(PRIORITY_RANK[effPriority(b)]??3));
 }
 
 function renderContent(){
@@ -1243,27 +1253,30 @@ function renderContent(){
   filterBar.style.display='flex';
 
   const list = getFilteredTasks();
-  updateProgress(list);
+  updateProgress(currentView==='today' ? list.filter(t=>!isFutureRange(t)) : list);
   const quickHTML = currentView==='today' ? quickTodayHTML() : '';
   if(!list.length){ el.innerHTML=quickHTML+`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No hay tareas aquí</p></div>`; bindQuick(el); return; }
 
   const groups = {};
   const today = localDate();
   list.forEach(t=>{
-    let g = 'Sin fecha';
-    if(currentView==='today' && t.is_recurring) g = '🔄 Tareas recurrentes';
+    let g = currentView==='today' ? '📅 Hoy' : 'Sin fecha'; // en Hoy ya no hay sección "Sin fecha"
+    if(currentView==='today' && isFutureRange(t)) g = '🔭 Tareas a futuro';
+    else if(currentView==='today' && t.is_recurring) g = '🔄 Tareas recurrentes';
     else if(t.status==='done') g = '✅ Completadas hoy';
     else if(t.status==='missed') g = '❌ No completadas';
     else if(t.due_date){
       if(t.due_date < today) g = '⚠️ Vencidas';
       else if(t.due_date === today) g = '📅 Hoy';
-      else g = '📆 Próximas';
+      else g = currentView==='today' ? '📅 Hoy' : '📆 Próximas'; // tareas de rango a ≤7 días
+
     }
     if(!groups[g]) groups[g]=[];
     groups[g].push(t);
   });
 
-  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','🔄 Tareas recurrentes','Sin fecha','❌ No completadas','✅ Completadas hoy'];
+  if(groups['🔭 Tareas a futuro']) groups['🔭 Tareas a futuro'].sort((a,b)=>a.due_date.localeCompare(b.due_date));
+  const order = ['⚠️ Vencidas','📅 Hoy','📆 Próximas','🔄 Tareas recurrentes','🔭 Tareas a futuro','Sin fecha','❌ No completadas','✅ Completadas hoy'];
   let html = quickHTML+'<div class="tasks-list">';
   order.forEach(g=>{
     if(!groups[g]) return;
@@ -1293,7 +1306,10 @@ function taskCardHTML(t){
   const doneSubs = subs.filter(s=>s.done).length;
   const today = localDate();
   let dueHTML='';
-  if(t.due_date){
+  if(rangeActive(t)){
+    const n = daysUntilStr(t.due_date);
+    dueHTML=`<span class="task-due ${n<0?'overdue':n<=1?'today':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Límite ${formatDate(t.due_date)} · ${rangeDueText(t)}</span>`;
+  } else if(t.due_date){
     const cls = t.due_date<today?'overdue':t.due_date===today?'today':'';
     const startLabel = t.due_date===today?'Hoy':t.due_date<today?'Vencida':formatDate(t.due_date);
     const endLabel = t.end_date ? ` → ${formatDate(t.end_date)}` : '';
@@ -1307,10 +1323,11 @@ function taskCardHTML(t){
   const statusBadge = t.status==='in_progress' ? `<span class="status-badge in_progress">⏳ En progreso</span>` : t.status==='missed' ? `<span class="status-badge missed">❌ No completada</span>` : '';
   const isClosed = t.status==='done'||t.status==='missed';
   const priorityFlag = isClosed ? '' :
+    rangeActive(t) ? rangeFlagHTML(t) :
     t.priority==='critical' ? `<span class="priority-flag critical">🟣 Crítica</span>` :
     t.priority==='high' ? `<span class="priority-flag high">🔥 Alta prioridad</span>` : '';
   return `<div class="task-card ${t.status==='done'?'done':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''}" data-id="${t.id}">
-    <div class="priority-bar ${t.priority}"></div>
+    <div class="priority-bar ${effPriority(t)}"></div>
     <div class="task-check ${t.status==='done'?'checked':t.status==='in_progress'?'in_progress':t.status==='missed'?'missed':''}" data-id="${t.id}">
       <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
@@ -1644,6 +1661,40 @@ async function toggleHabitDay(habitId, dayIdx){
   }
 }
 
+// ── TAREAS A FUTURO ──────────────────────────────────────────
+// Tarea de rango = tiene start_date y due_date (fecha límite). Las fechas se calculan en
+// America/Monterrey. La prioridad de una tarea de rango se calcula al pintar; no se guarda.
+function todayLocalStr(){
+  return new Intl.DateTimeFormat('en-CA', {timeZone:'America/Monterrey', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
+}
+// (se llama daysUntilStr porque Finanzas ya tiene un daysUntil que recibe un Date)
+function daysUntilStr(dateStr){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const [ty,tm,td] = todayLocalStr().split('-').map(Number);
+  return Math.round((Date.UTC(y,m-1,d) - Date.UTC(ty,tm-1,td)) / 86400000);
+}
+function isRangeTask(t){ return !!(t.start_date && t.due_date); }
+function rangePriority(t){
+  const n = daysUntilStr(t.due_date);
+  if(n<=1) return 'critical'; // incluye vencidas
+  if(n<=3) return 'high';
+  if(n<=7) return 'medium';
+  return 'low';
+}
+const rangeOpen = t=>isRangeTask(t) && t.status!=='done' && t.status!=='missed';
+function rangeHidden(t){ return rangeOpen(t) && todayLocalStr() < t.start_date; }   // antes de su inicio
+function rangeActive(t){ return rangeOpen(t) && todayLocalStr() >= t.start_date; }
+function isFutureRange(t){ return rangeActive(t) && daysUntilStr(t.due_date) > 7; }  // sección "Tareas a futuro"
+function effPriority(t){ return rangeActive(t) ? rangePriority(t) : t.priority; }
+function rangeDueText(t){
+  const n = daysUntilStr(t.due_date);
+  if(n<0) return `vencida hace ${-n} día${n===-1?'':'s'}`;
+  if(n===0) return 'vence hoy';
+  return `faltan ${n} día${n===1?'':'s'}`;
+}
+const RANGE_FLAG = {critical:'🟣 Crítica', high:'🔥 Alta', medium:'🟡 Media', low:'🟢 Baja'};
+function rangeFlagHTML(t){ const p=rangePriority(t); return `<span class="priority-flag ${p}">${RANGE_FLAG[p]}</span>`; }
+
 // ── ORDEN DEL DÍA ────────────────────────────────────────────
 // Las mismas tareas de "Hoy", pero en una lista que se reordena arrastrando.
 // El orden se guarda en tasks.day_order (menor = primero). Lo que no tiene orden
@@ -1651,13 +1702,13 @@ async function toggleHabitDay(habitId, dayIdx){
 function orderedTodayTasks(){
   const today = localDate();
   // Solo tareas con fecha de hoy (sin fecha o vencidas no entran en esta lista)
-  const list = tasks.filter(t=>t.due_date===today && isTodayTask(t,today));
+  const list = tasks.filter(t=>(t.due_date===today || isRangeTask(t)) && isTodayTask(t,today));
   const open = list.filter(t=>t.status!=='done' && t.status!=='missed');
   const closed = list.filter(t=>t.status==='done' || t.status==='missed');
   const idx = new Map(tasks.map((t,i)=>[t.id,i]));
   open.sort((a,b)=>{
     const ao=a.day_order ?? 1e9, bo=b.day_order ?? 1e9;
-    return ao-bo || (PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3) || idx.get(a.id)-idx.get(b.id);
+    return ao-bo || (PRIORITY_RANK[effPriority(a)]??3)-(PRIORITY_RANK[effPriority(b)]??3) || idx.get(a.id)-idx.get(b.id);
   });
   return {open, closed};
 }
@@ -1665,9 +1716,11 @@ function orderedTodayTasks(){
 function orderItemHTML(t, n){
   const closed = t.status==='done' || t.status==='missed';
   const badge = closed ? '' :
+    rangeActive(t) ? rangeFlagHTML(t) :
     t.priority==='critical' ? '<span class="priority-flag critical">🟣 Crítica</span>' :
     t.priority==='high' ? '<span class="priority-flag high">🔥 Alta</span>' : '';
-  const when = t.due_date && t.due_date<localDate() ? '<span class="task-due overdue">Vencida</span>' : (t.due_time?`<span class="task-due">${t.due_time.slice(0,5)}</span>`:'');
+  const when = rangeActive(t) ? `<span class="task-due ${daysUntilStr(t.due_date)<0?'overdue':''}">${rangeDueText(t)}</span>` :
+    t.due_date && t.due_date<localDate() ? '<span class="task-due overdue">Vencida</span>' : (t.due_time?`<span class="task-due">${t.due_time.slice(0,5)}</span>`:'');
   const prog = t.status==='in_progress' ? '<span class="status-badge in_progress">⏳</span>' : '';
   return `<div class="order-item ${closed?'closed':''}" data-id="${t.id}">
     ${closed ? '' : `<div class="order-handle" title="Arrastra para ordenar"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></div>
@@ -2159,9 +2212,10 @@ function updateProgress(list){
 function updateCounts(){
   const today = localDate();
   const tomorrow = localDateOffset(1);
-  document.getElementById('countToday').textContent = tasks.filter(t=>t.status!=='done'&&t.status!=='missed'&&(!t.due_date||t.due_date<=today)).length;
-  document.getElementById('countAll').textContent = dedupeRecurring(tasks.filter(t=>t.status!=='done'&&t.status!=='missed')).length;
-  document.getElementById('countTomorrow').textContent = tasks.filter(t=>t.status!=='done'&&t.status!=='missed'&&t.due_date===tomorrow).length;
+  const shown = tasks.filter(t=>!rangeHidden(t));
+  document.getElementById('countToday').textContent = shown.filter(t=>t.status!=='done'&&t.status!=='missed'&&(isRangeTask(t) ? daysUntilStr(t.due_date)<=7 : (!t.due_date||t.due_date<=today))).length;
+  document.getElementById('countAll').textContent = dedupeRecurring(shown.filter(t=>t.status!=='done'&&t.status!=='missed')).length;
+  document.getElementById('countTomorrow').textContent = shown.filter(t=>t.status!=='done'&&t.status!=='missed'&&t.due_date===tomorrow).length;
   const missed = tasks.filter(t=>t.status!=='done'&&t.status!=='missed'&&t.due_date&&t.due_date<today).length;
   document.getElementById('countMissed').textContent = missed;
   document.getElementById('countMissed').style.display = missed ? 'inline' : 'none';
@@ -2352,6 +2406,7 @@ function openTaskModal(id=null){
     const t=tasks.find(t=>t.id===id);
     document.getElementById('taskTitle').value=t.title;
     document.getElementById('taskDue').value=t.due_date||'';
+    document.getElementById('taskStart').value=t.start_date||'';
     document.getElementById('taskTime').value=t.due_time?t.due_time.slice(0,5):'';
     document.getElementById('taskEndDate').value=t.end_date||'';
     document.getElementById('endDateRow').style.display = (t.recurrence) ? 'block' : 'none';
@@ -2378,6 +2433,7 @@ function openTaskModal(id=null){
   } else {
     document.getElementById('taskTitle').value='';
     document.getElementById('taskDue').value='';
+    document.getElementById('taskStart').value='';
     document.getElementById('taskTime').value='';
     document.getElementById('taskEndDate').value='';
     document.getElementById('endDateRow').style.display='none';
@@ -2438,6 +2494,10 @@ async function saveTask(){
   if(!currentPriority){ showToast('Elige una prioridad','error'); return; }
   if(currentRecur==='custom' && !currentCustomDays.length){ showToast('Elige al menos un día para la recurrencia personalizada','error'); return; }
   const due=document.getElementById('taskDue').value;
+  const start=document.getElementById('taskStart').value;
+  if(start && !due){ showToast('Para una tarea a futuro pon también la Fecha (fecha límite)','error'); return; }
+  if(start && due && start>due){ showToast('El inicio no puede ser después de la fecha límite','error'); return; }
+  if(start && currentRecur){ showToast('Una tarea recurrente no puede tener inicio; quita uno de los dos','error'); return; }
   const time=document.getElementById('taskTime').value;
   const endDate=document.getElementById('taskEndDate').value;
   const proj=document.getElementById('taskProject').value;
@@ -2458,9 +2518,13 @@ async function saveTask(){
     recurrence,
     position:tasks.length
   };
+  // start_date solo se manda si hace falta, así las tareas normales se guardan igual que antes
+  const editingTask = editingTaskId ? tasks.find(t=>t.id===editingTaskId) : null;
+  if(start) body.start_date = start;
+  else if(editingTask && editingTask.start_date) body.start_date = null;
 
   // Helper: attempt POST/PATCH, retry without end_date if column missing
-  async function attempt(b){
+  async function attempt(b, retried){
     try{
       if(editingTaskId){
         await dbPatch('tasks',b,`?id=eq.${editingTaskId}`);
@@ -2477,10 +2541,11 @@ async function saveTask(){
       }
     } catch(e){
       // If error mentions end_date column, retry without it
-      if(e.message.includes('end_date') || e.message.includes('category') || e.message.includes('column')){
+      if('start_date' in b && e.message.includes('start_date')) throw new Error('falta la columna start_date (corre migrations/2026-10-25-start-date.sql)');
+      if(!retried && (e.message.includes('end_date') || e.message.includes('category') || e.message.includes('column'))){
         const {end_date, category, ...safe}=b;
         // keep category as a tag-like workaround if needed
-        return await attempt(safe);
+        return await attempt(safe, true);
       }
       throw e;
     }
@@ -2745,7 +2810,7 @@ function renderCalendarView(el){
   for(let i=1;i<=daysInMonth;i++) cells.push({d:new Date(year,month,i),cur:true});
   while(cells.length%7!==0){ const l=cells[cells.length-1].d; cells.push({d:new Date(l.getFullYear(),l.getMonth(),l.getDate()+1),cur:false}); }
 
-  const visible = tasks.filter(t=>t.due_date && (calShowDone || (t.status!=='done' && t.status!=='missed')));
+  const visible = tasks.filter(t=>t.due_date && !rangeHidden(t) && (calShowDone || (t.status!=='done' && t.status!=='missed')));
   const byDate={};
   visible.forEach(t=>{ (byDate[t.due_date] ||= []).push(t); });
   Object.values(byDate).forEach(l=>l.sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3)));
