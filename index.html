@@ -184,6 +184,14 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif}
 .task-action-btn:hover{background:var(--bg3);color:var(--text)}
 .task-action-btn.danger:hover{background:var(--red-bg);color:var(--red)}
 .task-action-btn svg{width:13px;height:13px}
+/* Celular: no hay "hover", así que los botones van visibles en su propia fila
+   (antes eran invisibles pero seguían ocupando ~176px y se podían tocar sin verlos) */
+@media(max-width:768px){
+  .task-card{flex-wrap:wrap;row-gap:10px}
+  .task-actions{opacity:1;flex-basis:100%;justify-content:flex-end;gap:6px;padding-top:10px;border-top:1px solid var(--border)}
+  .task-action-btn{width:32px;height:32px;border-radius:8px}
+  .task-action-btn svg{width:15px;height:15px}
+}
 
 /* Goals */
 .goals-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
