@@ -415,6 +415,12 @@ input[type="date"].form-input, input[type="time"].form-input{-webkit-min-logical
 .remind-btn{width:100%}
 .remind-btn:disabled{opacity:.45;cursor:default}
 .remind-section{margin-bottom:6px}
+.past-group{margin-bottom:10px}
+.past-summary{cursor:pointer;list-style:none;user-select:none;padding:12px 0}
+.past-summary::-webkit-details-marker{display:none}
+.past-arrow{display:inline-block;transition:transform .15s;margin-right:2px}
+.past-group[open] .past-arrow{transform:rotate(90deg)}
+.past-more{margin-top:10px}
 .task-due.worked{color:var(--teal)}
 .task-action-btn.btn-worked:hover,.task-action-btn.btn-worked.on{background:var(--teal-bg);color:var(--teal)}
 .day-options{display:flex;gap:6px;margin-top:8px}
@@ -768,7 +774,7 @@ body.auth-locked .login-screen{display:flex;min-height:100vh;align-items:center;
     </div>
     <div class="nav-item" data-view="done">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-      Completadas
+      Pasadas
     </div>
   </nav>
 
@@ -1229,20 +1235,21 @@ function isTodayTask(t, today){
 function getFilteredTasks(){
   const today = localDate();
   const tomorrow = localDateOffset(1);
-  let list = tasks.filter(t=>!rangeHidden(t)); // antes de su inicio no aparece en ninguna vista
+  // antes de su inicio solo aparece en Próximas (marcada "Empieza el …")
+  let list = currentView==='upcoming' ? [...tasks] : tasks.filter(t=>!rangeHidden(t));
   if(currentView==='today') list = list.filter(t=>isTodayTask(t,today) || isFutureRange(t) || workedTodayRange(t));
   else if(currentView==='tomorrow'){
     list = list.filter(t=>t.status!=='done' && t.due_date===tomorrow);
   }
-  else if(currentView==='upcoming') list = list.filter(t=>t.status!=='done' && ((t.end_date && t.end_date > today) || (!t.end_date && t.due_date && t.due_date > today)));
+  else if(currentView==='upcoming') list = list.filter(t=>t.status!=='done' && t.status!=='missed' && ((t.end_date && t.end_date > today) || (!t.end_date && t.due_date && t.due_date > today)));
   else if(currentView==='missed'){
     list = list.filter(t=>t.status!=='done' && t.status!=='missed' && t.due_date && t.due_date < today);
   }
   else if(currentView.startsWith('project_')){
     const pid = currentView.replace('project_','');
-    list = list.filter(t=>t.category===pid && t.status!=='done');
+    list = list.filter(t=>t.category===pid && t.status!=='done' && t.status!=='missed');
   } else {
-    list = list.filter(t=>t.status!=='done');
+    list = list.filter(t=>t.status!=='done' && t.status!=='missed'); // las ❌ No completadas van en Pasadas
   }
   // "Todas", "Próximas" y las categorías son vistas de exploración: una tarea
   // recurrente se ve UNA vez ahí, no una por cada día que ya se generó. "Hoy",
@@ -1272,6 +1279,7 @@ function renderContent(){
   if(currentView==='calendar'){ filterBar.style.display='none'; renderCalendarView(el); updateProgress([]); return; }
   if(currentView==='stats')   { filterBar.style.display='none'; renderStatsView(el);    updateProgress([]); return; }
   if(currentView==='missed')  { filterBar.style.display='none'; renderMissedView(el);   updateProgress([]); return; }
+  if(currentView==='done')    { filterBar.style.display='none'; renderPastView(el);      updateProgress([]); return; }
   if(currentView==='goals')   { filterBar.style.display='none'; renderGoalsView(el);     updateProgress([]); return; }
   if(currentView==='habits')  { filterBar.style.display='none'; renderHabitsView(el);    updateProgress([]); return; }
   if(currentView==='order')  { filterBar.style.display='none'; renderOrderView(el);      updateProgress([]); return; }
@@ -1284,6 +1292,8 @@ function renderContent(){
   updateProgress(currentView==='today' ? list.filter(t=>!isFutureRange(t)) : list);
   const quickHTML = currentView==='today' ? quickTodayHTML() + remindTomorrowHTML() : '';
   if(!list.length){ el.innerHTML=quickHTML+`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No hay tareas aquí</p></div>`; bindQuick(el); bindTaskCards(el); return; }
+
+  if(currentView==='upcoming'){ el.innerHTML = upcomingHTML(list); bindTaskCards(el); return; }
 
   const groups = {};
   const today = localDate();
@@ -1340,7 +1350,9 @@ function taskCardHTML(t){
   const doneSubs = subs.filter(s=>s.done).length;
   const today = localDate();
   let dueHTML='';
-  if(rangeActive(t)){
+  if(rangeHidden(t)){
+    dueHTML=`<span class="task-due">⏳ Empieza ${shortDay(t.start_date)} · límite ${formatDate(t.due_date)}</span>`;
+  } else if(rangeActive(t)){
     const n = daysUntilStr(t.due_date);
     dueHTML=`<span class="task-due ${n<0?'overdue':n<=1?'today':''}">⏳ Límite ${formatDate(t.due_date)} · ${rangeDueText(t)}</span>`;
   } else if(t.due_date){
@@ -1696,6 +1708,35 @@ async function toggleHabitDay(habitId, dayIdx){
       showToast('Error al guardar el hábito (¿ya corriste el SQL de días?)','error');
     }
   }
+}
+
+// ── PRÓXIMAS Y PASADAS ───────────────────────────────────────
+function shortDay(d){ return new Date(d+'T12:00:00').toLocaleDateString('es-MX',{weekday:'short', day:'numeric', month:'short'}).replace(/\./g,''); }
+// Próximas: dos grupos, lo más cercano arriba
+function upcomingHTML(list){
+  const byDate = (a,b)=>(a.due_date||'').localeCompare(b.due_date||'') || (a.due_time||'').localeCompare(b.due_time||'') || (PRIORITY_RANK[effPriority(a)]??3)-(PRIORITY_RANK[effPriority(b)]??3);
+  const exact = list.filter(t=>!isRangeTask(t)).sort(byDate);
+  const range = list.filter(t=>isRangeTask(t)).sort(byDate);
+  const group = (label, arr, empty)=>`<div class="task-group-label">${label} <span style="opacity:.7">(${arr.length})</span></div>${arr.length ? arr.map(taskCardHTML).join('') : `<div class="fin-hint" style="margin:0 0 8px">${empty}</div>`}`;
+  return `<div class="tasks-list">${group('📌 Día exacto', exact, 'Sin tareas con día exacto próximas.')}${group('⏳ Con fecha límite', range, 'Sin tareas con fecha límite próximas.')}</div>`;
+}
+// Pasadas: dos desplegables, ✅ Completadas y ❌ No completadas (las más recientes primero)
+let pastLimit = {done:30, missed:30};
+function pastOpenState(){ try{ return JSON.parse(localStorage.getItem('pastOpen')||'{}'); }catch(e){ return {}; } }
+function renderPastView(el){
+  const recent = (a,b)=>String(b.completed_at||b.due_date||'').localeCompare(String(a.completed_at||a.due_date||''));
+  const done = tasks.filter(t=>t.status==='done').sort(recent);
+  const missed = tasks.filter(t=>t.status==='missed').sort(recent);
+  const open = pastOpenState();
+  const section = (key, label, arr)=>`<details class="past-group" data-past="${key}" ${open[key]?'open':''}>
+      <summary class="task-group-label past-summary"><span class="past-arrow">▸</span> ${label} <span style="opacity:.7">(${arr.length})</span></summary>
+      <div class="tasks-list">${arr.length ? arr.slice(0, pastLimit[key]).map(taskCardHTML).join('') : '<div class="fin-hint" style="margin:0 0 8px">Nada por aquí.</div>'}</div>
+      ${arr.length>pastLimit[key] ? `<button type="button" class="btn btn-ghost fin-small-btn past-more" data-past-more="${key}">Ver ${Math.min(30, arr.length-pastLimit[key])} más</button>` : ''}
+    </details>`;
+  el.innerHTML = section('done','✅ Completadas', done) + section('missed','❌ No completadas', missed);
+  el.querySelectorAll('details.past-group').forEach(d=>d.addEventListener('toggle', ()=>{ const o=pastOpenState(); o[d.dataset.past]=d.open; try{ localStorage.setItem('pastOpen', JSON.stringify(o)); }catch(e){} }));
+  el.querySelectorAll('[data-past-more]').forEach(b=>b.onclick=()=>{ pastLimit[b.dataset.pastMore]+=30; renderPastView(el); });
+  bindTaskCards(el);
 }
 
 // ── AVANCÉ HOY ───────────────────────────────────────────────
@@ -2719,7 +2760,7 @@ function setView(view, label){
   if(currentSection!=='tasks'){ currentSection='tasks'; syncSectionUI(); }
   currentView=view;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
-  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Completadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',habits:'Hábitos',reminders:'Recordatorios',notes:'Notas',quick:'Tareas rápidas',order:'Orden del día'}[view]||view);
+  document.getElementById('viewTitle').textContent=label||({today:'Hoy',tomorrow:'Mañana',all:'Todas las tareas',upcoming:'Próximas',done:'Pasadas',missed:'Sin completar',calendar:'Calendario',stats:'Estadísticas',goals:'Objetivos',habits:'Hábitos',reminders:'Recordatorios',notes:'Notas',quick:'Tareas rápidas',order:'Orden del día'}[view]||view);
   renderContent();
   if(window.innerWidth<768) closeSidebar();
 }
