@@ -39,7 +39,7 @@ Gestor de tareas diario con: Hoy / Orden del día / Mañana / Todas / Próximas 
 - **Hábitos:** `habit_weeks.days int[]` (0=lunes…6=domingo) + `count` sincronizado; filas viejas solo tienen `count`. Semana = lunes (`weekKey()`).
 - **Objetivos:** vencimiento por `created_at` vs. periodo actual (`goalExpired`); "renovar" reescribe `created_at`; archivo de completados con un botón (sin pestaña nueva).
 - **Notas:** mosaico en JS (`layoutNotes`, máx. 2 columnas, 1 en móvil); cada nota recuerda su columna (`noteColOf`) para no saltar al editar. Edición en el lugar (textarea sin caja, autoajustable).
-- **Calendario:** vista Mes (cuadrícula desde domingo) y Semana, con "Incluir completadas" y día saturado (≥5 pendientes).
+- **Calendario:** vista Mes (cuadrícula desde domingo) y Semana, con "Incluir completadas" y día saturado (≥5 pendientes de día exacto). Las tareas con fecha límite salen en cada día desde `start_date` hasta el límite (o hasta hoy si siguen abiertas y vencidas, o hasta el día en que se cerraron), con la prioridad de ese día (`calTasksByDate`, `prioForDaysLeft`); ⏳ en la píldora, ✓ los días con avance.
 - **Móvil (lecciones):** `html/body{overflow-x:hidden}`; hijos de flex/grid con `min-width:0`; inputs ≥16px (iOS hace zoom si no); inputs `date/time` con alto explícito (42px); acciones de tarjeta con hover-reveal en escritorio y en su propia fila visible en móvil (≤768px, no hay hover); el modal de tarea va centrado.
 - **UI:** cambios pequeños y quirúrgicos; no rediseñar sin que se pida. Fecha/Hora apilados con el mismo ancho que Título.
 - Siempre escapar texto de usuario con `escapeHTML` / `escapeAttr` al armar HTML.

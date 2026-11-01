@@ -2954,10 +2954,8 @@ function renderCalendarView(el){
   for(let i=1;i<=daysInMonth;i++) cells.push({d:new Date(year,month,i),cur:true});
   while(cells.length%7!==0){ const l=cells[cells.length-1].d; cells.push({d:new Date(l.getFullYear(),l.getMonth(),l.getDate()+1),cur:false}); }
 
-  const visible = tasks.filter(t=>t.due_date && !rangeHidden(t) && (calShowDone || (t.status!=='done' && t.status!=='missed')));
-  const byDate={};
-  visible.forEach(t=>{ (byDate[t.due_date] ||= []).push(t); });
-  Object.values(byDate).forEach(l=>l.sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3)));
+  const visible = tasks.filter(t=>t.due_date && (calShowDone || (t.status!=='done' && t.status!=='missed')));
+  const byDate = calTasksByDate(visible);
 
   if(calMode==='week'){ renderWeekCalendar(el, today, byDate); return; }
 
@@ -2977,8 +2975,8 @@ function renderCalendarView(el){
     const ds=localDate(d);
     const list=byDate[ds]||[];
     const isToday=ds===today;
-    const saturated=list.filter(t=>t.status!=='done'&&t.status!=='missed').length>=5;
-    const pills=list.slice(0,3).map(t=>`<div class="cal-pill ${calPillClass(t)}" title="${escapeAttr(t.title)}">${escapeHTML(t.title)}</div>`).join('');
+    const saturated=list.filter(t=>!t.__range&&t.status!=='done'&&t.status!=='missed').length>=5;
+    const pills=list.slice(0,3).map(t=>`<div class="cal-pill ${calPillClass(t)}" title="${escapeAttr(t.title)}">${calPrefix(t)}${escapeHTML(t.title)}</div>`).join('');
     const more=list.length>3?`<div class="cal-more">+${list.length-3} más</div>`:'';
     const dots=list.slice(0,4).map(t=>`<span class="cal-dot ${calPillClass(t)}"></span>`).join('');
     html+=`<div class="cal-cell ${cur?'':'other'} ${saturated?'saturated':''} ${ds===calSelected?'selected':''}" onclick="calSelectDay('${ds}')">
@@ -2993,14 +2991,15 @@ function renderCalendarView(el){
     <span><i class="cal-dot critical"></i>Crítica</span><span><i class="cal-dot high"></i>Alta</span>
     <span><i class="cal-dot medium"></i>Media</span><span><i class="cal-dot low"></i>Baja</span>
     <span><i class="cal-dot done"></i>Completada</span><span><i class="cal-dot missed"></i>No completada</span>
-    <span><i class="cal-warn">⚠</i>Día saturado (5+ pendientes)</span>
+    <span>⏳ Con fecha límite: sale cada día y sube de prioridad al acercarse</span>
+    <span><i class="cal-warn">⚠</i>Día saturado (5+ pendientes de día exacto)</span>
   </div>`;
 
   if(calSelected){
     const list=byDate[calSelected]||[];
     const label=new Date(calSelected+'T12:00:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
     html+=`<div class="cal-selected"><h4 style="text-transform:capitalize">${label}</h4>
-      ${list.length?list.map(t=>`<div class="cal-sel-item" onclick="openTaskModal('${t.id}')"><i class="cal-dot ${calPillClass(t)}"></i><span class="${t.status==='done'?'cal-sel-done':''}">${escapeHTML(t.title)}</span>${t.due_time?`<em>${t.due_time.slice(0,5)}</em>`:''}</div>`).join(''):'<div class="cal-empty-day">Sin tareas este día</div>'}
+      ${list.length?list.map(t=>`<div class="cal-sel-item" onclick="openTaskModal('${t.id}')"><i class="cal-dot ${calPillClass(t)}"></i><span class="${t.status==='done'?'cal-sel-done':''}">${calPrefix(t)}${escapeHTML(t.title)}</span>${t.__range?`<em>${escapeHTML(calRangeNote(t))}</em>`:t.due_time?`<em>${t.due_time.slice(0,5)}</em>`:''}</div>`).join(''):'<div class="cal-empty-day">Sin tareas este día</div>'}
     </div>`;
   }
   el.innerHTML=html;
@@ -3022,16 +3021,45 @@ function renderWeekCalendar(el, today, byDate){
   </div><div class="cal-week">`;
   days.forEach((d,i)=>{
     const ds=localDate(d), list=byDate[ds]||[];
-    const saturated=list.filter(t=>t.status!=='done'&&t.status!=='missed').length>=5;
+    const saturated=list.filter(t=>!t.__range&&t.status!=='done'&&t.status!=='missed').length>=5;
     html+=`<div class="cal-wrow ${saturated?'saturated':''}">
       <div class="cal-wlabel"><span>${DOW[i]}</span><b class="cal-num ${ds===today?'today':''}">${d.getDate()}</b>${saturated?'<span class="cal-warn">⚠</span>':''}</div>
-      <div class="cal-wtasks">${list.length?list.map(t=>`<div class="cal-pill cal-wpill ${calPillClass(t)}" onclick="openTaskModal('${t.id}')">${t.due_time?`<em>${t.due_time.slice(0,5)}</em> `:''}${escapeHTML(t.title)}</div>`).join(''):'<div class="cal-empty-day">Sin tareas</div>'}</div>
+      <div class="cal-wtasks">${list.length?list.map(t=>`<div class="cal-pill cal-wpill ${calPillClass(t)}" onclick="openTaskModal('${t.id}')">${t.__range?`<em>${escapeHTML(calRangeNote(t))}</em> `:t.due_time?`<em>${t.due_time.slice(0,5)}</em> `:''}${calPrefix(t)}${escapeHTML(t.title)}</div>`).join(''):'<div class="cal-empty-day">Sin tareas</div>'}</div>
     </div>`;
   });
   html+='</div>';
   el.innerHTML=html;
 }
 
+// Una tarea con fecha límite sale en cada día desde su inicio hasta el límite, con la prioridad
+// que tendría ese día. Si sigue abierta y ya venció, sigue saliendo (crítica) hasta hoy.
+function addDaysStr(ds, n){ const [y,m,d]=ds.split('-').map(Number); return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10); }
+function daysBetweenStr(a, b){ const [y1,m1,d1]=a.split('-').map(Number), [y2,m2,d2]=b.split('-').map(Number); return Math.round((Date.UTC(y2,m2-1,d2)-Date.UTC(y1,m1-1,d1))/86400000); }
+function prioForDaysLeft(n){ return n<=1 ? 'critical' : n<=3 ? 'high' : n<=7 ? 'medium' : 'low'; }
+function calTasksByDate(list){
+  const byDate = {}, today = todayLocalStr();
+  for(const t of list){
+    if(!isRangeTask(t)){ (byDate[t.due_date] ||= []).push(t); continue; }
+    const closedOn = t.completed_at ? localDate(new Date(t.completed_at)) : null;
+    let end = t.due_date;
+    if(t.status==='done' || t.status==='missed'){ if(closedOn && closedOn < end) end = closedOn; if(closedOn && closedOn > end && t.status==='done') end = closedOn; }
+    else if(today > end) end = today; // vencida y abierta: sigue saliendo hasta hoy
+    const from = end < t.start_date ? end : t.start_date; // cerrada antes de empezar: sale el día que se cerró
+    const total = Math.min(daysBetweenStr(from, end), 366);
+    for(let i=0;i<=total;i++){
+      const ds = addDaysStr(from, i);
+      const left = daysBetweenStr(ds, t.due_date);
+      (byDate[ds] ||= []).push({...t, priority: prioForDaysLeft(left), __range:true, __left:left, __worked:(t.worked_dates||[]).includes(ds)});
+    }
+  }
+  Object.values(byDate).forEach(l=>l.sort((a,b)=>(PRIORITY_RANK[a.priority]??3)-(PRIORITY_RANK[b.priority]??3)));
+  return byDate;
+}
+function calPrefix(t){ return t.__range ? (t.__worked ? '✓ ' : '⏳ ') : ''; }
+function calRangeNote(t){
+  const n = t.__left;
+  return n<0 ? `vencida hace ${-n} d` : n===0 ? 'vence hoy' : `límite en ${n} d`;
+}
 function calSelectDay(ds){ calSelected = calSelected===ds ? null : ds; renderContent(); }
 
 // ── STATS VIEW ────────────────────────────────────────────────
