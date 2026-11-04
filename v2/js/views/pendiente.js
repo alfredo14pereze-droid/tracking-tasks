@@ -1,5 +1,5 @@
 // Secciones que todavía no existen en v2: explican en qué fase llegan y llevan a v1.
-import { escapeHTML, icon } from '../util.js';
+import { escapeHTML, icon } from '../util.js?v=202611032349';
 
 export const SECTIONS = {
   calendario: { title: 'Calendario', phase: 'Por ahora sigue en la versión actual.' },

@@ -9,6 +9,8 @@ existentes. Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
   repite, metas). Si cambia una fórmula en v1, cambiarla aquí también.
 - Patrones de v1: optimista + rollback + toast, `escapeHTML`, inputs ≥16px, `min-width:0`, sin desborde a 375px.
 - v2 no registra service worker.
+- **Antes de cada commit de v2:** `sh v2/bump-version.sh` (pone el mismo `?v=` en todos los imports e index.html;
+  sin esto el navegador mezcla archivos viejos y nuevos durante los 10 min de caché de GitHub Pages).
 
 ## Fases
 1. ✅ Shell + Inicio (tareas y hábitos en solo lectura).
