@@ -1,14 +1,14 @@
 // Shell de v2: sesión, router por hash y navegación (inferior en móvil, lateral en escritorio).
-import { sb, AuthError } from './db.js?v=202611032355';
-import { escapeHTML, showToast } from './util.js?v=202611032355';
-import * as inicio from './views/inicio.js?v=202611032355';
-import * as pendiente from './views/pendiente.js?v=202611032355';
-import * as finanzas from './views/finanzas.js?v=202611032355';
-import * as salud from './views/salud.js?v=202611032355';
-import * as entreno from './views/entreno.js?v=202611032355';
-import * as rutinas from './views/rutinas.js?v=202611032355';
-import * as tareasView from './views/tareas.js?v=202611032355';
-import { checkRecurring } from './tareas.js?v=202611032355';
+import { sb, AuthError } from './db.js?v=202611040000';
+import { escapeHTML, showToast } from './util.js?v=202611040000';
+import * as inicio from './views/inicio.js?v=202611040000';
+import * as pendiente from './views/pendiente.js?v=202611040000';
+import * as finanzas from './views/finanzas.js?v=202611040000';
+import * as salud from './views/salud.js?v=202611040000';
+import * as entreno from './views/entreno.js?v=202611040000';
+import * as rutinas from './views/rutinas.js?v=202611040000';
+import * as tareasView from './views/tareas.js?v=202611040000';
+import { checkRecurring } from './tareas.js?v=202611040000';
 
 const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'notas', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.

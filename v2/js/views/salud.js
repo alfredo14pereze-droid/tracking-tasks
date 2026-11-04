@@ -1,7 +1,7 @@
 // Salud: Ejercicio (rutina de hoy, semana, progreso), Actividad (metas + Whoop) y Sueño.
-import { dbPost, dbUpsert, callFunction } from '../db.js?v=202611032355';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611032355';
-import * as S from '../salud.js?v=202611032355';
+import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611040000';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040000';
+import * as S from '../salud.js?v=202611040000';
 
 const TABS = { ejercicio: 'Ejercicio', actividad: 'Actividad', sueno: 'Sueño' };
 const DAY = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -147,7 +147,8 @@ function historyCard(d) {
       const n = d.sets.filter(s => s.workout_id === w.id && s.done).length;
       const mins = Math.round((new Date(w.finished_at) - new Date(w.started_at)) / 60000);
       const day = new Date(w.started_at).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
-      return `<div class="task"><div class="task-main"><div class="task-title">${escapeHTML(w.name)}</div><div class="task-meta">${escapeHTML(day)} · ${minsLabel(mins)} · ${n} series</div></div></div>`;
+      return `<div class="task"><div class="task-main"><div class="task-title">${escapeHTML(w.name)}</div><div class="task-meta">${escapeHTML(day)} · ${minsLabel(mins)} · ${n} series</div></div>
+        <button type="button" class="icon-btn sm" data-wdel="${escapeHTML(w.id)}" aria-label="Borrar entreno ${escapeHTML(w.name)} del ${escapeHTML(day)}">${icon('trash')}</button></div>`;
     }).join('')}
   </section>`;
 }
@@ -275,9 +276,26 @@ function bind() {
   on('[data-whoop-connect]', connectWhoop);
   on('[data-whoop-sync]', syncWhoop);
   on('[data-whoop-off]', disconnectWhoop);
+  on('[data-wdel]', e => deleteWorkout(e.currentTarget.dataset.wdel));
 }
 
 async function reload() { st.d = await S.loadSalud(); paint(); }
+
+// Borra un entreno del historial (y sus series). Pide confirmar; no se puede deshacer.
+function deleteWorkout(id) {
+  const d = st.d, w = d.workouts.find(x => x.id === id); if (!w) return;
+  const n = d.sets.filter(s => s.workout_id === id && s.done).length;
+  const day = new Date(w.started_at).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' });
+  openModal('Borrar entreno', `<p class="small" style="margin:0">Se borra "${escapeHTML(w.name)}" del ${escapeHTML(day)} con ${n === 1 ? 'su serie' : `sus ${n} series`}. Ya no cuenta para tu progreso ni tus metas. No se puede deshacer.</p>`,
+    '<button type="button" class="btn-primary" style="background:var(--over)" id="wdOk">Sí, borrar</button><button type="button" class="btn-ghost" data-close>Cancelar</button>');
+  document.getElementById('wdOk').onclick = async () => {
+    closeModal();
+    const prevW = d.workouts, prevS = d.sets;
+    d.workouts = d.workouts.filter(x => x.id !== id); d.sets = d.sets.filter(s => s.workout_id !== id); paint();
+    try { await dbDelete('ex_workouts', `?id=eq.${id}`); showToast('Entreno borrado'); }
+    catch { d.workouts = prevW; d.sets = prevS; paint(); showToast('No se pudo borrar', 'error'); }
+  };
+}
 
 // ── Acciones ─────────────────────────────────────────
 async function seed(e) {

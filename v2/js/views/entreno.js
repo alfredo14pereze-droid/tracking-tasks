@@ -1,8 +1,8 @@
 // Entreno en curso: una tarjeta por ejercicio con sus series, "anterior", opciones y timer de descanso.
 // Cada serie se guarda al marcarla (optimista + rollback). Lo no marcado vive en un borrador local.
-import { dbPost, dbPatch, dbDelete } from '../db.js?v=202611032355';
-import { escapeHTML, showToast, icon, openModal, closeModal } from '../util.js?v=202611032355';
-import * as S from '../salud.js?v=202611032355';
+import { dbPost, dbPatch, dbDelete } from '../db.js?v=202611040000';
+import { escapeHTML, showToast, icon, openModal, closeModal } from '../util.js?v=202611040000';
+import * as S from '../salud.js?v=202611040000';
 
 let st = null;     // { d, w, slots, current, restEnd, restTotal }
 let root = null;
@@ -315,7 +315,17 @@ function finish() {
   }
   const pending = st.slots.reduce((a, s) => a + s.sets.filter(x => !x.done).length, 0);
   openModal('Terminar entreno', `<p class="small" style="margin:0">${n} serie${n === 1 ? '' : 's'} registrada${n === 1 ? '' : 's'}${pending ? ` · ${pending} sin marcar (no se guardan)` : ''}.</p>`,
-    '<button type="button" class="btn-primary" id="fOk">Terminar</button><button type="button" class="btn-ghost" data-close>Seguir entrenando</button>');
+    '<button type="button" class="btn-primary" id="fOk">Terminar</button><button type="button" class="btn-ghost" data-close>Seguir entrenando</button><button type="button" class="btn-link" style="color:var(--alert)" id="fDrop">Descartar entreno (borra sus series)</button>');
+  // Descartar aunque haya series (p. ej. un entreno de prueba): pide confirmar antes de borrar.
+  document.getElementById('fDrop').onclick = () => {
+    openModal('Descartar entreno', `<p class="small" style="margin:0">Se borran este entreno y ${n === 1 ? 'su serie' : `sus ${n} series`}. No cuenta para tu progreso ni para tus metas. No se puede deshacer.</p>`,
+      '<button type="button" class="btn-primary" style="background:var(--over)" id="fDropOk">Sí, descartar</button><button type="button" class="btn-ghost" data-close>Cancelar</button>');
+    document.getElementById('fDropOk').onclick = async () => {
+      closeModal();
+      try { await dbDelete('ex_workouts', `?id=eq.${st.w.id}`); clearDraft(st.w.id); stopTick(); showToast('Entreno descartado'); location.hash = '#salud'; }
+      catch { showToast('No se pudo descartar', 'error'); }
+    };
+  };
   document.getElementById('fOk').onclick = async () => {
     closeModal();
     const at = new Date().toISOString();
