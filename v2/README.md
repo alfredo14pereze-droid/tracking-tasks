@@ -18,6 +18,8 @@ existentes. Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
    el hash del token). El Atajo de iOS la llama con la anon key. La cuenta se elige buscando el
    nombre/institución de la cuenta dentro del nombre de la tarjeta; si no hay coincidencia, la
    captura queda "por revisar" en Finanzas.
+   `sql/2026-11-03-captura-tarjetas.sql` agrega `capture_card_accounts`: al elegir la cuenta de un pago
+   por revisar, la app guarda tarjeta → cuenta y la función la usa primero en los siguientes pagos.
 3. Ejercicio · 4. Whoop · 5. Claude (ver plan).
 
 Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.

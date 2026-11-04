@@ -4,7 +4,7 @@ import { safeGet } from './db.js';
 import { localDate } from './util.js';
 
 export async function loadFinance() {
-  const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens] = await Promise.all([
+  const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap] = await Promise.all([
     safeGet('accounts', '?order=sort_order.asc,name.asc'),
     safeGet('categories', '?order=name.asc'),
     safeGet('transactions', '?order=occurred_on.desc,created_at.desc'),
@@ -14,7 +14,8 @@ export async function loadFinance() {
     safeGet('position_valuations', '?order=month.asc'),
     safeGet('card_settings', ''),
     safeGet('wallet_captures', '?order=received_at.desc&limit=200'),   // tabla nueva (v2/sql)
-    safeGet('capture_tokens', '?revoked=eq.false&order=created_at.desc')
+    safeGet('capture_tokens', '?revoked=eq.false&order=created_at.desc'),
+    safeGet('capture_card_accounts', '')                               // tabla nueva (captura-tarjetas.sql)
   ]);
   const errors = Object.entries({ accounts, categories, transactions: tx, budgets })
     .filter(([, v]) => v === null).map(([k]) => k);
@@ -22,6 +23,7 @@ export async function loadFinance() {
     accounts: accounts || [], categories: categories || [], tx: tx || [], budgets: budgets || [],
     goals: goals || [], positions: positions || [], valuations: valuations || [], cards: cards || [],
     captures, tokens, // null = la migración de captura aún no se corrió
+    cardMap,          // null = falta 2026-11-03-captura-tarjetas.sql
     errors
   };
 }
@@ -219,6 +221,12 @@ export function captureByTx(f) {
   const m = new Map();
   for (const c of f.captures || []) if (c.transaction_id) m.set(c.transaction_id, c);
   return m;
+}
+// Cuenta que ya elegiste antes para esta tarjeta (sin distinguir mayúsculas).
+export function rememberedAccount(f, cardName) {
+  if (!f.cardMap || !cardName) return null;
+  const m = f.cardMap.find(x => x.card_name.toLowerCase() === cardName.toLowerCase());
+  return m && f.accounts.some(a => a.id === m.account_id && !a.archived) ? m.account_id : null;
 }
 // Por revisar: capturas sin cuenta, o gastos capturados que siguen sin categoría.
 export function capturesToReview(f) {

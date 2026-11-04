@@ -1,6 +1,6 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, SUPABASE_URL, SUPABASE_KEY } from '../db.js';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js';
 import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js';
 import * as F from '../fin.js';
 
@@ -111,7 +111,8 @@ function goalRow(f, g) {
 function reviewRow(f, c) {
   const t = c.transaction_id ? f.tx.find(x => x.id === c.transaction_id) : null;
   const cats = F.activeCats(f, 'expense').map(x => `<option value="${escapeHTML(x.id)}">${escapeHTML(x.name)}</option>`).join('');
-  const accs = F.bankAccounts(f).map(x => `<option value="${escapeHTML(x.id)}">${escapeHTML(x.name)}</option>`).join('');
+  const pre = t ? null : F.rememberedAccount(f, c.card_name);
+  const accs = F.bankAccounts(f).map(x => `<option value="${escapeHTML(x.id)}"${x.id === pre ? ' selected' : ''}>${escapeHTML(x.name)}</option>`).join('');
   return `<div class="review" data-cap="${escapeHTML(c.id)}">
     <div class="tx-main">
       <div class="tx-title">${escapeHTML(c.merchant || 'Apple Pay')} · ${F.fmtMoney(c.amount_cents)}</div>
@@ -323,12 +324,27 @@ async function saveReview(row) {
   c.transaction_id = created.id;
   try {
     await dbPatch('wallet_captures', { status: 'linked', account_id: acc, transaction_id: created.id }, `?id=eq.${c.id}`);
-    showToast('Gasto registrado');
   } catch {
     // El gasto sí quedó; solo falló marcar la captura. No lo borro para no perder el registro.
-    showToast('Gasto registrado, pero la captura sigue pendiente: márcala como ignorada', 'error');
+    paint();
+    return showToast('Gasto registrado, pero la captura sigue pendiente: márcala como ignorada', 'error');
   }
+  const learned = await rememberCard(c.card_name, acc);
   paint();
+  showToast(learned ? `Listo. Los próximos pagos con ${c.card_name} irán solos a ${F.accName(f, acc)}` : 'Gasto registrado');
+}
+
+// Guarda "esta tarjeta va a esta cuenta" para que el Atajo la registre sola la próxima vez.
+// Devuelve true si se aprendió algo nuevo. Si la tabla aún no existe, no hace nada.
+async function rememberCard(cardName, accountId) {
+  const f = state.f;
+  if (!cardName || !f.cardMap) return false;
+  if (F.rememberedAccount(f, cardName) === accountId) return false;
+  try {
+    const [row] = await dbUpsert('capture_card_accounts', { card_name: cardName, account_id: accountId }, 'user_id,card_name');
+    f.cardMap = f.cardMap.filter(x => x.card_name.toLowerCase() !== cardName.toLowerCase()).concat(row);
+    return true;
+  } catch { return false; } // no es grave: solo no se recuerda
 }
 
 async function ignoreCapture(id) {
