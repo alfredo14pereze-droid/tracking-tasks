@@ -554,3 +554,28 @@ textarea{font-family:inherit;font-size:16px}
 .heat i,.hk{display:block;aspect-ratio:1;border-radius:4px}
 .hk{width:12px;height:12px}
 .h0{background:var(--line)}.h1{background:#B9D3C2}.h2{background:#7FA892}.h3{background:var(--accent)}
+
+/* ── Estimar comida con IA ─────────────────────────── */
+.ai-box{display:flex;flex-direction:column;gap:8px;background:var(--bg);border-radius:16px;padding:12px}
+.ai-row{display:flex;gap:8px;align-items:flex-start}
+.ai-row .field{flex:1 1 auto;min-width:0;height:auto;min-height:64px;padding:10px 12px;line-height:1.4;resize:vertical;background:#fff}
+.ai-mic{width:48px;height:48px;border:1px solid var(--line-2)}
+.ai-mic.on{background:var(--over);color:#fff;border-color:var(--over);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(194,65,12,.2)}}
+.btn-dark svg{width:18px;height:18px}
+.ai-or{display:flex;align-items:center;gap:10px;margin:10px 0 2px;color:var(--text-2);font-size:12px}
+.ai-or::before,.ai-or::after{content:'';flex:1;height:1px;background:var(--line-2)}
+.ai-qs,.ai-est{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.ai-q{border:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ai-q legend{font-size:14px;font-weight:600;padding:0 0 4px}
+.ai-other{height:40px;background:#fff}
+.ai-total{display:flex;flex-direction:column;gap:2px;background:var(--accent);color:#fff;border-radius:12px;padding:10px 12px}
+.ai-total strong{font-size:20px}
+.ai-total span{font-size:13px;color:var(--on-accent-2)}
+.ai-item{display:flex;justify-content:space-between;gap:10px;font-size:14px;border-top:1px solid var(--line-2);padding-top:6px}
+.ai-item span:first-child{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}
+.ai-item small{color:var(--text-2);font-size:12px}
+.ai-item span:last-child{flex-shrink:0;font-weight:600}
+.ai-assump{margin:0;padding-left:18px;font-size:12px;color:var(--text-2);display:flex;flex-direction:column;gap:2px}
+.spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}

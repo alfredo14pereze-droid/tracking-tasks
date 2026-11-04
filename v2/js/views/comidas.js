@@ -1,8 +1,8 @@
 // Comidas (dieta): macros del día vs. metas, registro, ideas con receta, semana y peso/medidas.
 // Vive como pestaña dentro de Salud; recibe los datos de loadSalud() (d.meals, d.dietGoals, d.body, d.whoop).
-import { dbPost, dbDelete, dbUpsert } from '../db.js?v=202611040944';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040944';
-import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611040944';
+import { dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611040955';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040955';
+import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611040955';
 
 export const DIET_GOALS = {
   kcal: { label: 'Calorías', unit: 'kcal', def: 2200 },
@@ -175,7 +175,19 @@ async function saveMeal(d, body, repaint) {
 function openMeal(d, repaint, pre = {}) {
   const num = v => Number(String(v ?? '').replace(',', '.'));
   const rec = recents(d);
+  const canDictate = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   openModal('Agregar comida', `
+    <section class="ai-box" aria-labelledby="aiLbl">
+      <label class="flabel" id="aiLbl" for="aiText" style="margin-top:0">Escribe o dicta lo que comiste</label>
+      <div class="ai-row">
+        <textarea class="field" id="aiText" rows="2" maxlength="1000" placeholder="Ej. sándwich de jamón y queso con un café con leche"></textarea>
+        ${canDictate ? `<button type="button" class="icon-btn ai-mic" id="aiMic" aria-label="Dictar" aria-pressed="false">${icon('mic')}</button>` : ''}
+      </div>
+      ${canDictate ? '' : '<p class="small" style="margin:0">Para dictar, usa el micrófono del teclado.</p>'}
+      <button type="button" class="btn-dark" id="aiGo" style="width:100%">${icon('spark')}Estimar calorías y macros</button>
+      <div id="aiOut" aria-live="polite"></div>
+    </section>
+    <div class="ai-or"><span>o captúralo tú</span></div>
     ${rec.length ? `<span class="flabel" style="margin-top:0">Recientes</span><div class="opts">${rec.map((m, i) => `<button type="button" class="opt" data-recent="${i}">${escapeHTML(m.name)} · ${r0(m.kcal)}</button>`).join('')}</div>` : ''}
     <label class="flabel" for="mName">¿Qué comiste?</label>
     <input class="field" id="mName" maxlength="120" autocomplete="off" placeholder="Ej. 2 tacos de pollo" value="${escapeHTML(pre.name || '')}">
@@ -193,6 +205,7 @@ function openMeal(d, repaint, pre = {}) {
     </div>
     <p class="small" style="margin:6px 0 0">Si solo sabes las calorías, deja los macros en 0. Si pones los macros y dejas calorías vacías, las calculo.</p>`,
     '<button type="button" class="btn-primary" id="mSave">Guardar</button>');
+  bindEstimate();
   document.querySelectorAll('#modal [data-recent]').forEach(b => b.onclick = () => {
     const m = rec[Number(b.dataset.recent)];
     const set = (id, v) => { document.getElementById(id).value = v; };
@@ -208,6 +221,81 @@ function openMeal(d, repaint, pre = {}) {
     saveMeal(d, { name, slot: document.getElementById('mSlot').value, eaten_on: document.getElementById('mDay').value || localDate(),
       kcal: Math.round(kcal), protein_g: p, carbs_g: c, fat_g: f, recipe_key: pre.recipe_key || null }, repaint);
   };
+}
+
+// ── Estimar con IA (función "nutricion" en Supabase) ──
+function bindEstimate() {
+  const $ = id => document.getElementById(id);
+  const out = $('aiOut');
+  let lastText = '';
+  const errMsg = e => /Failed to fetch|404|Load failed/i.test(e.message) ? 'Falta publicar la función "nutricion" en Supabase.' : e.message;
+  const busy = (on, label) => { $('aiGo').disabled = on; $('aiGo').innerHTML = on ? `<span class="spin" aria-hidden="true"></span>${label}` : `${icon('spark')}Estimar calorías y macros`; };
+
+  async function run(answers) {
+    const text = $('aiText').value.trim();
+    if (text.length < 2) return showToast('Escribe o dicta lo que comiste', 'error');
+    lastText = text;
+    busy(true, answers ? 'Calculando…' : 'Pensando…');
+    try {
+      const r = await callFunction('nutricion', { text, answers });
+      if (r.status === 'questions') renderQuestions(r.questions); else renderEstimate(r);
+    } catch (e) { out.innerHTML = `<div class="error-box">${escapeHTML(errMsg(e))}</div>`; }
+    finally { busy(false); }
+  }
+
+  function renderQuestions(qs) {
+    out.innerHTML = `<div class="ai-qs"><p class="small" style="margin:0">Para estimarlo mejor:</p>
+      ${qs.map((q, i) => `<fieldset class="ai-q" data-q="${i}"><legend>${escapeHTML(q.question)}</legend>
+        <div class="opts">${q.options.map(o => `<button type="button" class="opt" data-opt="${escapeHTML(o)}" aria-pressed="false">${escapeHTML(o)}</button>`).join('')}
+          <button type="button" class="opt" data-opt="" aria-pressed="false">No sé</button></div>
+        <label class="sr-only" for="aiOther${i}">Otra respuesta</label><input class="field ai-other" id="aiOther${i}" placeholder="Otra (escríbela)" maxlength="120" autocomplete="off">
+      </fieldset>`).join('')}
+      <button type="button" class="btn-primary" id="aiCalc" style="width:100%">Calcular</button></div>`;
+    out.querySelectorAll('.ai-q').forEach(fs => {
+      fs.querySelectorAll('[data-opt]').forEach(b => b.onclick = () => {
+        fs.querySelectorAll('[data-opt]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        fs.querySelector('.ai-other').value = '';
+      });
+      fs.querySelector('.ai-other').oninput = () => fs.querySelectorAll('[data-opt]').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    });
+    $('aiCalc').onclick = () => {
+      if ($('aiText').value.trim() !== lastText) return run(); // cambió la descripción: empezar de nuevo
+      run(qs.map((q, i) => {
+        const fs = out.querySelector(`[data-q="${i}"]`);
+        const pick = fs.querySelector('[data-opt][aria-pressed="true"]');
+        return { question: q.question, answer: fs.querySelector('.ai-other').value.trim() || (pick ? pick.dataset.opt : '') };
+      }));
+    };
+  }
+
+  function renderEstimate(r) {
+    const set = (id, v) => { $(id).value = v; };
+    set('mName', r.title); set('mKcal', r0(r.total.kcal)); set('mP', fmt1(r.total.protein_g)); set('mC', fmt1(r.total.carbs_g)); set('mF', fmt1(r.total.fat_g));
+    out.innerHTML = `<div class="ai-est">
+      <div class="ai-total"><strong>${r0(r.total.kcal)} kcal</strong><span>P ${fmt1(r.total.protein_g)} g · C ${fmt1(r.total.carbs_g)} g · G ${fmt1(r.total.fat_g)} g</span></div>
+      ${r.items.map(x => `<div class="ai-item"><span>${escapeHTML(x.name)}<small>${escapeHTML(x.portion)}</small></span><span>${r0(x.kcal)} kcal</span></div>`).join('')}
+      ${r.assumptions.length ? `<ul class="ai-assump">${r.assumptions.map(a => `<li>${escapeHTML(a)}</li>`).join('')}</ul>` : ''}
+      <p class="small" style="margin:0">Es un estimado: ajusta abajo si quieres y toca Guardar.</p></div>`;
+  }
+
+  $('aiGo').onclick = () => run();
+  $('aiText').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run(); });
+
+  // Dictado con el reconocimiento de voz del navegador (Safari/Chrome), en español de México.
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const mic = $('aiMic');
+  if (Rec && mic) {
+    let rec = null;
+    mic.onclick = () => {
+      if (rec) { rec.stop(); return; }
+      rec = new Rec(); rec.lang = 'es-MX'; rec.interimResults = true; rec.continuous = false;
+      const base = $('aiText').value.trim();
+      rec.onresult = e => { const t = [...e.results].map(x => x[0].transcript).join(' '); $('aiText').value = (base ? base + ' ' : '') + t; };
+      rec.onerror = e => { if (e.error !== 'aborted' && e.error !== 'no-speech') showToast('No pude usar el micrófono: ' + e.error, 'error'); };
+      rec.onend = () => { rec = null; mic.setAttribute('aria-pressed', 'false'); mic.classList.remove('on'); };
+      try { rec.start(); mic.setAttribute('aria-pressed', 'true'); mic.classList.add('on'); } catch { rec = null; }
+    };
+  }
 }
 
 async function deleteMeal(d, id, repaint) {

@@ -49,7 +49,11 @@ Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
    GENERADO con `python3 v2/build-finclasica.py .` desde la sección FINANZAS de `clasica/index.html` (misma lógica,
    adaptador mínimo; estilos en `css/finclasica.css` con alcance `.fc`). No editar finclasica.js a mano.
    La clásica ya no está en el menú; `clasica/` queda como respaldo.
-7. Claude: sugerencias y análisis (ver plan).
+7. ✅ Estimar comidas con IA (4-nov-2026): en Comidas › Agregar escribes o dictas (Web Speech, es-MX) lo que comiste;
+   la Edge Function `supabase/functions/nutricion` llama a Claude (`claude-opus-5-5`, effort low, salida JSON con
+   esquema, `fallbacks: "default"`) y regresa hasta 3 preguntas con opciones o el estimado por alimento + total.
+   Secrets: `ANTHROPIC_API_KEY` y `ALLOWED_EMAILS`. Probada con cliente simulado (Node).
+8. Claude: sugerencias del gym y análisis de estados de cuenta (pendiente).
 
 ## Conectar Whoop (una vez)
 1. Corre `sql/2026-11-03-ejercicio-whoop.sql`.

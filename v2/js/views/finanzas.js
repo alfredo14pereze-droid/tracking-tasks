@@ -1,9 +1,9 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611040944';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040944';
-import { FIN_TABS } from '../finclasica.js?v=202611040944';
-import * as F from '../fin.js?v=202611040944';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611040955';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040955';
+import { FIN_TABS } from '../finclasica.js?v=202611040955';
+import * as F from '../fin.js?v=202611040955';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
