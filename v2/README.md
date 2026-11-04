@@ -53,7 +53,13 @@ Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
    la Edge Function `supabase/functions/nutricion` llama a Claude (`claude-opus-5-5`, effort low, salida JSON con
    esquema, `fallbacks: "default"`) y regresa hasta 3 preguntas con opciones o el estimado por alimento + total.
    Secrets: `ANTHROPIC_API_KEY` y `ALLOWED_EMAILS`. Probada con cliente simulado (Node).
-8. Claude: sugerencias del gym y análisis de estados de cuenta (pendiente).
+8. ✅ Asistente con IA (4-nov-2026): Edge Function `supabase/functions/asistente` (una sola, acciones `gym`,
+   `estado`, `categorias`, `ideas`, `semana`; mismos secrets que `nutricion`). La app manda los datos ya
+   resumidos (no lee la DB). Todo corre solo al tocar un botón; respuestas en caché local (`js/ia.js`).
+   - Salud › Ejercicio: "Sugerencia de Claude" (`views/coach.js`) con Aplicar (series/reps) y Crear rutina.
+   - Finanzas: "Sugerir categorías" en Apple Pay por revisar y "Estado de cuenta (PDF)" (`views/estado.js`).
+   - Comidas: "Ideas a mi medida (IA)" — la función filtra pescado/mariscos además del prompt.
+   - Inicio: "Tu semana" (resumen semanal, caché por semana).
 
 ## Conectar Whoop (una vez)
 1. Corre `sql/2026-11-03-ejercicio-whoop.sql`.

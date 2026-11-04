@@ -1,8 +1,9 @@
 // Salud: Ejercicio (rutina de hoy, semana, progreso), Actividad (metas + Whoop) y Sueño.
-import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611040955';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040955';
-import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611040955';
-import * as S from '../salud.js?v=202611040955';
+import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611041029';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041029';
+import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611041029';
+import { coachHTML, bindCoach } from './coach.js?v=202611041029';
+import * as S from '../salud.js?v=202611041029';
 
 const TABS = { ejercicio: 'Ejercicio', comidas: 'Comidas', actividad: 'Actividad', sueno: 'Sueño' };
 const DAY = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -248,7 +249,7 @@ function paint() {
     body = setupCard('Falta un paso', 'Para usar Ejercicio corre <code>v2/sql/2026-11-03-ejercicio-whoop.sql</code> en el SQL Editor de Supabase y vuelve a abrir esta pantalla.');
   } else if (st.tab === 'ejercicio') {
     body = d.routines.length
-      ? `<div class="fin-grid"><div class="fin-col">${heroCard(d)}${weekCard(d)}${historyCard(d)}</div><div class="fin-col">${routineCard(d)}${progressCard(d)}</div></div>`
+      ? `<div class="fin-grid"><div class="fin-col">${heroCard(d)}${weekCard(d)}${historyCard(d)}</div><div class="fin-col">${routineCard(d)}${progressCard(d)}${coachHTML(d)}</div></div>`
       : setupCard('Tus rutinas', 'Crea las rutinas base (Push, Pull, Pierna y Full) con varias opciones de ejercicio en cada lugar. Después las puedes cambiar como quieras.',
         `<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn-dark" data-seed>Crear rutinas base</button><a class="btn-ghost sm" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--text)" href="#rutinas">Hacer la mía</a></div>`);
   } else if (st.tab === 'comidas') {
@@ -281,6 +282,7 @@ function bind() {
   on('[data-whoop-sync]', syncWhoop);
   on('[data-whoop-off]', disconnectWhoop);
   on('[data-wdel]', e => deleteWorkout(e.currentTarget.dataset.wdel));
+  if (st.tab === 'ejercicio' && st.d.ready) bindCoach(root, st.d, paint, reload);
 }
 
 async function reload() { st.d = await S.loadSalud(); paint(); }

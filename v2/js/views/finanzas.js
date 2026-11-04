@@ -1,9 +1,11 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611040955';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040955';
-import { FIN_TABS } from '../finclasica.js?v=202611040955';
-import * as F from '../fin.js?v=202611040955';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041029';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041029';
+import { FIN_TABS } from '../finclasica.js?v=202611041029';
+import { openStatement } from './estado.js?v=202611041029';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041029';
+import * as F from '../fin.js?v=202611041029';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -12,7 +14,7 @@ const BRAND = [ // color del cuadrito de cada cuenta (mockup)
 ];
 const RPC_URL = `${SUPABASE_URL}/rest/v1/rpc/capture_wallet_tx`;
 
-let state = { f: null, period: 'mes', showAll: false };
+let state = { f: null, period: 'mes', showAll: false, aiCats: {} };
 let rootEl = null;
 
 function readPeriod() { try { return localStorage.getItem('v2FinPeriod') || 'mes'; } catch { return 'mes'; } }
@@ -111,7 +113,8 @@ function goalRow(f, g) {
 
 function reviewRow(f, c) {
   const t = c.transaction_id ? f.tx.find(x => x.id === c.transaction_id) : null;
-  const cats = F.activeCats(f, 'expense').map(x => `<option value="${escapeHTML(x.id)}">${escapeHTML(x.name)}</option>`).join('');
+  const sug = state.aiCats[c.id];
+  const cats = F.activeCats(f, 'expense').map(x => `<option value="${escapeHTML(x.id)}"${x.id === sug ? ' selected' : ''}>${escapeHTML(x.name)}</option>`).join('');
   const pre = t ? null : F.rememberedAccount(f, c.card_name);
   const accs = F.bankAccounts(f).map(x => `<option value="${escapeHTML(x.id)}"${x.id === pre ? ' selected' : ''}>${escapeHTML(x.name)}</option>`).join('');
   return `<div class="review" data-cap="${escapeHTML(c.id)}">
@@ -197,6 +200,10 @@ function paint() {
 
         ${review.length ? `<section class="card" aria-labelledby="revT" style="gap:4px">
           <div class="card-head" style="padding-bottom:8px"><h2 id="revT">Apple Pay por revisar</h2><span class="chip chip-alert">${review.length}</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px">
+            <button type="button" class="btn-ghost sm ai-btn" data-ai-cats>${aiLabel('Sugerir categorías')}</button>
+            ${Object.keys(state.aiCats).length ? '<button type="button" class="btn-primary sm" data-r-saveall>Guardar todas</button>' : ''}
+          </div>
           ${review.slice(0, 10).map(c => reviewRow(f, c)).join('')}
         </section>` : ''}
 
@@ -223,6 +230,12 @@ function paint() {
           ${state.showAll && inPeriod.length > 100 ? `<div class="empty">Mostrando 100 de ${inPeriod.length}.</div>` : ''}
         </section>
 
+        <section class="card" aria-labelledby="stT" style="gap:10px">
+          <div class="card-head"><h2 id="stT">Estado de cuenta</h2></div>
+          <p class="small" style="margin:0">Sube el PDF de tu banco o tarjeta: Claude saca los movimientos, marca cuáles ya tenías y registras los nuevos.</p>
+          <button type="button" class="btn-dark ai-btn" style="align-self:flex-start" data-statement>${aiLabel('Analizar PDF')}</button>
+        </section>
+
         ${shortcutCard(f)}
       </div>
     </div>
@@ -238,10 +251,44 @@ function bind() {
   rootEl.querySelector('[data-add]').onclick = openExpense;
   rootEl.querySelector('[data-connect]')?.addEventListener('click', connectShortcut);
   rootEl.querySelector('[data-revoke]')?.addEventListener('click', revokeShortcut);
+  rootEl.querySelector('[data-statement]')?.addEventListener('click', () => openStatement(state.f, paint));
+  rootEl.querySelector('[data-ai-cats]')?.addEventListener('click', suggestCats);
+  rootEl.querySelector('[data-r-saveall]')?.addEventListener('click', async e => {
+    const rows = [...rootEl.querySelectorAll('[data-cap]')];
+    e.currentTarget.disabled = true;
+    for (const row of rows) {
+      const needAcc = row.querySelector('[data-r-acc]');
+      if (!row.querySelector('[data-r-cat]').value || (needAcc && !needAcc.value)) continue; // las incompletas se quedan
+      await saveReview(row);
+    }
+    state.aiCats = {}; paint();
+  });
   rootEl.querySelectorAll('[data-cap]').forEach(row => {
     row.querySelector('[data-r-save]').onclick = () => saveReview(row);
     row.querySelector('[data-r-ignore]')?.addEventListener('click', () => ignoreCapture(row.dataset.cap));
   });
+}
+
+// ── Sugerir categorías con IA (pagos de Apple Pay por revisar) ──
+async function suggestCats(e) {
+  const f = state.f;
+  const review = F.capturesToReview(f).slice(0, 10);
+  const payments = review.map(c => ({ id: c.id, merchant: c.merchant || 'Apple Pay', amount: (Number(c.amount_cents) || 0) / 100, card: c.card_name || '' }));
+  const categories = F.activeCats(f, 'expense').map(c => ({ id: c.id, name: c.name }));
+  const seen = new Set(), examples = [];
+  for (const t of f.tx) {
+    if (t.type !== 'expense' || !t.category_id || !t.note) continue;
+    const k = t.note.toLowerCase(); if (seen.has(k)) continue; seen.add(k);
+    examples.push({ merchant: t.note, category: F.catName(f, t.category_id) }); if (examples.length >= 60) break;
+  }
+  try {
+    const res = await withBusy(e.currentTarget, 'Pensando…', () => ask('categorias', { payments, categories, examples }));
+    const valid = new Set(categories.map(c => c.id));
+    state.aiCats = {};
+    for (const r of res.results || []) if (valid.has(r.category_id)) state.aiCats[r.id] = r.category_id;
+    paint();
+    showToast(Object.keys(state.aiCats).length ? 'Listo: revisa las categorías y toca Guardar (o Guardar todas)' : 'No pude sugerir categorías', Object.keys(state.aiCats).length ? 'info' : 'error');
+  } catch (err) { showToast(err.message, 'error'); }
 }
 
 // ── Capturar gasto ───────────────────────────────────

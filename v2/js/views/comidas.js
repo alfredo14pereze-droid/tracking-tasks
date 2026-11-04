@@ -1,8 +1,9 @@
 // Comidas (dieta): macros del día vs. metas, registro, ideas con receta, semana y peso/medidas.
 // Vive como pestaña dentro de Salud; recibe los datos de loadSalud() (d.meals, d.dietGoals, d.body, d.whoop).
-import { dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611040955';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040955';
-import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611040955';
+import { dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611041029';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041029';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041029';
+import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611041029';
 
 export const DIET_GOALS = {
   kcal: { label: 'Calorías', unit: 'kcal', def: 2200 },
@@ -76,6 +77,7 @@ function ideasCard(d) {
     <div class="card-head"><h2 id="ideasT">Ideas para hoy</h2><button type="button" class="btn-link" data-recipes>Ver recetas</button></div>
     ${protLeft > 60 ? `<div class="small">Te faltan ${r0(protLeft)} g de proteína: te sugiero opciones altas en proteína.</div>` : ''}
     <div class="ideas">${ideas.map(r => ideaTile(r)).join('')}</div>
+    <button type="button" class="btn-ghost sm ai-btn" style="align-self:flex-start" data-ai-ideas>${aiLabel('Ideas a mi medida (IA)')}</button>
   </section>`;
 }
 const ideaTile = r => `<button type="button" class="idea" data-recipe="${escapeHTML(r.key)}">
@@ -150,6 +152,7 @@ export function bindComidas(root, d, repaint) {
   on('[data-delmeal]', e => deleteMeal(d, e.currentTarget.dataset.delmeal, repaint));
   on('[data-recipe]', e => openRecipe(d, e.currentTarget.dataset.recipe, repaint));
   on('[data-recipes]', () => openRecipeBrowser(d, repaint));
+  on('[data-ai-ideas]', () => openAiIdeas(d, repaint));
   on('[data-dgoals]', () => openDietGoals(d, repaint));
   on('[data-measure]', () => openMeasures(d, repaint));
 }
@@ -322,6 +325,41 @@ function openRecipe(d, key, repaint) {
     closeModal();
     if (!d.dietReady) return showToast('Primero corre el SQL de Comidas', 'error');
     saveMeal(d, { name: r.name, slot: r.slot, eaten_on: localDate(), kcal: r.kcal, protein_g: r.protein, carbs_g: r.carbs, fat_g: r.fat, recipe_key: r.key }, repaint);
+  };
+}
+
+// Ideas con IA: 3 opciones para lo que te falta del día (la función nunca propone pescado ni mariscos).
+function openAiIdeas(d, repaint) {
+  const today = localDate();
+  const meals = d.meals.filter(m => m.eaten_on === today);
+  const remaining = {}, goals = {};
+  for (const k of Object.keys(DIET_GOALS)) { goals[k] = r0(dgoal(d, k)); remaining[k] = Math.max(0, r0(dgoal(d, k) - sum(meals, k === 'kcal' ? 'kcal' : k))); }
+  const recent = [...new Set(d.meals.filter(m => m.eaten_on >= lastNDays(5)[0]).map(m => m.name))].slice(0, 25);
+  openModal('Ideas a tu medida', `
+    <p class="small" style="margin:0">Te faltan hoy ${remaining.kcal} kcal y ${remaining.protein_g} g de proteína.</p>
+    <span class="flabel">¿Para qué comida?</span>
+    <div class="opts">${Object.entries(SLOTS).map(([k, v]) => `<button type="button" class="opt" data-islot="${k}" aria-pressed="${k === slotNow()}">${v}</button>`).join('')}</div>
+    <button type="button" class="btn-dark ai-btn" id="iaGo" style="width:100%;margin-top:8px">${aiLabel('Darme 3 ideas')}</button>
+    <div id="iaOut" aria-live="polite"></div>`);
+  let slot = slotNow(), ideas = [];
+  document.querySelectorAll('#modal [data-islot]').forEach(b => b.onclick = () => { slot = b.dataset.islot; document.querySelectorAll('#modal [data-islot]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
+  document.getElementById('iaGo').onclick = async e => {
+    try {
+      const res = await withBusy(e.currentTarget, 'Pensando…', () => ask('ideas', { slot, remaining, goals, recent }));
+      ideas = res.ideas || [];
+      document.getElementById('iaOut').innerHTML = `<div class="ia-list">${ideas.map((x, i) => `<details class="ia-idea">
+        <summary><span class="idea-name">${escapeHTML(x.name)}</span><span class="small">${r0(x.kcal)} kcal · ${fmt1(x.protein_g)} g prot. · ${x.mins} min</span><span class="small" style="color:var(--accent)">${escapeHTML(x.why)}</span></summary>
+        <span class="flabel">Ingredientes</span><ul class="recipe-list">${(x.ingredients || []).map(y => `<li>${escapeHTML(y)}</li>`).join('')}</ul>
+        <span class="flabel">Preparación</span><ol class="recipe-list">${(x.steps || []).map(y => `<li>${escapeHTML(y)}</li>`).join('')}</ol>
+        <button type="button" class="btn-primary sm" style="margin-top:8px" data-iadd="${i}">Agregar a hoy</button>
+      </details>`).join('')}</div>`;
+      document.querySelectorAll('#modal [data-iadd]').forEach(b => b.onclick = () => {
+        const x = ideas[Number(b.dataset.iadd)];
+        if (!d.dietReady) return showToast('Primero corre el SQL de Comidas', 'error');
+        closeModal();
+        saveMeal(d, { name: x.name.slice(0, 120), slot: SLOTS[x.slot] ? x.slot : slot, eaten_on: localDate(), kcal: r0(x.kcal), protein_g: Number(fmt1(x.protein_g)), carbs_g: Number(fmt1(x.carbs_g)), fat_g: Number(fmt1(x.fat_g)), recipe_key: null }, repaint);
+      });
+    } catch (err) { showToast(err.message, 'error'); }
   };
 }
 

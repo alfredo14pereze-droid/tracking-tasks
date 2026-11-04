@@ -1,10 +1,12 @@
 // Inicio: tareas de hoy (marcables), hábitos de la semana (marcables), finanzas y Whoop.
-import { safeGet, AuthError } from '../db.js?v=202611040955';
-import * as F from '../fin.js?v=202611040955';
-import * as K from '../tareas.js?v=202611040955';
-import { toggleHabitDay } from '../habitos.js?v=202611040955';
-import { openTaskModal } from './tareas.js?v=202611040955';
-import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon, showToast } from '../util.js?v=202611040955';
+import { safeGet, AuthError } from '../db.js?v=202611041029';
+import * as F from '../fin.js?v=202611041029';
+import * as K from '../tareas.js?v=202611041029';
+import { toggleHabitDay } from '../habitos.js?v=202611041029';
+import { ask, withBusy, aiLabel, cache } from '../ia.js?v=202611041029';
+import * as SA from '../salud.js?v=202611041029';
+import { openTaskModal } from './tareas.js?v=202611041029';
+import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon, showToast } from '../util.js?v=202611041029';
 
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 const CATEGORY = { trabajo: 'Trabajo', personal: 'Personal', fitness: 'Fitness', proyectos: 'Proyectos' };
@@ -120,6 +122,13 @@ export function render(el, data, opts = {}) {
 function bind(el, data, opts) {
   const again = () => { if (document.body.contains(el)) render(el, data, opts); };
   el.querySelector('[data-newtask]').onclick = () => openTaskModal(null, again);
+  el.querySelector('[data-weeksum]')?.addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    try {
+      const res = await withBusy(btn, 'Escribiendo…', async () => ask('semana', { stats: await weekStats(data) }));
+      cache.set('semana:' + weekKey(), res); again();
+    } catch (err) { showToast(err.message, 'error'); }
+  });
   el.querySelectorAll('[data-tcheck]').forEach(b => b.onclick = () => K.toggleTask(b.dataset.tcheck, again));
   el.querySelectorAll('[data-tedit]').forEach(b => b.onclick = () => openTaskModal(b.dataset.tedit, again));
   el.querySelectorAll('[data-hday]').forEach(b => b.onclick = () => {
@@ -219,6 +228,7 @@ function paint(el, data, { name = 'Alfredo' } = {}) {
         ${habitsCard}
         ${fs ? `<div class="mob-only">${budgetCard(fs)}</div>
         <div class="desk-only desk-stack">${chartCard(fs)}${payCard(fs)}</div>` : ''}
+        ${weekSummaryCard()}
       </div>
     </div>
   </div>`;
@@ -307,4 +317,53 @@ function recoveryCard(days, desk) {
     <div class="big"${desk ? ' style="font-size:30px"' : ''}>${s}%</div>
     <div class="small" style="color:${color};font-weight:500">${escapeHTML(desk ? sleep : 'Whoop · ' + zone)}</div>
   </a>`;
+}
+
+// ── Resumen semanal con IA ───────────────────────────
+function weekSummaryCard() {
+  const c = cache.get('semana:' + weekKey());
+  const r = c?.v;
+  return `<section class="card week-sum" aria-labelledby="wsT">
+    <div class="card-head"><h2 id="wsT">${r ? escapeHTML(r.title) : 'Tu semana'}</h2><span class="muted" style="font-size:12px">✦ Claude</span></div>
+    ${r ? `${r.highlights?.length ? `<div><span class="label">Lo bueno</span><ul>${r.highlights.map(x => `<li>${escapeHTML(x)}</li>`).join('')}</ul></div>` : ''}
+      ${r.improvements?.length ? `<div><span class="label">Para mejorar</span><ul>${r.improvements.map(x => `<li>${escapeHTML(x)}</li>`).join('')}</ul></div>` : ''}
+      ${r.focus ? `<div class="chip chip-soft" style="white-space:normal;align-self:flex-start;font-size:12px;padding:6px 10px">${escapeHTML(r.focus)}</div>` : ''}`
+      : '<div class="small">Un resumen de tus tareas, hábitos, entrenos, sueño, comida y gastos de esta semana, con 2–3 cosas a mejorar.</div>'}
+    <button type="button" class="btn-ghost sm ai-btn" style="align-self:flex-start" data-weeksum>${aiLabel(r ? 'Actualizar resumen' : 'Hacer mi resumen')}</button>
+  </section>`;
+}
+
+// Números de la semana (lunes a hoy) para el resumen. Junta lo que ya cargó Inicio + Salud.
+async function weekStats(data) {
+  const mon = weekKey(), today = localDate();
+  const inWeek = ds => ds && ds >= mon && ds <= today;
+  const tasks = K.T.tasks;
+  const doneDay = t => t.completed_at ? localDate(new Date(t.completed_at)) : null;
+  const hw = habitsWeek(data.habits, data.weeks);
+  let salud = null; try { salud = await SA.loadSalud(); } catch { /* sin salud */ }
+  const stats = {
+    semana_desde: mon, hoy: today,
+    tareas: {
+      completadas: tasks.filter(t => t.status === 'done' && inWeek(doneDay(t))).length,
+      no_completadas: tasks.filter(t => t.status === 'missed' && inWeek(doneDay(t))).length,
+      vencidas_pendientes: tasks.filter(t => !K.isClosed(t) && t.due_date && t.due_date < today).length,
+      criticas_pendientes: tasks.filter(t => !K.isClosed(t) && K.effPriority(t) === 'critical').length
+    },
+    habitos: hw.map(h => ({ habito: h.title, hechos: h.count, meta: h.target }))
+  };
+  if (salud?.ready) {
+    const w = SA.weekSummary(salud);
+    stats.entrenos = { hechos: w.values.workouts_week, meta: SA.goal(salud, 'workouts_week'), minutos_activos: w.values.active_min_week };
+    if (w.hasWhoop) stats.whoop = { strain_prom: w.values.strain_day && +w.values.strain_day.toFixed(1), pasos_prom: w.values.steps_day && Math.round(w.values.steps_day), sueno_h_prom: w.values.sleep_hours_day && +w.values.sleep_hours_day.toFixed(1),
+      recuperacion_prom: (() => { const v = salud.whoop.daily.filter(x => inWeek(x.day) && x.recovery_score != null).map(x => x.recovery_score); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; })() };
+    const meals = (salud.meals || []).filter(m => inWeek(m.eaten_on));
+    const days = [...new Set(meals.map(m => m.eaten_on))];
+    if (days.length) stats.comida = { dias_registrados: days.length, kcal_prom_dia: Math.round(meals.reduce((s, m) => s + (+m.kcal || 0), 0) / days.length), proteina_prom_dia: Math.round(meals.reduce((s, m) => s + (+m.protein_g || 0), 0) / days.length) };
+  }
+  if (data.fin) {
+    const f = data.fin;
+    const spent = f.tx.filter(t => t.type === 'expense' && inWeek(t.occurred_on)).reduce((s, t) => s + (+t.amount_cents || 0), 0);
+    stats.gastos = { semana_mxn: Math.round(spent / 100), mes_mxn: Math.round(F.totals(f, F.periodRange('mes')).exp / 100), presupuesto_mes_mxn: Math.round(F.monthBudgetTotal(f) / 100) };
+  }
+  return stats;
 }
