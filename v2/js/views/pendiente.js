@@ -1,10 +1,11 @@
 // Secciones que todavía no existen en v2: explican en qué fase llegan y llevan a la versión clásica.
-import { escapeHTML, icon } from '../util.js?v=202611040011';
+import { escapeHTML, icon } from '../util.js?v=202611040935';
 
 export const SECTIONS = {
   calendario: { title: 'Calendario', phase: 'Por ahora sigue en la versión clásica.' },
   objetivos:  { title: 'Objetivos y hábitos', phase: 'Por ahora se editan en la versión clásica.' },
-  notas:      { title: 'Notas', phase: 'Por ahora siguen en la versión clásica.' }
+  notas:      { title: 'Notas', phase: '' },
+  recordatorios: { title: 'Recordatorios', phase: '' }
 };
 
 export function render(el, route) {
@@ -27,6 +28,7 @@ export function renderMore(el) {
     <nav class="card more-list" aria-label="Más secciones">
       ${link('calendario', 'calendario')}
       ${link('objetivos', 'objetivos')}
+      ${link('recordatorios', 'bell')}
       ${link('notas', 'notas')}
       <a href="../clasica/">${icon('volver')}Versión clásica</a>
       <button type="button" data-logout>${icon('salir')}Cerrar sesión</button>

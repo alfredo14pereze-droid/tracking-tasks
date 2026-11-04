@@ -1,16 +1,19 @@
 // Shell de v2: sesión, router por hash y navegación (inferior en móvil, lateral en escritorio).
-import { sb, AuthError } from './db.js?v=202611040011';
-import { escapeHTML, showToast } from './util.js?v=202611040011';
-import * as inicio from './views/inicio.js?v=202611040011';
-import * as pendiente from './views/pendiente.js?v=202611040011';
-import * as finanzas from './views/finanzas.js?v=202611040011';
-import * as salud from './views/salud.js?v=202611040011';
-import * as entreno from './views/entreno.js?v=202611040011';
-import * as rutinas from './views/rutinas.js?v=202611040011';
-import * as tareasView from './views/tareas.js?v=202611040011';
-import { checkRecurring } from './tareas.js?v=202611040011';
+import { sb, AuthError } from './db.js?v=202611040935';
+import { escapeHTML, showToast } from './util.js?v=202611040935';
+import * as inicio from './views/inicio.js?v=202611040935';
+import * as pendiente from './views/pendiente.js?v=202611040935';
+import * as finanzas from './views/finanzas.js?v=202611040935';
+import * as salud from './views/salud.js?v=202611040935';
+import * as entreno from './views/entreno.js?v=202611040935';
+import * as rutinas from './views/rutinas.js?v=202611040935';
+import * as objetivosView from './views/objetivos.js?v=202611040935';
+import * as recordatoriosView from './views/recordatorios.js?v=202611040935';
+import * as notasView from './views/notas.js?v=202611040935';
+import * as tareasView from './views/tareas.js?v=202611040935';
+import { checkRecurring } from './tareas.js?v=202611040935';
 
-const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'notas', 'mas'];
+const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'recordatorios', 'notas', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.
 const SALUD = ['salud', 'entreno', 'rutinas', 'rutina'];
 const $ = id => document.getElementById(id);
@@ -28,7 +31,7 @@ const currentRoute = () => parseHash().route;
 function markNav(route) {
   // En móvil, las secciones que viven en "Más" marcan la pestaña Más.
   const base = SALUD.includes(route) ? 'salud' : route;
-  const tabRoute = ['calendario', 'objetivos', 'notas'].includes(base) ? 'mas' : base;
+  const tabRoute = ['calendario', 'objetivos', 'recordatorios', 'notas'].includes(base) ? 'mas' : base;
   document.querySelectorAll('[data-route]').forEach(a => {
     const on = a.closest('.tabbar') ? a.dataset.route === tabRoute : a.dataset.route === base;
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
@@ -90,6 +93,15 @@ async function renderRoute() {
       if (seq !== renderSeq) return;
       if (e instanceof AuthError) return showLogin();
       main.innerHTML = `<div class="page"><div class="error-box">No se pudo cargar Salud.<br><small>${escapeHTML(e.message)}</small></div></div>`;
+    }
+  } else if (['objetivos', 'recordatorios', 'notas'].includes(route)) {
+    skeleton();
+    const view = { objetivos: objetivosView, recordatorios: recordatoriosView, notas: notasView }[route];
+    try { await view.show(main, () => seq === renderSeq); }
+    catch (e) {
+      if (seq !== renderSeq) return;
+      if (e instanceof AuthError) return showLogin();
+      main.innerHTML = `<div class="page"><div class="error-box">No se pudo cargar.<br><small>${escapeHTML(e.message)}</small></div></div>`;
     }
   } else if (route === 'mas') {
     pendiente.renderMore(main);

@@ -466,3 +466,38 @@ input[type="time"].field{height:48px}
 .recipe-list{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--text-3)}
 .stats3.four{grid-template-columns:repeat(4,minmax(0,1fr));border-top:none;padding-top:0}
 .hero-btn{border:none;color:#fff;font:inherit;font-size:12px;cursor:pointer;min-height:32px}
+
+/* ── Objetivos, hábitos, recordatorios, notas ──────── */
+.goal-cols{display:flex;flex-direction:column;gap:16px}
+@media (min-width:900px){.goal-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}}
+.goal{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);min-width:0}
+.goal .task-main{gap:4px}
+.goal.done .task-title{color:var(--text-2);text-decoration:line-through}
+.goal.late .task-title{color:var(--alert)}
+.goal .icon-btn.sm{background:transparent}
+.goal .icon-btn.sm.on{color:var(--accent)}
+.goal .icon-btn.sm.on svg{fill:currentColor}
+.hdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.hday{display:flex;flex-direction:column;align-items:center;gap:6px}
+.hday span{font-size:11px;color:var(--text-2)}
+.hday.today span{color:var(--text);font-weight:700}
+.hday .dot{width:100%;max-width:44px;height:40px;border-radius:12px}
+.hstatus{font-size:13px;font-weight:600}
+.hstatus.done{color:var(--positive)}
+.hstatus.partial{color:#8A6D1A}
+.hstatus.none{color:var(--text-2)}
+.hhist{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;font-size:13px;padding:8px 0;border-top:1px solid var(--line)}
+.hadd,.radd{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.radd-title{flex:1 1 220px;min-width:0}
+.radd .field,.hadd .field{height:48px}
+.radd .btn-primary,.hadd .btn-primary{min-height:48px}
+.ncols{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
+@media (min-width:900px){.ncols{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ncol{display:flex;flex-direction:column;gap:16px;min-width:0}
+.note{gap:8px}
+.note-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.5}
+.note-new{height:auto;min-height:88px;padding:12px 14px;resize:vertical;line-height:1.5}
+.note-title-in{border:none;outline:none;background:none;font:inherit;font-size:16px;font-weight:600;padding:0;color:var(--text)}
+.note-text-in{border:none;outline:none;background:none;font:inherit;font-size:16px;line-height:1.5;resize:none;padding:0;color:var(--text);overflow:hidden;width:100%}
+.note.editing{box-shadow:0 0 0 2px var(--accent)}
+textarea{font-family:inherit;font-size:16px}

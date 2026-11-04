@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611040011';
-import { localDate } from './util.js?v=202611040011';
+import { safeGet } from './db.js?v=202611040935';
+import { localDate } from './util.js?v=202611040935';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap] = await Promise.all([

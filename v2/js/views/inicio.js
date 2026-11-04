@@ -1,9 +1,10 @@
 // Inicio: tareas de hoy (marcables), hábitos de la semana (marcables), finanzas y Whoop.
-import { safeGet, dbPost, dbPatch, AuthError } from '../db.js?v=202611040011';
-import * as F from '../fin.js?v=202611040011';
-import * as K from '../tareas.js?v=202611040011';
-import { openTaskModal } from './tareas.js?v=202611040011';
-import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon, showToast } from '../util.js?v=202611040011';
+import { safeGet, AuthError } from '../db.js?v=202611040935';
+import * as F from '../fin.js?v=202611040935';
+import * as K from '../tareas.js?v=202611040935';
+import { toggleHabitDay } from '../habitos.js?v=202611040935';
+import { openTaskModal } from './tareas.js?v=202611040935';
+import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon, showToast } from '../util.js?v=202611040935';
 
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 const CATEGORY = { trabajo: 'Trabajo', personal: 'Personal', fitness: 'Fitness', proyectos: 'Proyectos' };
@@ -127,26 +128,6 @@ function bind(el, data, opts) {
   });
 }
 
-// Marcar un día de un hábito (igual que toggleHabitDay de v1: habit_weeks.days + count).
-async function toggleHabitDay(data, habitId, dayIdx, again) {
-  const wk = weekKey();
-  data.weeks = data.weeks || [];
-  let row = data.weeks.find(w => String(w.habit_id) === String(habitId) && w.week_key === wk);
-  const prevDays = row && Array.isArray(row.days) ? [...row.days] : [];
-  const days = prevDays.includes(dayIdx) ? prevDays.filter(d => d !== dayIdx) : [...prevDays, dayIdx].sort((a, b) => a - b);
-  if (row) {
-    const prev = { days: row.days, count: row.count };
-    row.days = days; row.count = days.length; again();
-    if (String(row.id).startsWith('temp-')) return;
-    try { await dbPatch('habit_weeks', { days, count: days.length }, `?id=eq.${row.id}`); }
-    catch { row.days = prev.days; row.count = prev.count; again(); showToast('No se pudo actualizar el hábito', 'error'); }
-  } else {
-    row = { id: 'temp-' + Date.now(), habit_id: habitId, week_key: wk, days, count: days.length };
-    data.weeks.push(row); again();
-    try { const [c] = await dbPost('habit_weeks', { habit_id: habitId, week_key: wk, days, count: days.length }); Object.assign(row, c); }
-    catch { data.weeks = data.weeks.filter(w => w !== row); again(); showToast('No se pudo guardar el hábito', 'error'); }
-  }
-}
 
 function paint(el, data, { name = 'Alfredo' } = {}) {
   const { open, closed } = todayTasks(data.tasks);
