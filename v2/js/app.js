@@ -7,6 +7,8 @@ import * as finanzas from './views/finanzas.js';
 import * as salud from './views/salud.js';
 import * as entreno from './views/entreno.js';
 import * as rutinas from './views/rutinas.js';
+import * as tareasView from './views/tareas.js';
+import { checkRecurring } from './tareas.js';
 
 const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'notas', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.
@@ -53,6 +55,8 @@ async function renderRoute() {
       if (seq !== renderSeq) return; // el usuario ya cambió de sección
       inicio.render(main, data);
       updateTaskCount(data);
+      // Igual que v1 al abrir: genera las recurrentes de hoy + 7 días (una vez por sesión).
+      if (await checkRecurring() && seq === renderSeq) { inicio.render(main, data); updateTaskCount(data); }
     } catch (e) {
       if (seq !== renderSeq) return;
       if (e instanceof AuthError) return showLogin();
@@ -66,6 +70,14 @@ async function renderRoute() {
       if (seq !== renderSeq) return;
       if (e instanceof AuthError) return showLogin();
       main.innerHTML = `<div class="page"><div class="error-box">No se pudieron cargar las finanzas.<br><small>${escapeHTML(e.message)}</small></div></div>`;
+    }
+  } else if (route === 'tareas') {
+    skeleton();
+    try { await tareasView.show(main, parseHash().param, () => seq === renderSeq); }
+    catch (e) {
+      if (seq !== renderSeq) return;
+      if (e instanceof AuthError) return showLogin();
+      main.innerHTML = `<div class="page"><div class="error-box">No se pudieron cargar las tareas.<br><small>${escapeHTML(e.message)}</small></div></div>`;
     }
   } else if (SALUD.includes(route)) {
     skeleton();

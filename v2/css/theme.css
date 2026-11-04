@@ -373,3 +373,73 @@ input[type="date"].field{height:48px}
 .minis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .mini{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text-2);font-weight:600;min-width:0}
 .mini .field{height:44px;text-align:center;padding:0 4px}
+
+/* ── Tareas ────────────────────────────────────────── */
+.as-btn{border:none;background:none;padding:0;text-align:left;cursor:pointer;font:inherit;color:inherit}
+button.check{background:transparent;cursor:pointer;padding:0}
+.check.progress{border-color:var(--accent);background:linear-gradient(90deg,var(--accent-soft) 50%,transparent 50%)}
+.check.check-sm{width:22px;height:22px;min-height:0}
+button.dot{border:none;padding:0;cursor:pointer;width:24px;height:24px;border-radius:8px}
+button.dot:disabled{cursor:default;opacity:.55}
+.dots{gap:5px}
+.dots-labels{gap:5px}
+.dots-labels span{width:24px}
+.views{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px;-webkit-overflow-scrolling:touch}
+.views::-webkit-scrollbar{display:none}
+@media (min-width:900px){.views{flex-wrap:wrap;margin:0;padding:0;overflow:visible}}
+.vchip{flex:0 0 auto;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line-2);background:var(--card);font-size:14px;font-weight:500;color:var(--text-3);cursor:pointer;white-space:nowrap}
+.vchip[aria-pressed="true"]{background:var(--dark);border-color:var(--dark);color:#fff}
+.vchip span{font-size:12px;opacity:.75;margin-left:2px}
+.vchip span.warn{color:var(--over);opacity:1;font-weight:700}
+.vchip[aria-pressed="true"] span.warn{color:#FFB38A}
+.tfilters{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px}
+.tfilters .field{height:44px}
+.tbody{display:flex;flex-direction:column;gap:16px}
+.tgroup{display:flex;flex-direction:column;gap:8px}
+.tgroup-h{font-size:13px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;padding:0 4px;display:flex;gap:6px;align-items:center;cursor:default}
+.tgroup-h span{font-weight:500;opacity:.8}
+details.past > summary{cursor:pointer;list-style:none;min-height:44px}
+details.past > summary::-webkit-details-marker{display:none}
+details.past > summary::before{content:'▸';transition:transform .15s}
+details.past[open] > summary::before{transform:rotate(90deg)}
+.tcard{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:18px;padding:10px 8px 10px 14px;min-width:0}
+.tcard .tcard-main,.oitem .tcard-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;border:none;background:none;padding:4px 0;text-align:left;cursor:pointer;font:inherit;color:inherit;min-height:40px;justify-content:center}
+.tcard.done .task-title,.tcard.missed .task-title,.oitem.closed .task-title{color:var(--text-2);text-decoration:line-through}
+.task-meta.late{color:var(--alert)}
+.tcard .icon-btn.sm{background:transparent}
+.tcard .icon-btn.sm:hover{background:var(--bg)}
+details.quick > summary{list-style:none;cursor:pointer;min-height:32px}
+details.quick > summary::-webkit-details-marker{display:none}
+.qadd{display:flex;gap:8px}
+.qadd .field{flex:1 1 auto;min-width:0;height:44px}
+.qadd .btn-primary{width:48px;padding:0;display:flex;align-items:center;justify-content:center}
+.qadd .btn-primary svg{width:18px;height:18px}
+.qitem{display:flex;align-items:center;gap:10px;min-width:0;border-top:1px solid var(--line);padding:4px 0}
+.qtitle{flex:1 1 auto;min-width:0;font-size:15px;overflow-wrap:anywhere}
+.qitem.done .qtitle{color:var(--text-2);text-decoration:line-through}
+.olist{display:flex;flex-direction:column}
+.oitem{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);background:var(--card);min-width:0;position:relative}
+.olist .oitem:first-child{border-top:none}
+.oitem.dragging{z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.14);border-radius:12px;padding-left:6px;padding-right:6px}
+.ohandle{width:28px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--ring);cursor:grab;touch-action:none;flex-shrink:0}
+.onum{width:18px;font-size:13px;font-weight:600;color:var(--text-2);text-align:center;flex-shrink:0}
+.order-move{display:none;gap:2px}
+@media (max-width:899px){.oitem .chip{display:none}}
+@media (min-width:900px){.order-move{display:flex}}
+/* Formulario de tarea */
+.seg4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.seg4 button{min-height:44px;border-radius:12px;border:1px solid var(--line-2);background:var(--card);font-size:14px;font-weight:500;color:var(--text-3);cursor:pointer}
+.seg4 button[aria-pressed="true"].p-critical{background:var(--alert-bg);border-color:var(--alert);color:var(--alert);font-weight:700}
+.seg4 button[aria-pressed="true"].p-high{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+.seg4 button[aria-pressed="true"].p-medium,.seg4 button[aria-pressed="true"].p-low{background:var(--line);border-color:var(--text-2);color:var(--text);font-weight:700}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.row2 > div{display:flex;flex-direction:column;min-width:0}
+input[type="time"].field{height:48px}
+.toggle-row{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px;margin-top:6px;cursor:pointer}
+.toggle-row input{width:22px;height:22px;accent-color:var(--accent)}
+.days7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-top:8px}
+.days7 button{min-height:44px;border-radius:12px;border:1px solid var(--line-2);background:var(--card);font-weight:600;cursor:pointer}
+.days7 button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.toast{display:flex;align-items:center;justify-content:space-between;gap:12px;pointer-events:auto}
+.toast-btn{border:none;background:rgba(255,255,255,.16);color:#fff;font-weight:600;font-size:13px;min-height:32px;padding:0 12px;border-radius:999px;cursor:pointer}
+.modal-body > *{flex-shrink:0}

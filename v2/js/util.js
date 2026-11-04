@@ -37,14 +37,21 @@ export function greeting(d = new Date()) {
   return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
 }
 
-export function showToast(msg, type = 'info') {
+// action opcional: { label, onClick } (p. ej. "Deshacer").
+export function showToast(msg, type = 'info', action) {
   const c = document.getElementById('toasts');
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.setAttribute('role', type === 'error' ? 'alert' : 'status');
-  t.textContent = msg;
+  const span = document.createElement('span'); span.textContent = msg; t.appendChild(span);
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'toast-btn'; b.textContent = action.label;
+    b.onclick = () => { t.remove(); action.onClick(); };
+    t.appendChild(b);
+  }
   c.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
+  setTimeout(() => t.remove(), action ? 6000 : 3500);
 }
 
 // Íconos de trazo (los del mockup).

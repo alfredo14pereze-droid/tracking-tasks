@@ -31,7 +31,12 @@ existentes. Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
      Los tokens viven en `whoop_tokens` sin políticas RLS (solo la función con service role). La app
      sincroniza al abrir Salud si pasaron más de 2 h. Metas semanales combinan entrenos de v2 + entrenos de
      Whoop que no se traslapan (±15 min).
-4. Claude: sugerencias y análisis (ver plan).
+4. ✅ Tareas (`js/tareas.js` + `js/views/tareas.js`): port fiel de v1 — Hoy (grupos de v1), Orden del día
+   (Pointer Events + flechas), Mañana, Próximas, Sin completar, Todas, Pasadas y categorías; formulario con
+   día exacto / fecha límite, recordatorio, "ciertos días" (custom:) y 'monthly' viejo se conserva.
+   `checkRecurring()` corre una vez por sesión al abrir Inicio o Tareas (igual que v1; el índice único evita
+   duplicados si v1 y v2 corren a la vez). Inicio permite marcar tareas y días de hábitos.
+5. Claude: sugerencias y análisis (ver plan).
 
 ## Conectar Whoop (una vez)
 1. Corre `sql/2026-11-03-ejercicio-whoop.sql`.

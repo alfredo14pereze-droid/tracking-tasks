@@ -2,9 +2,7 @@
 import { escapeHTML, icon } from '../util.js';
 
 export const SECTIONS = {
-  tareas:     { title: 'Tareas', phase: 'Por ahora sigue en la versión actual.' },
   calendario: { title: 'Calendario', phase: 'Por ahora sigue en la versión actual.' },
-  finanzas:   { title: 'Finanzas', phase: 'Llega en la fase 2 con cuentas, presupuesto y captura desde Apple Pay.' },
   objetivos:  { title: 'Objetivos y hábitos', phase: 'Por ahora se editan en la versión actual.' },
   notas:      { title: 'Notas', phase: 'Por ahora siguen en la versión actual.' }
 };

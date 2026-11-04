@@ -1,8 +1,9 @@
-// Inicio: tareas de hoy y hábitos de la semana (solo lectura) + resumen de finanzas.
-// Whoop se muestra como "pendiente" hasta la fase 4.
-import { dbGet, safeGet, AuthError } from '../db.js';
+// Inicio: tareas de hoy (marcables), hábitos de la semana (marcables), finanzas y Whoop.
+import { safeGet, dbPost, dbPatch, AuthError } from '../db.js';
 import * as F from '../fin.js';
-import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon } from '../util.js';
+import * as K from '../tareas.js';
+import { openTaskModal } from './tareas.js';
+import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon, showToast } from '../util.js';
 
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 const CATEGORY = { trabajo: 'Trabajo', personal: 'Personal', fitness: 'Fitness', proyectos: 'Proyectos' };
@@ -10,17 +11,15 @@ const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
 // ── Datos ─────────────────────────────────────────────
 export async function load() {
-  // Abiertas + las que se cerraron hoy (para el "5/8 hechas").
-  const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
-  const since = new Date(startOfDay.getTime() - 86400000).toISOString(); // margen de un día por zona horaria
-  const [tasks, habits, weeks, fin, whoop] = await Promise.all([
-    dbGet('tasks', `?select=*&or=(status.in.(todo,in_progress),completed_at.gte.${encodeURIComponent(since)})&order=position.asc,created_at.desc`),
+  // Todas las tareas (igual que v1): hace falta para las recurrentes y para marcarlas aquí.
+  const [, habits, weeks, fin, whoop] = await Promise.all([
+    K.loadTasks(),
     safeGet('habits', '?order=created_at.asc'),
     safeGet('habit_weeks', `?week_key=eq.${weekKey()}`),
     F.loadFinance().catch(e => { if (e instanceof AuthError) throw e; return null; }),
     safeGet('whoop_daily', '?order=day.desc&limit=3')
   ]);
-  return { tasks: tasks || [], habits, weeks, fin: fin && !fin.errors.length ? fin : null, whoop: whoop || [] };
+  return { tasks: K.T.tasks, habits, weeks, fin: fin && !fin.errors.length ? fin : null, whoop: whoop || [] };
 }
 
 // ── Reglas de v1 (isTodayTask, rangos, effPriority) ──
@@ -89,29 +88,67 @@ function taskRow(t) {
     meta.push(n < 0 ? `vencida hace ${-n} d` : n === 0 ? 'vence hoy' : `faltan ${n} d`);
   }
   return `<div class="task${st ? ' closed' : ''}">
-    <span class="check ${st}" role="img" aria-label="${stLabel}">${st === 'done' ? icon('check', 3) : st === 'missed' ? icon('x', 3) : ''}</span>
-    <div class="task-main">
-      <div class="task-title">${escapeHTML(t.title)}</div>
-      ${meta.length ? `<div class="task-meta">${escapeHTML(meta.join(' · '))}</div>` : ''}
-    </div>
+    <button type="button" class="check ${st}" data-tcheck="${escapeHTML(t.id)}" aria-label="${stLabel}: ${escapeHTML(t.title)}${isClosed(t) ? ' (tocar para reabrir)' : ''}">${st === 'done' ? icon('check', 3) : st === 'missed' ? icon('x', 3) : ''}</button>
+    <button type="button" class="task-main as-btn" data-tedit="${escapeHTML(t.id)}">
+      <span class="task-title">${escapeHTML(t.title)}</span>
+      ${meta.length ? `<span class="task-meta">${escapeHTML(meta.join(' · '))}</span>` : ''}
+    </button>
     ${badge(t)}
   </div>`;
 }
 
 function habitRow(h) {
   const ti = todayIdx();
+  const NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
   const dots = DAY_LABELS.map((l, i) =>
-    `<span class="dot${h.days.includes(i) ? ' on' : ''}${i === ti ? ' today' : ''}"></span>`).join('');
+    `<button type="button" class="dot${h.days.includes(i) ? ' on' : ''}${i === ti ? ' today' : ''}" data-hday="${escapeHTML(h.id)}:${i}"${i > ti ? ' disabled' : ''} aria-pressed="${h.days.includes(i)}" aria-label="${escapeHTML(h.title)} el ${NAMES[i]}"></button>`).join('');
   const done = h.count >= h.target;
   return `<div class="habit" role="group" aria-label="${escapeHTML(h.title)}: ${h.count} de ${h.target} esta semana">
     <div class="habit-name">${escapeHTML(h.title)}<small>${h.count}/${h.target}${done ? ' · meta cumplida' : ''}</small></div>
-    <div class="dots" aria-hidden="true">${dots}</div>
+    <div class="dots">${dots}</div>
   </div>`;
 }
 
 const MAX_ROWS = 8;
 
-export function render(el, data, { name = 'Alfredo' } = {}) {
+export function render(el, data, opts = {}) {
+  paint(el, data, opts);
+  bind(el, data, opts);
+}
+
+function bind(el, data, opts) {
+  const again = () => { if (document.body.contains(el)) render(el, data, opts); };
+  el.querySelector('[data-newtask]').onclick = () => openTaskModal(null, again);
+  el.querySelectorAll('[data-tcheck]').forEach(b => b.onclick = () => K.toggleTask(b.dataset.tcheck, again));
+  el.querySelectorAll('[data-tedit]').forEach(b => b.onclick = () => openTaskModal(b.dataset.tedit, again));
+  el.querySelectorAll('[data-hday]').forEach(b => b.onclick = () => {
+    const [hid, day] = b.dataset.hday.split(':');
+    toggleHabitDay(data, hid, Number(day), again);
+  });
+}
+
+// Marcar un día de un hábito (igual que toggleHabitDay de v1: habit_weeks.days + count).
+async function toggleHabitDay(data, habitId, dayIdx, again) {
+  const wk = weekKey();
+  data.weeks = data.weeks || [];
+  let row = data.weeks.find(w => String(w.habit_id) === String(habitId) && w.week_key === wk);
+  const prevDays = row && Array.isArray(row.days) ? [...row.days] : [];
+  const days = prevDays.includes(dayIdx) ? prevDays.filter(d => d !== dayIdx) : [...prevDays, dayIdx].sort((a, b) => a - b);
+  if (row) {
+    const prev = { days: row.days, count: row.count };
+    row.days = days; row.count = days.length; again();
+    if (String(row.id).startsWith('temp-')) return;
+    try { await dbPatch('habit_weeks', { days, count: days.length }, `?id=eq.${row.id}`); }
+    catch { row.days = prev.days; row.count = prev.count; again(); showToast('No se pudo actualizar el hábito', 'error'); }
+  } else {
+    row = { id: 'temp-' + Date.now(), habit_id: habitId, week_key: wk, days, count: days.length };
+    data.weeks.push(row); again();
+    try { const [c] = await dbPost('habit_weeks', { habit_id: habitId, week_key: wk, days, count: days.length }); Object.assign(row, c); }
+    catch { data.weeks = data.weeks.filter(w => w !== row); again(); showToast('No se pudo guardar el hábito', 'error'); }
+  }
+}
+
+function paint(el, data, { name = 'Alfredo' } = {}) {
   const { open, closed } = todayTasks(data.tasks);
   const total = open.length + closed.length;
   const doneN = closed.length;
@@ -177,7 +214,7 @@ export function render(el, data, { name = 'Alfredo' } = {}) {
         <div class="eyebrow">${escapeHTML(longDate())}</div>
         <h1 class="hello">${greeting()}, <em>${escapeHTML(name)}</em></h1>
       </div>
-      <a class="btn-dark round" href="../" aria-label="Nueva tarea (en la versión actual)" title="Por ahora las tareas se crean en la versión actual">${icon('plus', 2.4)}<span class="lbl">Nueva tarea</span></a>
+      <button type="button" class="btn-dark round" data-newtask aria-label="Nueva tarea">${icon('plus', 2.4)}<span class="lbl">Nueva tarea</span></button>
     </header>
 
     <div class="mob-only">
