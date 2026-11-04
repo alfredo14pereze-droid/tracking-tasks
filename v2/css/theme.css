@@ -1,0 +1,242 @@
+/* TaskTracker v2 — tema claro (tokens del mockup aprobado) */
+:root{
+  --bg:#F4F2EC;
+  --side:#EDEAE2;
+  --card:#FFFFFF;
+  --text:#17181A;
+  --text-2:#5E6066;
+  --text-3:#4A4C52;
+  --line:#EEECE6;
+  --line-2:#E6E3DB;
+  --ring:#C9C6BD;
+  --accent:#1F4D3A;
+  --accent-hover:#163828;
+  --accent-soft:#DCE8DF;
+  --on-accent-2:#CFE0D5;
+  --on-accent-3:#9FBFAD;
+  --positive:#2E6B4F;
+  --alert:#9A3412;
+  --alert-bg:#FCE9DD;
+  --over:#C2410C;
+  --dark:#17181A;
+  --on-dark-2:#B9BBC0;
+  --r-card:24px;
+  --r-card-sm:20px;
+  --font:'Inter Tight', system-ui, -apple-system, sans-serif;
+  --serif:'Instrument Serif', Georgia, serif;
+  --nav-h:64px;
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;overflow-x:hidden}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font);
+  font-size:15px;
+  line-height:1.4;
+  -webkit-font-smoothing:antialiased;
+  -webkit-tap-highlight-color:transparent;
+}
+a{color:var(--accent)}
+a:hover{color:var(--accent-hover)}
+button{font-family:inherit;color:inherit}
+input{font-family:inherit;font-size:16px} /* ≥16px: iOS no hace zoom */
+h1,h2{margin:0}
+[hidden]{display:none !important}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ── Shell ─────────────────────────────────────────── */
+.shell{min-height:100dvh}
+.side{display:none}
+.main{
+  min-width:0;
+  padding:calc(env(safe-area-inset-top) + 28px) 16px calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px);
+  max-width:640px;
+  margin:0 auto;
+}
+
+/* Navegación inferior (móvil) */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  display:flex;justify-content:space-around;
+  padding:8px 8px calc(env(safe-area-inset-bottom) + 8px);
+  background:rgba(255,255,255,.92);
+  -webkit-backdrop-filter:saturate(1.4) blur(14px);
+  backdrop-filter:saturate(1.4) blur(14px);
+  border-top:1px solid var(--line-2);
+}
+.tab{
+  flex:1 1 0;min-width:0;min-height:48px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  text-decoration:none;color:var(--text-2);font-size:11px;font-weight:500;
+}
+.tab svg{width:22px;height:22px}
+.tab[aria-current="page"]{color:var(--text);font-weight:600}
+
+/* Navegación lateral (escritorio) */
+@media (min-width:900px){
+  .shell{display:grid;grid-template-columns:240px minmax(0,1fr)}
+  .tabbar{display:none}
+  .side{
+    display:flex;flex-direction:column;gap:4px;
+    position:sticky;top:0;height:100dvh;overflow-y:auto;
+    background:var(--side);padding:28px 16px;
+  }
+  .main{max-width:1180px;width:100%;padding:32px clamp(16px,3vw,40px) 40px}
+}
+.brand{display:flex;align-items:center;gap:10px;padding:0 10px 24px;font-size:16px;font-weight:600}
+.brand-mark{
+  width:32px;height:32px;border-radius:10px;background:var(--accent);color:#fff;
+  font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;
+}
+.side-link{
+  display:flex;align-items:center;gap:10px;min-height:44px;padding:10px 12px;border-radius:12px;
+  color:var(--text-3);text-decoration:none;font-size:14px;font-weight:500;
+}
+.side-link svg{width:18px;height:18px;flex-shrink:0}
+.side-link:hover{background:rgba(255,255,255,.55);color:var(--text)}
+.side-link[aria-current="page"]{background:var(--card);color:var(--text);font-weight:600}
+.side-count{margin-left:auto;font-size:12px;color:var(--text-2)}
+.side-foot{margin-top:auto;padding-top:16px;display:flex;flex-direction:column;gap:4px}
+.side-foot button.side-link{border:none;background:none;width:100%;cursor:pointer;text-align:left}
+
+/* ── Piezas comunes ────────────────────────────────── */
+.page{display:flex;flex-direction:column;gap:18px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.head > div{min-width:0}
+.eyebrow{font-size:13px;color:var(--text-2);font-weight:500}
+.hello{font-size:30px;font-weight:600;letter-spacing:-.02em;line-height:1.1;margin-top:4px}
+.hello em{font-family:var(--serif);font-style:italic;font-weight:400;font-size:1.13em}
+.btn-dark{
+  min-height:44px;min-width:44px;padding:0 18px;border:none;border-radius:22px;
+  background:var(--dark);color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;flex-shrink:0;
+}
+.btn-dark:hover{color:#fff;background:#2a2b2e}
+.btn-dark svg{width:18px;height:18px}
+.btn-dark .lbl{display:none}
+.btn-dark.round{padding:0;width:44px}
+@media (min-width:900px){
+  .hello{font-size:34px}
+  .btn-dark .lbl{display:inline}
+  .btn-dark.round{padding:0 18px;width:auto}
+  .head{align-items:flex-end}
+}
+
+.card{background:var(--card);border-radius:var(--r-card);padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card-sm{border-radius:var(--r-card-sm);padding:16px;gap:10px}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card-head h2{font-size:16px;font-weight:600}
+.card-head a,.card-head .muted{font-size:13px;font-weight:500;text-decoration:none}
+.muted{color:var(--text-2)}
+.label{font-size:13px;color:var(--text-2);font-weight:500}
+.big{font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.small{font-size:12px;color:var(--text-2)}
+.chip{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;white-space:nowrap;flex-shrink:0}
+.chip-alert{color:var(--alert);background:var(--alert-bg)}
+.chip-soft{color:var(--accent);background:var(--accent-soft)}
+.chip-plain{color:var(--text-2);background:var(--line)}
+
+/* Tarjeta "Tu día" */
+.hero{background:var(--accent);color:#fff;border-radius:var(--r-card);padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.hero .label{color:var(--on-accent-2)}
+.hero-pill{font-size:12px;background:rgba(255,255,255,.14);padding:4px 10px;border-radius:999px;white-space:nowrap}
+.hero-num{font-size:52px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.hero-num span{color:var(--on-accent-3)}
+.hero-sub{font-size:14px;color:var(--on-accent-2)}
+.bar{height:6px;background:rgba(255,255,255,.18);border-radius:3px;overflow:hidden}
+.bar > div{height:100%;background:#fff;border-radius:3px;transition:width .4s ease}
+
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.cols{display:flex;flex-direction:column;gap:18px}
+.col-side{display:flex;flex-direction:column;gap:18px;min-width:0}
+.mob-only{display:contents}
+.desk-only{display:none}
+@media (min-width:900px){
+  .mob-only{display:none}
+  .desk-only{display:flex}
+  .kpis.desk-only{display:grid}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+  .kpis .hero-num{font-size:40px}
+  .cols{flex-direction:row;flex-wrap:wrap;gap:16px;align-items:flex-start}
+  .cols > .card{flex:3 1 380px}
+  .col-side{flex:2 1 280px;gap:16px}
+  .card{padding:20px}
+}
+
+.pending-val{color:var(--ring)}
+
+/* Lista de tareas */
+.tasks{display:flex;flex-direction:column}
+.task{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);min-width:0}
+.task-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.task-title{font-size:15px;overflow-wrap:anywhere}
+.task.closed .task-title{color:var(--text-2);text-decoration:line-through}
+.task-meta{font-size:12px;color:var(--text-2)}
+.check{
+  width:24px;height:24px;border-radius:12px;flex-shrink:0;
+  border:2px solid var(--ring);display:flex;align-items:center;justify-content:center;color:#fff;
+}
+.check svg{width:14px;height:14px}
+.check.done{background:var(--accent);border-color:var(--accent)}
+.check.missed{background:var(--line-2);border-color:var(--line-2);color:var(--text-2)}
+.task-time{font-size:12px;color:var(--text-2);flex-shrink:0}
+.empty{padding:14px 0 4px;color:var(--text-2);font-size:14px;border-top:1px solid var(--line)}
+
+/* Hábitos */
+.habits{display:flex;flex-direction:column;gap:12px}
+.habit{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.habit-name{font-size:14px;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.habit-name small{display:block;font-size:12px;color:var(--text-2)}
+.dots{display:flex;gap:6px;flex-shrink:0}
+.dot{width:18px;height:18px;border-radius:6px;background:var(--line-2)}
+.dot.on{background:var(--accent)}
+.dot.today{box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--ring)}
+.dots-labels{display:flex;gap:6px;justify-content:flex-end}
+.dots-labels span{width:18px;text-align:center;font-size:10px;color:var(--text-2)}
+
+/* Sección pendiente */
+.soon{background:var(--card);border-radius:var(--r-card);padding:28px 20px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.soon h1{font-size:26px;font-weight:600;letter-spacing:-.02em}
+.soon p{margin:0;color:var(--text-2);max-width:46ch}
+.more-list{display:flex;flex-direction:column}
+.more-list a,.more-list button{
+  display:flex;align-items:center;gap:12px;min-height:52px;padding:0 4px;border:none;border-top:1px solid var(--line);
+  background:none;font-size:15px;color:var(--text);text-decoration:none;cursor:pointer;width:100%;text-align:left;
+}
+.more-list a:first-child{border-top:none}
+.more-list svg{width:20px;height:20px;color:var(--text-2)}
+
+/* Login */
+.login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.login-card{width:100%;max-width:380px;background:var(--card);border-radius:var(--r-card);padding:28px 22px;display:flex;flex-direction:column;gap:12px}
+.login-card h1{font-size:26px;font-weight:600;letter-spacing:-.02em}
+.login-card p{margin:0;color:var(--text-2);font-size:14px}
+.field{
+  width:100%;height:48px;padding:0 14px;border-radius:14px;border:1px solid var(--line-2);
+  background:var(--bg);color:var(--text);outline:none;
+}
+.field:focus{border-color:var(--accent);background:#fff}
+.btn-primary{min-height:48px;border:none;border-radius:14px;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.btn-primary:disabled{opacity:.6}
+.btn-ghost{min-height:44px;border:1px solid var(--line-2);border-radius:14px;background:none;font-size:14px;font-weight:500;cursor:pointer}
+.btn-link{min-height:44px;border:none;background:none;color:var(--accent);font-size:14px;cursor:pointer}
+.login-msg{font-size:13px;color:var(--text-2);min-height:18px}
+.login-msg.error{color:var(--alert)}
+
+/* Carga y error */
+.skeleton{background:linear-gradient(90deg,var(--line) 0,#f7f5f0 50%,var(--line) 100%);background-size:200% 100%;animation:sk 1.2s linear infinite;border-radius:var(--r-card)}
+@keyframes sk{to{background-position:-200% 0}}
+.error-box{background:var(--alert-bg);color:var(--alert);border-radius:var(--r-card-sm);padding:14px 16px;font-size:14px}
+
+/* Toast */
+.toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);z-index:50;display:flex;flex-direction:column;gap:8px;width:min(92vw,420px);pointer-events:none}
+@media (min-width:900px){.toasts{bottom:24px}}
+.toast{background:var(--dark);color:#fff;border-radius:14px;padding:12px 16px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:tin .2s ease}
+.toast.error{background:var(--over)}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}}
+
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
