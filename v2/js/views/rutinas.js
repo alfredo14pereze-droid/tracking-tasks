@@ -1,8 +1,8 @@
 // Rutinas: lista (#rutinas) y editor de una rutina (#rutina/<id>).
 // Cada lugar de la rutina tiene series/reps/descanso y varias opciones de ejercicio.
-import { dbPost, dbPatch, dbDelete } from '../db.js?v=202611040937';
-import { escapeHTML, showToast, icon, openModal, closeModal } from '../util.js?v=202611040937';
-import * as S from '../salud.js?v=202611040937';
+import { dbPost, dbPatch, dbDelete } from '../db.js?v=202611040938';
+import { escapeHTML, showToast, icon, openModal, closeModal } from '../util.js?v=202611040938';
+import * as S from '../salud.js?v=202611040938';
 
 let st = null;
 let root = null;

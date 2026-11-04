@@ -548,3 +548,9 @@ textarea{font-family:inherit;font-size:16px}
 .cal-wtasks{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center}
 .cal-legend{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
 .cal-legend span{display:inline-flex;align-items:center;gap:5px}
+
+/* ── Estadísticas ──────────────────────────────────── */
+.heat{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.heat i,.hk{display:block;aspect-ratio:1;border-radius:4px}
+.hk{width:12px;height:12px}
+.h0{background:var(--line)}.h1{background:#B9D3C2}.h2{background:#7FA892}.h3{background:var(--accent)}
