@@ -1,10 +1,10 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611041059';
-import { localDate } from './util.js?v=202611041059';
+import { safeGet } from './db.js?v=202611041203';
+import { localDate } from './util.js?v=202611041203';
 
 export async function loadFinance() {
-  const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts] = await Promise.all([
+  const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions] = await Promise.all([
     safeGet('accounts', '?order=sort_order.asc,name.asc'),
     safeGet('categories', '?order=name.asc'),
     safeGet('transactions', '?order=occurred_on.desc,created_at.desc'),
@@ -16,7 +16,9 @@ export async function loadFinance() {
     safeGet('wallet_captures', '?order=received_at.desc&limit=200'),   // tabla nueva (v2/sql)
     safeGet('capture_tokens', '?revoked=eq.false&order=created_at.desc'),
     safeGet('capture_card_accounts', ''),                              // tabla nueva (captura-tarjetas.sql)
-    safeGet('capture_attempts', '?order=at.desc&limit=8')              // bitácora del Atajo (captura-bitacora.sql)
+    safeGet('capture_attempts', '?order=at.desc&limit=8'),             // bitácora del Atajo (captura-bitacora.sql)
+    safeGet('income_sources', '?active=eq.true&order=created_at.asc'),
+    safeGet('assumptions', '')
   ]);
   const errors = Object.entries({ accounts, categories, transactions: tx, budgets })
     .filter(([, v]) => v === null).map(([k]) => k);
@@ -26,6 +28,7 @@ export async function loadFinance() {
     captures, tokens, // null = la migración de captura aún no se corrió
     cardMap,          // null = falta 2026-11-03-captura-tarjetas.sql
     attempts,         // null = falta 2026-11-04-captura-bitacora.sql
+    incomes: incomes || [], assumptions: assumptions || [],
     errors
   };
 }
@@ -84,6 +87,18 @@ export function accBalance(f, id) {
   const a = f.accounts.find(x => x.id === id);
   let b = Number(a && a.opening_balance_cents) || 0;
   for (const t of f.tx) {
+    const amt = Number(t.amount_cents) || 0;
+    if (t.account_id === id) b += t.type === 'income' ? amt : -amt;
+    if (t.type === 'transfer' && t.to_account_id === id) b += amt;
+  }
+  return b;
+}
+// Saldo al cierre de un día (YYYY-MM-DD). skip = movimiento que no se cuenta.
+export function balanceOn(f, id, day, skip = null) {
+  const a = f.accounts.find(x => x.id === id);
+  let b = Number(a && a.opening_balance_cents) || 0;
+  for (const t of f.tx) {
+    if (t === skip || t.occurred_on > day) continue;
     const amt = Number(t.amount_cents) || 0;
     if (t.account_id === id) b += t.type === 'income' ? amt : -amt;
     if (t.type === 'transfer' && t.to_account_id === id) b += amt;
@@ -209,13 +224,102 @@ export function nextPayDate(day) {
   }
   return null;
 }
-// Próximo pago de tarjeta: la de crédito con deuda y fecha de pago más cercana.
+// Día "day" del mes (y, m), ajustado a meses cortos.
+const dayIn = (y, m, day) => new Date(y, m, Math.min(day, new Date(y, m + 1, 0).getDate()));
+// Último corte: el día de corte más reciente que ya pasó (hoy cuenta como corte).
+export function lastCutDate(cutDay, today = new Date()) {
+  const t = new Date(today); t.setHours(0, 0, 0, 0);
+  let d = dayIn(t.getFullYear(), t.getMonth(), cutDay);
+  if (d > t) d = dayIn(t.getFullYear(), t.getMonth() - 1, cutDay);
+  return d;
+}
+// Fecha límite de pago de ese corte: el primer día de pago después del corte.
+export function dueDateAfter(cut, payDay) {
+  let d = dayIn(cut.getFullYear(), cut.getMonth(), payDay);
+  if (d <= cut) d = dayIn(cut.getFullYear(), cut.getMonth() + 1, payDay);
+  return d;
+}
+// Estado de una tarjeta de crédito:
+//   debt      = deuda total hoy (incluye compras después del corte)
+//   statement = pago para no generar intereses de este corte (lo que dijo el banco, o lo calculado al corte)
+//   paid      = pagos hechos después del corte · toPay = lo que falta para la fecha límite
+export function cardStatus(f, a) {
+  const c = f.cards.find(x => x.account_id === a.id);
+  if (!c) return null;
+  const cut = lastCutDate(c.cut_day), cutStr = localDate(cut);
+  const due = dueDateAfter(cut, c.pay_day);
+  const fromBank = c.statement_cut_on === cutStr && c.statement_due_cents !== null && c.statement_due_cents !== undefined;
+  const statement = fromBank ? Number(c.statement_due_cents) : Math.max(0, -balanceOn(f, a.id, cutStr));
+  let paid = 0;
+  for (const t of f.tx) {
+    if (t.occurred_on <= cutStr) continue;
+    const amt = Number(t.amount_cents) || 0;
+    if (t.type === 'transfer' && t.to_account_id === a.id) paid += amt;
+    else if (t.type === 'income' && t.account_id === a.id) paid += amt;
+  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return {
+    card: c, cut, cutStr, due, fromBank, statement, paid,
+    toPay: Math.max(0, statement - paid), debt: Math.max(0, -accBalance(f, a.id)),
+    overdue: today > due && statement - paid > 0,
+    nextCut: dayIn(cut.getFullYear(), cut.getMonth() + 1, c.cut_day)
+  };
+}
+// Próximo pago de tarjeta: la de crédito con pago pendiente y fecha límite más cercana.
 export function nextCardPayment(f) {
   return bankAccounts(f).filter(a => a.kind === 'credit').map(a => {
-    const c = f.cards.find(x => x.account_id === a.id);
-    const debt = -accBalance(f, a.id);
-    return c && debt > 0 ? { account: a, date: nextPayDate(c.pay_day), debt } : null;
-  }).filter(x => x && x.date).sort((a, b) => a.date - b.date)[0] || null;
+    const s = cardStatus(f, a);
+    return s && s.toPay > 0 ? { account: a, date: s.due, debt: s.toPay, total: s.debt } : null;
+  }).filter(Boolean).sort((a, b) => a.date - b.date)[0] || null;
+}
+
+// ── Ingresos esperados (mismas reglas que "Este mes") ─
+// Desde cuándo se piden: el 1 del mes o la fecha de tus saldos reales (assumptions.start_date), lo que sea después.
+export function startDate(f) {
+  const a = f.assumptions.find(x => x.key === 'start_date');
+  if (!a || a.value === null || a.value === undefined) return null;
+  const s = String(Math.round(Number(a.value)));
+  return new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)));
+}
+function countFrom(f) {
+  const first = new Date(); first.setHours(0, 0, 0, 0); first.setDate(1);
+  const st = startDate(f);
+  return st && st > first ? st : first;
+}
+// Pagos de una fuente con fecha en [from, until). null = no sé qué día llega.
+function paydaysFrom(src, from, until) {
+  const a = Number(src.amount_cents) || 0;
+  if (src.frequency === 'semanal') {
+    if (src.pay_weekday === null || src.pay_weekday === undefined || src.pay_weekday === '') return null;
+    let n = 0; const d = new Date(from);
+    while (d < until) { if (d.getDay() === Number(src.pay_weekday)) n++; d.setDate(d.getDate() + 1); }
+    return n * a;
+  }
+  if ((src.frequency === 'mensual' || src.frequency === 'quincenal') && src.pay_day) {
+    const y = from.getFullYear(), m = from.getMonth(), len = new Date(y, m + 1, 0).getDate();
+    const days = src.frequency === 'mensual' ? [src.pay_day] : [src.pay_day, src.pay_day + 15];
+    return days.filter(dd => dd <= len).map(dd => new Date(y, m, dd)).filter(dt => dt >= from && dt < until).length * a;
+  }
+  return null;
+}
+function expectedThisMonth(f, src) {
+  const from = countFrom(f), end = new Date(from.getFullYear(), from.getMonth() + 1, 1);
+  const n = paydaysFrom(src, from, end);
+  if (n !== null) return n;
+  const st = startDate(f), first = new Date(from.getFullYear(), from.getMonth(), 1);
+  if (st && st > first && src.frequency !== 'semanal') return 0; // ya estaba en tus saldos
+  const a = Number(src.amount_cents) || 0;
+  return src.frequency === 'semanal' ? a * 4 : src.frequency === 'quincenal' ? a * 2 : a;
+}
+// Recibido = ingresos de esa categoría registrados desde countFrom (lo de antes ya estaba en el saldo).
+export function expectedIncomes(f) {
+  const from = localDate(countFrom(f)), to = monthStartStr(1);
+  return f.incomes.filter(x => x.category_id).map(src => {
+    const received = f.tx.filter(t => t.type === 'income' && t.category_id === src.category_id && t.occurred_on >= from && t.occurred_on < to)
+      .reduce((s, t) => s + (Number(t.amount_cents) || 0), 0);
+    const expected = expectedThisMonth(f, src);
+    return { src, expected, received, left: Math.max(0, expected - received) };
+  }).filter(x => x.expected > 0);
 }
 
 // ── Capturas de Apple Pay ────────────────────────────

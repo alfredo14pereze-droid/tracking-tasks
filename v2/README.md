@@ -78,3 +78,16 @@ Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
 5. En v2 › Salud › Actividad › **Conectar Whoop**.
 
 Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
+
+### Finanzas con datos reales (4-nov-2026) · `sql/2026-11-04-finanzas-reales.sql`
+- **Saldos reales** (Resumen › Cuentas): escribes el saldo de hoy de cada banco; ajusta `opening_balance_cents`
+  y guarda `assumptions.start_date` = hoy, así los ingresos de antes ya no se piden (evita sumarlos dos veces).
+- **Rendimientos** (`js/rendimientos.js`): `accounts.annual_rate_pct` + `yield_since`. Un ingreso por cuenta y mes
+  (`transactions.auto_key = yield:<cuenta>:<AAAA-MM>`), interés diario hasta ayer. Si el monto ≠ `auto_amount_cents`,
+  lo corregiste a mano y no se vuelve a tocar.
+- **Tarjeta** (`F.cardStatus`): deuda total vs. pago para no generar intereses = deuda al último corte (o
+  `card_settings.statement_due_cents` si es de ese corte) − pagos después del corte. "Pago del mes" registra el pago
+  como transferencia.
+- **Ingresos por recibir** en Resumen (`F.expectedIncomes`, mismas reglas que "Este mes"), con aviso si ya registraste
+  uno de esa categoría en los últimos 5 días.
+

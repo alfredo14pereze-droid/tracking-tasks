@@ -1,11 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041059';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041059';
-import { FIN_TABS } from '../finclasica.js?v=202611041059';
-import { openStatement } from './estado.js?v=202611041059';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041059';
-import * as F from '../fin.js?v=202611041059';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041203';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041203';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041203';
+import { FIN_TABS } from '../finclasica.js?v=202611041203';
+import { openStatement } from './estado.js?v=202611041203';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041203';
+import * as F from '../fin.js?v=202611041203';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -28,6 +29,8 @@ export async function show(el, isCurrent = () => true) {
   state.showAll = false;
   state.f = f;
   paint();
+  // Rendimientos del mes: se calculan después de pintar para no hacer esperar la pantalla.
+  if (await syncYields(f) && isCurrent()) paint();
 }
 
 // ── Piezas ───────────────────────────────────────────
@@ -36,22 +39,49 @@ function brandColor(a) {
   return (BRAND.find(([re]) => re.test(s)) || [null, '#5E6066'])[1];
 }
 
+const fmtDay = d => d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }).replace('.', '');
+const hasNewCols = f => f.accounts.some(a => 'annual_rate_pct' in a);
+
 function accountSub(f, a) {
   if (a.kind === 'credit') {
-    const c = f.cards.find(x => x.account_id === a.id);
-    return c ? `Crédito · pagar el ${c.pay_day}` : 'Crédito';
+    const s = F.cardStatus(f, a);
+    if (!s) return 'Crédito';
+    if (s.toPay > 0) return `${s.overdue ? 'Vencido: ' : ''}Pagar ${F.fmtMoney0(s.toPay)} antes del ${fmtDay(s.due)}`;
+    return `Pago del mes cubierto ✓ · corte ${fmtDay(s.nextCut)}`;
   }
   if (F.accPositions(f, a.id).length) return 'Fondos · valor del último corte';
+  const rate = Number(a.annual_rate_pct);
+  if (rate > 0) {
+    const y = f.tx.find(t => t.auto_key === `yield:${a.id}:${localDate().slice(0, 7)}`);
+    return `${ACC_KIND[a.kind] || a.kind} · ${rate}% anual${y ? ` · +${F.fmtMoney(y.amount_cents)} este mes` : ''}`;
+  }
   return ACC_KIND[a.kind] || a.kind;
 }
 
 function accountCard(f, a) {
   const v = F.accountValue(f, a.id);
+  const credit = a.kind === 'credit';
   return `<div class="card card-sm acc">
     <div class="acc-head"><span class="acc-mark" style="background:${brandColor(a)}" aria-hidden="true">${escapeHTML(a.name.charAt(0).toUpperCase())}</span><span class="acc-name">${escapeHTML(a.name)}</span></div>
     <div class="acc-val${v < 0 ? ' neg' : ''}">${F.fmtSigned(v)}</div>
-    <div class="small">${escapeHTML(accountSub(f, a))}</div>
+    ${credit ? '<div class="small" style="margin-top:-6px">Deuda total</div>' : ''}
+    <div class="small"${credit && F.cardStatus(f, a)?.overdue ? ' style="color:var(--alert)"' : ''}>${escapeHTML(accountSub(f, a))}</div>
+    ${credit ? `<button type="button" class="btn-ghost sm" style="align-self:flex-start" data-card-month="${escapeHTML(a.id)}">Pago del mes</button>` : ''}
   </div>`;
+}
+
+function incomesCard(f) {
+  const list = F.expectedIncomes(f).filter(x => x.left > 0);
+  if (!list.length) return '';
+  return `<section class="card" aria-labelledby="incT" style="gap:4px">
+    <div class="card-head" style="padding-bottom:8px"><h2 id="incT">Ingresos por recibir</h2><span class="small">${escapeHTML(F.monthName(0))}</span></div>
+    ${list.map(x => `<div class="tx">
+      <span class="tx-ic in" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg></span>
+      <div class="tx-main"><div class="tx-title">${escapeHTML(x.src.name)}</div>
+        <div class="task-meta">${x.received ? `Recibido ${F.fmtMoney0(x.received)} · faltan ${F.fmtMoney0(x.left)}` : `Esperado ${F.fmtMoney0(x.expected)}`}</div></div>
+      <button type="button" class="btn-primary sm" data-inc="${escapeHTML(x.src.id)}">Ya lo recibí</button>
+    </div>`).join('')}
+  </section>`;
 }
 
 function budgetRow(r) {
@@ -223,8 +253,11 @@ function paint() {
           ${review.slice(0, 10).map(c => reviewRow(f, c)).join('')}
         </section>` : ''}
 
+        ${incomesCard(f)}
+
         <section aria-labelledby="accT" style="display:flex;flex-direction:column;gap:10px">
-          <h2 id="accT" style="font-size:16px;font-weight:600">Cuentas</h2>
+          <div class="card-head"><h2 id="accT" style="font-size:16px;font-weight:600">Cuentas</h2>
+            <div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="btn-link" data-rates>Rendimientos</button><button type="button" class="btn-link" data-real>Saldos reales</button></div></div>
           <div class="grid-2">${accounts.length ? accounts.map(a => accountCard(f, a)).join('') : '<div class="small">Sin cuentas.</div>'}</div>
         </section>
 
@@ -265,6 +298,10 @@ function bind() {
   });
   rootEl.querySelector('[data-toggle-all]').onclick = () => { state.showAll = !state.showAll; paint(); };
   rootEl.querySelector('[data-add]').onclick = openExpense;
+  rootEl.querySelector('[data-real]')?.addEventListener('click', openRealBalances);
+  rootEl.querySelector('[data-rates]')?.addEventListener('click', openRates);
+  rootEl.querySelectorAll('[data-card-month]').forEach(b => b.onclick = () => openCardMonth(b.dataset.cardMonth));
+  rootEl.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => openIncome(b.dataset.inc));
   rootEl.querySelector('[data-connect]')?.addEventListener('click', connectShortcut);
   rootEl.querySelector('[data-revoke]')?.addEventListener('click', revokeShortcut);
   rootEl.querySelector('[data-statement]')?.addEventListener('click', () => openStatement(state.f, paint));
@@ -325,6 +362,7 @@ function openExpense() {
     <label class="flabel" for="gNote">Nota (opcional)</label>
     <input class="field" id="gNote" maxlength="120" autocomplete="off" placeholder="Oxxo, café…">
   `, `<button type="button" class="btn-primary" id="gSave">Guardar gasto</button>`);
+  try { const last = localStorage.getItem('v2LastAcc'); if (last && accs.some(a => a.id === last)) document.getElementById('gAcc').value = last; } catch { /* sin storage */ }
   setTimeout(() => document.getElementById('gAmt').focus(), 50);
   document.getElementById('gSave').onclick = saveExpense;
 }
@@ -334,6 +372,7 @@ async function saveExpense() {
   const date = document.getElementById('gDate').value;
   if (!amount) return showToast('Escribe un monto válido', 'error');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return showToast('Elige la fecha', 'error');
+  try { localStorage.setItem('v2LastAcc', document.getElementById('gAcc').value); } catch { /* sin storage */ }
   const tx = {
     type: 'expense', amount_cents: amount, occurred_on: date,
     account_id: document.getElementById('gAcc').value,
@@ -480,4 +519,177 @@ async function revokeShortcut() {
   } catch {
     f.tokens = prev; paint(); showToast('No se pudo desconectar', 'error');
   }
+}
+
+// ── Saldos reales de hoy ─────────────────────────────
+// Escribes lo que dice cada banco hoy; la app ajusta el saldo inicial (no borra movimientos) para que cuadre.
+// También guarda hoy como fecha de inicio: los ingresos de antes ya no se piden (ya estaban en el saldo).
+const centsInput = c => (Math.abs(c) / 100).toFixed(2);
+function openRealBalances() {
+  const f = state.f;
+  const accs = F.bankAccounts(f).filter(a => !F.accPositions(f, a.id).length);
+  if (!accs.length) return showToast('No hay cuentas', 'error');
+  openModal('Saldos reales de hoy', `
+    <p class="small" style="margin:0">Escribe lo que te dice <b>hoy</b> la app de cada banco. Ajusto el saldo inicial para que cuadre; tus movimientos no se borran. Los ingresos de antes de hoy ya no se vuelven a pedir.</p>
+    ${accs.map(a => {
+      const credit = a.kind === 'credit', s0 = credit ? F.cardStatus(f, a) : null, s = s0 && 'statement_cut_on' in s0.card ? s0 : null;
+      return `<label class="flabel" for="rb-${escapeHTML(a.id)}">${escapeHTML(a.name)}${credit ? ' · deuda total (lo que debes hoy)' : ''}</label>
+        <input class="field" id="rb-${escapeHTML(a.id)}" data-rb="${escapeHTML(a.id)}" inputmode="decimal" autocomplete="off" value="${centsInput(F.accBalance(f, a.id))}">
+        ${s ? `<label class="flabel" for="rs-${escapeHTML(a.id)}">${escapeHTML(a.name)} · pago para no generar intereses (corte del ${escapeHTML(fmtDay(s.cut))})</label>
+          <input class="field" id="rs-${escapeHTML(a.id)}" data-rs="${escapeHTML(a.id)}" inputmode="decimal" autocomplete="off" placeholder="Lo que dice tu estado de cuenta" value="${s.fromBank ? centsInput(s.card.statement_due_cents) : ''}">
+          <p class="small" style="margin:4px 0 0">Si ya hiciste un pago después del corte, escribe el monto original del estado de cuenta: el pago ya registrado se descuenta solo.</p>` : ''}`;
+    }).join('')}
+  `, `<button type="button" class="btn-primary" id="rbSave">Guardar saldos</button>`);
+  document.getElementById('rbSave').onclick = async e => {
+    const btn = e.currentTarget;
+    const plan = [];
+    for (const inp of document.querySelectorAll('#modal [data-rb]')) {
+      const a = f.accounts.find(x => x.id === inp.dataset.rb);
+      const v = inp.value.trim() === '' ? null : F.parseCents(inp.value.replace(/[$,\s-]/g, '') || '0');
+      if (v === null) return showToast(`Revisa el saldo de ${a.name}`, 'error');
+      const target = a.kind === 'credit' ? -v : v;
+      const diff = target - F.accBalance(f, a.id);
+      if (diff) plan.push({ a, opening: (Number(a.opening_balance_cents) || 0) + diff });
+    }
+    const stm = [];
+    for (const inp of document.querySelectorAll('#modal [data-rs]')) {
+      if (!inp.value.trim()) continue;
+      const v = F.parseCents(inp.value.replace(/[$,\s]/g, ''));
+      const a = f.accounts.find(x => x.id === inp.dataset.rs);
+      if (v === null) return showToast(`Revisa el pago de ${a.name}`, 'error');
+      stm.push({ s: F.cardStatus(f, a), v });
+    }
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      for (const { a, opening } of plan) { await dbPatch('accounts', { opening_balance_cents: opening }, `?id=eq.${a.id}`); a.opening_balance_cents = opening; }
+      for (const { s, v } of stm) {
+        const body = { statement_cut_on: s.cutStr, statement_due_cents: v, updated_at: new Date().toISOString() };
+        await dbPatch('card_settings', body, `?id=eq.${s.card.id}`); Object.assign(s.card, body);
+      }
+      const today = Number(localDate().replace(/-/g, ''));
+      const [row] = await dbUpsert('assumptions', { key: 'start_date', value: today, updated_at: new Date().toISOString() }, 'user_id,key');
+      f.assumptions = f.assumptions.filter(x => x.key !== 'start_date').concat(row ? [row] : [{ key: 'start_date', value: today }]);
+      closeModal(); showToast('Saldos actualizados: desde hoy todo es real'); paint();
+    } catch {
+      btn.disabled = false; btn.textContent = 'Guardar saldos';
+      showToast('No se pudo guardar todo. Revisa y vuelve a intentar.', 'error'); paint();
+    }
+  };
+}
+
+// ── Tasas de rendimiento ─────────────────────────────
+function openRates() {
+  const f = state.f;
+  if (!hasNewCols(f)) return showToast('Primero corre v2/sql/2026-11-04-finanzas-reales.sql en Supabase', 'error');
+  const accs = F.bankAccounts(f).filter(a => ['debit', 'savings', 'cash'].includes(a.kind) && !F.accPositions(f, a.id).length);
+  const ym = localDate().slice(0, 7);
+  openModal('Rendimientos', `
+    <p class="small" style="margin:0">Pon la tasa anual que te da cada cuenta (la ves en la app del banco). Cada mes se registra un ingreso "Rendimiento" que se actualiza solo día a día. Si el banco te da otra cifra, cambia el monto de ese movimiento y ya no lo toco.</p>
+    ${accs.map(a => `<label class="flabel" for="rt-${escapeHTML(a.id)}">${escapeHTML(a.name)} · % anual</label>
+      <input class="field" id="rt-${escapeHTML(a.id)}" data-rt="${escapeHTML(a.id)}" inputmode="decimal" autocomplete="off" placeholder="Sin rendimiento" value="${Number(a.annual_rate_pct) > 0 ? Number(a.annual_rate_pct) : ''}">
+      ${Number(a.annual_rate_pct) > 0 ? `<p class="small" style="margin:4px 0 0">Este mes vas en ${F.fmtMoney(monthYield(f, a, ym))} (desde ${escapeHTML(fmtDay(new Date((a.yield_since || localDate()) + 'T12:00:00')))}).</p>` : ''}`).join('')}
+  `, `<button type="button" class="btn-primary" id="rtSave">Guardar tasas</button>`);
+  document.getElementById('rtSave').onclick = async e => {
+    const btn = e.currentTarget;
+    const changes = [];
+    for (const inp of document.querySelectorAll('#modal [data-rt]')) {
+      const a = f.accounts.find(x => x.id === inp.dataset.rt);
+      const raw = inp.value.trim().replace('%', '').replace(',', '.');
+      const rate = raw === '' ? null : Number(raw);
+      if (rate !== null && !(rate >= 0 && rate <= 100)) return showToast(`Revisa la tasa de ${a.name}`, 'error');
+      const prev = Number(a.annual_rate_pct) > 0 ? Number(a.annual_rate_pct) : null;
+      if ((rate || null) === prev) continue;
+      const body = { annual_rate_pct: rate || null };
+      if (rate > 0 && !prev) body.yield_since = localDate(); // empieza a contar hoy
+      changes.push({ a, body });
+    }
+    if (!changes.length) return closeModal();
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      for (const { a, body } of changes) { await dbPatch('accounts', body, `?id=eq.${a.id}`); Object.assign(a, body); }
+      closeModal(); showToast('Tasas guardadas'); paint();
+      if (await syncYields(f)) paint();
+    } catch { btn.disabled = false; btn.textContent = 'Guardar tasas'; showToast('No se pudieron guardar', 'error'); }
+  };
+}
+
+// ── Pago del mes de una tarjeta ──────────────────────
+function openCardMonth(accId) {
+  const f = state.f;
+  const a = f.accounts.find(x => x.id === accId);
+  const s = F.cardStatus(f, a);
+  if (!s) return (location.hash = '#finanzas/accounts', showToast('Primero pon el día de corte y de pago de la tarjeta en Cuentas', 'info'));
+  const from = F.bankAccounts(f).filter(x => ['debit', 'savings', 'cash'].includes(x.kind));
+  const canSave = 'statement_cut_on' in s.card;
+  openModal(`${a.name} · pago del mes`, `
+    <div class="stats3" style="border-top:none;padding-top:0">
+      <div><span>Deuda total</span><strong>${F.fmtMoney0(s.debt)}</strong></div>
+      <div><span>Corte</span><strong style="font-size:15px">${escapeHTML(fmtDay(s.cut))}</strong></div>
+      <div><span>Fecha límite</span><strong style="font-size:15px">${escapeHTML(fmtDay(s.due))}</strong></div>
+    </div>
+    <div class="bud-line"><span>Pago para no generar intereses</span><strong>${F.fmtMoney(s.statement)}</strong></div>
+    <div class="small" style="margin-top:-6px">${s.fromBank ? 'Según tu estado de cuenta.' : 'Calculado con lo que debías al corte. Si tu banco dice otra cifra, escríbela abajo.'}</div>
+    <div class="bud-line"><span>Pagado desde el corte</span><span>${F.fmtMoney(s.paid)}</span></div>
+    <div class="bud-line"><span><b>Te falta pagar</b></span><strong${s.overdue ? ' style="color:var(--alert)"' : ''}>${F.fmtMoney(s.toPay)}</strong></div>
+    <p class="small" style="margin:0">Lo que compres después del corte (${escapeHTML(fmtDay(s.cut))}) se suma a la deuda total, pero se paga hasta el siguiente corte (${escapeHTML(fmtDay(s.nextCut))}).</p>
+    ${canSave ? `<label class="flabel" for="cmStm">¿Qué dice tu estado de cuenta? (pago para no generar intereses)</label>
+      <div style="display:flex;gap:8px;align-items:center"><input class="field" style="flex:1;min-width:0" id="cmStm" inputmode="decimal" autocomplete="off" placeholder="Ej. 10000" value="${s.fromBank ? centsInput(s.card.statement_due_cents) : ''}"><button type="button" class="btn-ghost sm" id="cmStmSave">Guardar</button></div>` : ''}
+    <h3 style="font-size:15px;margin:10px 0 0">Registrar un pago</h3>
+    <div class="row2"><div><label class="flabel" for="cmAmt">Monto</label><input class="field" id="cmAmt" inputmode="decimal" autocomplete="off" value="${s.toPay ? centsInput(s.toPay) : ''}"></div>
+      <div><label class="flabel" for="cmDate">Fecha</label><input class="field" id="cmDate" type="date" value="${localDate()}"></div></div>
+    <label class="flabel" for="cmFrom">Desde</label>
+    <select class="field" id="cmFrom">${from.map(x => `<option value="${escapeHTML(x.id)}">${escapeHTML(x.name)}</option>`).join('')}</select>
+  `, `<button type="button" class="btn-primary" id="cmPay">Registrar pago</button>`);
+  document.getElementById('cmStmSave')?.addEventListener('click', async () => {
+    const v = F.parseCents(document.getElementById('cmStm').value.replace(/[$,\s]/g, ''));
+    if (v === null) return showToast('Escribe el monto del estado de cuenta', 'error');
+    const body = { statement_cut_on: s.cutStr, statement_due_cents: v, updated_at: new Date().toISOString() };
+    try { await dbPatch('card_settings', body, `?id=eq.${s.card.id}`); Object.assign(s.card, body); showToast('Guardado'); paint(); openCardMonth(accId); }
+    catch { showToast('No se pudo guardar', 'error'); }
+  });
+  document.getElementById('cmPay').onclick = async e => {
+    const btn = e.currentTarget;
+    const amount = F.parseCents(document.getElementById('cmAmt').value.replace(/[$,\s]/g, ''));
+    const date = document.getElementById('cmDate').value;
+    if (!amount) return showToast('Escribe el monto del pago', 'error');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return showToast('Elige la fecha', 'error');
+    btn.disabled = true;
+    try {
+      const [row] = await dbPost('transactions', { type: 'transfer', amount_cents: amount, account_id: document.getElementById('cmFrom').value, to_account_id: a.id, category_id: null, occurred_on: date, note: `Pago ${a.name}` });
+      f.tx.unshift(row); sortTx();
+      closeModal(); showToast('Pago registrado'); paint();
+    } catch { btn.disabled = false; showToast('No se pudo registrar el pago', 'error'); }
+  };
+}
+
+// ── Ya lo recibí ─────────────────────────────────────
+function openIncome(srcId) {
+  const f = state.f;
+  const x = F.expectedIncomes(f).find(i => i.src.id === srcId);
+  if (!x) return;
+  const step = x.src.frequency !== 'irregular' ? Math.min(Number(x.src.amount_cents) || 0, x.left) : x.left;
+  const accs = F.bankAccounts(f).filter(a => a.kind !== 'investment');
+  const recent = f.tx.filter(t => t.type === 'income' && t.category_id === x.src.category_id && t.occurred_on >= (() => { const d = new Date(); d.setDate(d.getDate() - 5); return localDate(d); })())[0];
+  openModal(`Recibí ${x.src.name}`, `
+    ${recent ? `<p class="small" style="margin:0;color:var(--alert)">Ojo: ya registraste ${escapeHTML(F.fmtMoney(recent.amount_cents))} de ${escapeHTML(x.src.name)} el ${escapeHTML(fmtDay(new Date(recent.occurred_on + 'T12:00:00')))}. Regístralo solo si es otro pago.</p>` : ''}
+    <label class="flabel" for="riAmt">Monto</label>
+    <input class="field" id="riAmt" inputmode="decimal" autocomplete="off" value="${centsInput(step)}">
+    <label class="flabel" for="riAcc">Cuenta</label>
+    <select class="field" id="riAcc">${accs.map(a => `<option value="${escapeHTML(a.id)}"${a.id === x.src.account_id ? ' selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
+    <label class="flabel" for="riDate">Fecha</label>
+    <input class="field" id="riDate" type="date" value="${localDate()}">
+  `, `<button type="button" class="btn-primary" id="riSave">Registrar ingreso</button>`);
+  document.getElementById('riSave').onclick = async e => {
+    const btn = e.currentTarget;
+    const amount = F.parseCents(document.getElementById('riAmt').value.replace(/[$,\s]/g, ''));
+    const date = document.getElementById('riDate').value;
+    if (!amount) return showToast('Escribe el monto', 'error');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return showToast('Elige la fecha', 'error');
+    btn.disabled = true;
+    try {
+      const [row] = await dbPost('transactions', { type: 'income', amount_cents: amount, account_id: document.getElementById('riAcc').value, to_account_id: null, category_id: x.src.category_id, occurred_on: date, note: x.src.name });
+      f.tx.unshift(row); sortTx();
+      closeModal(); showToast(`${x.src.name} registrado`); paint();
+    } catch { btn.disabled = false; showToast('No se pudo registrar', 'error'); }
+  };
 }
