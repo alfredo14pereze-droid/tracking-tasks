@@ -23,6 +23,8 @@ Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
    captura queda "por revisar" en Finanzas.
    `sql/2026-11-03-captura-tarjetas.sql` agrega `capture_card_accounts`: al elegir la cuenta de un pago
    por revisar, la app guarda tarjeta → cuenta y la función la usa primero en los siguientes pagos.
+   `sql/2026-11-04-captura-duplicados.sql`: el filtro anti-duplicados (2 min) compara monto + comercio
+   + tarjeta; antes ignoraba la tarjeta y se perdía un pago igual hecho con otra tarjeta.
 3. ✅ Ejercicio + metas de actividad + Whoop (`sql/2026-11-03-ejercicio-whoop.sql`).
    - Tablas `ex_exercises`, `ex_routines`, `ex_routine_items` (series/reps/descanso por lugar),
      `ex_item_options` (varias opciones de ejercicio por lugar; position 0 = principal), `ex_workouts`,
