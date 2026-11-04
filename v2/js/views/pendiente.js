@@ -1,10 +1,10 @@
-// Secciones que todavía no existen en v2: explican en qué fase llegan y llevan a v1.
-import { escapeHTML, icon } from '../util.js?v=202611032349';
+// Secciones que todavía no existen en v2: explican en qué fase llegan y llevan a la versión clásica.
+import { escapeHTML, icon } from '../util.js?v=202611032355';
 
 export const SECTIONS = {
-  calendario: { title: 'Calendario', phase: 'Por ahora sigue en la versión actual.' },
-  objetivos:  { title: 'Objetivos y hábitos', phase: 'Por ahora se editan en la versión actual.' },
-  notas:      { title: 'Notas', phase: 'Por ahora siguen en la versión actual.' }
+  calendario: { title: 'Calendario', phase: 'Por ahora sigue en la versión clásica.' },
+  objetivos:  { title: 'Objetivos y hábitos', phase: 'Por ahora se editan en la versión clásica.' },
+  notas:      { title: 'Notas', phase: 'Por ahora siguen en la versión clásica.' }
 };
 
 export function render(el, route) {
@@ -14,7 +14,7 @@ export function render(el, route) {
       <div class="eyebrow">v2 · en construcción</div>
       <h1>${escapeHTML(s.title)}</h1>
       <p>${escapeHTML(s.phase)}</p>
-      <a class="btn-dark" href="../">Abrir la versión actual</a>
+      <a class="btn-dark" href="../clasica/">Abrir en la versión clásica</a>
     </section>
   </div>`;
 }
@@ -28,7 +28,7 @@ export function renderMore(el) {
       ${link('calendario', 'calendario')}
       ${link('objetivos', 'objetivos')}
       ${link('notas', 'notas')}
-      <a href="../">${icon('volver')}Volver a la versión actual</a>
+      <a href="../clasica/">${icon('volver')}Versión clásica</a>
       <button type="button" data-logout>${icon('salir')}Cerrar sesión</button>
     </nav>
   </div>`;

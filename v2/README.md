@@ -1,7 +1,8 @@
 # TaskTracker v2
 
-Rediseño con tema claro en `/v2/`. **No modifica** `index.html`, `service-worker.js` ni las tablas
-existentes. Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
+Rediseño con tema claro en `/v2/`. **Desde el 3-nov-2026 es la página oficial:** la raíz (`index.html`)
+redirige aquí y la versión anterior quedó en `clasica/` (enlace "Versión clásica" en la barra lateral y en Más).
+Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
 
 - Sin build, ES modules. `js/app.js` = sesión + router por hash (`#inicio #tareas #finanzas #salud #mas`…).
 - `js/db.js` = mismo proyecto de Supabase y misma sesión que v1 (misma clave en localStorage).

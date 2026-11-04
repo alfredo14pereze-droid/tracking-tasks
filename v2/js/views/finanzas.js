@@ -1,8 +1,8 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611032349';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611032349';
-import * as F from '../fin.js?v=202611032349';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611032355';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611032355';
+import * as F from '../fin.js?v=202611032355';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -204,8 +204,8 @@ function paint() {
 
       <div class="fin-col">
         <section class="card" aria-labelledby="budT" style="gap:14px">
-          <div class="card-head"><h2 id="budT">Presupuesto por categoría</h2><a href="../">Editar</a></div>
-          ${budgets.length ? budgets.map(budgetRow).join('') : '<div class="small">Aún no hay presupuestos. Se configuran en la versión actual.</div>'}
+          <div class="card-head"><h2 id="budT">Presupuesto por categoría</h2><a href="../clasica/">Editar</a></div>
+          ${budgets.length ? budgets.map(budgetRow).join('') : '<div class="small">Aún no hay presupuestos. Se configuran en la versión clásica.</div>'}
         </section>
 
         <section class="card" aria-labelledby="movT" style="gap:4px">
@@ -242,7 +242,7 @@ function bind() {
 function openExpense() {
   const f = state.f;
   const accs = F.bankAccounts(f).filter(a => a.kind !== 'investment');
-  if (!accs.length) return showToast('Primero crea una cuenta en la versión actual', 'error');
+  if (!accs.length) return showToast('Primero crea una cuenta en la versión clásica', 'error');
   const opt = (list) => list.map(x => `<option value="${escapeHTML(x.id)}">${escapeHTML(x.name)}</option>`).join('');
   openModal('Nuevo gasto', `
     <label class="flabel" for="gAmt">Monto</label>
