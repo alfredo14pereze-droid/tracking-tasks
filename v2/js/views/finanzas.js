@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041330';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041330';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041330';
-import { FIN_TABS } from '../finclasica.js?v=202611041330';
-import { openStatement } from './estado.js?v=202611041330';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041330';
-import * as F from '../fin.js?v=202611041330';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041440';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041440';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041440';
+import { FIN_TABS } from '../finclasica.js?v=202611041440';
+import { openStatement } from './estado.js?v=202611041440';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041440';
+import * as F from '../fin.js?v=202611041440';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -149,14 +149,59 @@ function goalRow(f, g) {
   const target = Number(g.target_cents) || 0;
   const cur = F.goalCurrent(f, g);
   const pct = target ? Math.min(100, Math.round(cur / target * 100)) : null;
+  const monthly = F.goalMonthly(g), done = F.contributedThisMonth(f, g), left = F.monthsLeft(g);
+  const canContrib = f.contribs !== null && !g.account_id;
+  const due = g.due_date ? new Date(g.due_date + 'T12:00:00').toLocaleDateString('es-MX', { month: 'short', year: 'numeric' }).replace('.', '') : '';
   return `<div class="goal">
     <div class="ring" style="--p:${pct ?? 0}" role="img" aria-label="${pct === null ? 'Sin meta' : pct + '% de la meta'}"><span>${pct === null ? '—' : pct + '%'}</span></div>
-    <div style="min-width:0;display:flex;flex-direction:column;gap:4px">
-      <span class="label">Meta de ahorro</span>
+    <div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1">
+      <span class="label">${g.account_id ? `En ${escapeHTML(F.accName(f, g.account_id))}` : 'Meta de ahorro'}${due ? ` · para ${escapeHTML(due)}${left !== null ? ` (${left} mes${left === 1 ? '' : 'es'})` : ''}` : ''}</span>
       <span style="font-size:16px;font-weight:600;overflow-wrap:anywhere">${escapeHTML(g.name)}</span>
       <span class="small">${F.fmtMoney0(cur)}${target ? ` de ${F.fmtMoney0(target)}` : ''}</span>
+      ${monthly ? `<span class="small"${done >= monthly ? ' style="color:var(--positive);font-weight:600"' : ''}>${done >= monthly ? `✓ Apartaste ${F.fmtMoney0(done)} este mes` : `Este mes: apartar ${F.fmtMoney0(monthly - done)}${done ? ` (llevas ${F.fmtMoney0(done)})` : ''}`}</span>` : ''}
     </div>
+    ${canContrib ? `<button type="button" class="${monthly && done < monthly ? 'btn-primary' : 'btn-ghost'} sm" style="align-self:center" data-contrib="${escapeHTML(g.id)}">${monthly && done < monthly ? 'Aparté' : 'Mover'}</button>` : ''}
   </div>`;
+}
+
+function goalsCard(f) {
+  const goals = f.goals.filter(g => !g.archived).sort((a, b) => (F.goalMonthly(b) - F.goalMonthly(a)) || String(a.due_date || '9999').localeCompare(String(b.due_date || '9999')));
+  if (!goals.length) return '';
+  const plan = goals.reduce((x, g) => x + F.goalMonthly(g), 0), done = goals.reduce((x, g) => x + Math.min(F.goalMonthly(g), Math.max(0, F.contributedThisMonth(f, g))), 0);
+  return `<section class="card" aria-labelledby="goalT" style="gap:16px">
+    <div class="card-head"><h2 id="goalT">Metas</h2>${plan ? `<span class="small">Este mes: ${F.fmtMoney0(done)} de ${F.fmtMoney0(plan)}</span>` : ''}</div>
+    ${goals.map(g => goalRow(f, g)).join('')}
+  </section>`;
+}
+
+// Apartar (o sacar) dinero de una meta. El dinero sigue en tus cuentas de ahorro: la meta es un "sobre".
+function openContribution(goalId) {
+  const f = state.f;
+  const g = f.goals.find(x => x.id === goalId);
+  const monthly = F.goalMonthly(g), done = F.contributedThisMonth(f, g);
+  const pre = monthly && done < monthly ? monthly - done : 0;
+  openModal(g.name, `
+    <div class="seg" role="group" aria-label="Movimiento"><button type="button" data-cdir="in" aria-pressed="true">Apartar</button><button type="button" data-cdir="out" aria-pressed="false">Sacar (lo usé)</button></div>
+    <label class="flabel" for="ctAmt">Monto</label>
+    <input class="field" id="ctAmt" inputmode="decimal" autocomplete="off" value="${pre ? centsInput(pre) : ''}" placeholder="0.00">
+    <p class="small" style="margin:6px 0 0">El dinero se queda en tus cuentas de ahorro; aquí solo llevas cuánto es para "${escapeHTML(g.name)}". Lleva ${F.fmtMoney(F.goalCurrent(f, g))}${monthly ? ` · al mes ${F.fmtMoney0(monthly)}` : ''}.</p>
+  `, `<button type="button" class="btn-primary" id="ctSave">Guardar</button>`);
+  let dir = 'in';
+  document.querySelectorAll('#modal [data-cdir]').forEach(b => b.onclick = () => { dir = b.dataset.cdir; document.querySelectorAll('#modal [data-cdir]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
+  document.getElementById('ctSave').onclick = async e => {
+    const btn = e.currentTarget;
+    const v = F.parseCents(document.getElementById('ctAmt').value.replace(/[$,\s]/g, ''));
+    if (!v) return showToast('Escribe el monto', 'error');
+    const amount = dir === 'in' ? v : -v;
+    btn.disabled = true;
+    try {
+      const [row] = await dbPost('goal_contributions', { goal_id: g.id, month: F.monthStartStr(0), amount_cents: amount });
+      f.contribs.unshift(row);
+      const saved = (Number(g.saved_cents) || 0) + amount;
+      await dbPatch('money_goals', { saved_cents: saved }, `?id=eq.${g.id}`); g.saved_cents = saved;
+      closeModal(); showToast(dir === 'in' ? `Apartaste ${F.fmtMoney0(v)} para ${g.name}` : `Sacaste ${F.fmtMoney0(v)} de ${g.name}`); paint();
+    } catch { btn.disabled = false; showToast('No se pudo guardar', 'error'); }
+  };
 }
 
 function reviewRow(f, c) {
@@ -229,7 +274,6 @@ function paint() {
   const inPeriod = f.tx.filter(t => F.inRange(t, r));
   const txs = state.showAll ? inPeriod.slice(0, 100) : f.tx.slice(0, 5);
   const review = F.capturesToReview(f);
-  const goals = f.goals.slice(0, 3);
 
   rootEl.innerHTML = `<div class="page">
     <header class="head" style="align-items:center">
@@ -283,7 +327,7 @@ function paint() {
           <div class="grid-2">${accounts.length ? accounts.map(a => accountCard(f, a)).join('') : '<div class="small">Sin cuentas.</div>'}</div>
         </section>
 
-        ${goals.length ? `<section class="card" aria-label="Metas de ahorro" style="gap:16px">${goals.map(g => goalRow(f, g)).join('')}</section>` : ''}
+        ${goalsCard(f)}
       </div>
 
       <div class="fin-col">
@@ -325,6 +369,7 @@ function bind() {
   rootEl.querySelector('[data-rates]')?.addEventListener('click', openRates);
   rootEl.querySelectorAll('[data-card-month]').forEach(b => b.onclick = () => openCardMonth(b.dataset.cardMonth));
   rootEl.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => openIncome(b.dataset.inc));
+  rootEl.querySelectorAll('[data-contrib]').forEach(b => b.onclick = () => openContribution(b.dataset.contrib));
   rootEl.querySelector('[data-sources]')?.addEventListener('click', openSources);
   rootEl.querySelector('[data-newcard]')?.addEventListener('click', openNewCard);
   rootEl.querySelector('[data-newacc]')?.addEventListener('click', () => openAccount());

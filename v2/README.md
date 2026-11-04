@@ -103,4 +103,8 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
   parte; las cuentas con menos de 100% no entran en ingresos/gastos (`F.totals`). "+ Cuenta" / "Editar" en Resumen:
   nombre, banco, tipo, saldo de hoy (ajusta el saldo inicial), rendimiento % anual, % tuyo y "quitar" (archiva).
   La pestaña clásica Patrimonio todavía no conoce `owned_pct`.
+- **Metas con aportación mensual** (`sql/2026-11-04-aportaciones-metas.sql`, tabla `goal_contributions`): cada meta sin
+  cuenta es un "sobre" (`money_goals.saved_cents`); "Aparté" registra la aportación del mes y suma; "Sacar" resta.
+  `monthly_contribution_cents` = cuánto apartar al mes. La tarjeta Metas muestra "Este mes: $X de $Y".
+- "Te quedó" (antes "Ahorrado") = ingresos − gastos del periodo, sin cuentas que no son 100% tuyas.
 

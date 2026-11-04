@@ -1,20 +1,20 @@
 // Shell de v2: sesión, router por hash y navegación (inferior en móvil, lateral en escritorio).
-import { sb, AuthError } from './db.js?v=202611041330';
-import { escapeHTML, showToast } from './util.js?v=202611041330';
-import * as inicio from './views/inicio.js?v=202611041330';
-import * as pendiente from './views/pendiente.js?v=202611041330';
-import * as finClasica from './finclasica.js?v=202611041330';
-import * as finanzas from './views/finanzas.js?v=202611041330';
-import * as salud from './views/salud.js?v=202611041330';
-import * as entreno from './views/entreno.js?v=202611041330';
-import * as rutinas from './views/rutinas.js?v=202611041330';
-import * as objetivosView from './views/objetivos.js?v=202611041330';
-import * as recordatoriosView from './views/recordatorios.js?v=202611041330';
-import * as calendarioView from './views/calendario.js?v=202611041330';
-import * as estadisticasView from './views/estadisticas.js?v=202611041330';
-import * as notasView from './views/notas.js?v=202611041330';
-import * as tareasView from './views/tareas.js?v=202611041330';
-import { checkRecurring } from './tareas.js?v=202611041330';
+import { sb, AuthError } from './db.js?v=202611041440';
+import { escapeHTML, showToast } from './util.js?v=202611041440';
+import * as inicio from './views/inicio.js?v=202611041440';
+import * as pendiente from './views/pendiente.js?v=202611041440';
+import * as finClasica from './finclasica.js?v=202611041440';
+import * as finanzas from './views/finanzas.js?v=202611041440';
+import * as salud from './views/salud.js?v=202611041440';
+import * as entreno from './views/entreno.js?v=202611041440';
+import * as rutinas from './views/rutinas.js?v=202611041440';
+import * as objetivosView from './views/objetivos.js?v=202611041440';
+import * as recordatoriosView from './views/recordatorios.js?v=202611041440';
+import * as calendarioView from './views/calendario.js?v=202611041440';
+import * as estadisticasView from './views/estadisticas.js?v=202611041440';
+import * as notasView from './views/notas.js?v=202611041440';
+import * as tareasView from './views/tareas.js?v=202611041440';
+import { checkRecurring } from './tareas.js?v=202611041440';
 
 const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'recordatorios', 'notas', 'estadisticas', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.

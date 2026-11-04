@@ -1,10 +1,10 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611041330';
-import { localDate } from './util.js?v=202611041330';
+import { safeGet } from './db.js?v=202611041440';
+import { localDate } from './util.js?v=202611041440';
 
 export async function loadFinance() {
-  const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions] = await Promise.all([
+  const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions, contribs] = await Promise.all([
     safeGet('accounts', '?order=sort_order.asc,name.asc'),
     safeGet('categories', '?order=name.asc'),
     safeGet('transactions', '?order=occurred_on.desc,created_at.desc'),
@@ -18,7 +18,8 @@ export async function loadFinance() {
     safeGet('capture_card_accounts', ''),                              // tabla nueva (captura-tarjetas.sql)
     safeGet('capture_attempts', '?order=at.desc&limit=8'),             // bitácora del Atajo (captura-bitacora.sql)
     safeGet('income_sources', '?active=eq.true&order=created_at.asc'),
-    safeGet('assumptions', '')
+    safeGet('assumptions', ''),
+    safeGet('goal_contributions', '?order=created_at.desc')            // aportaciones-metas.sql
   ]);
   const errors = Object.entries({ accounts, categories, transactions: tx, budgets })
     .filter(([, v]) => v === null).map(([k]) => k);
@@ -29,6 +30,7 @@ export async function loadFinance() {
     cardMap,          // null = falta 2026-11-03-captura-tarjetas.sql
     attempts,         // null = falta 2026-11-04-captura-bitacora.sql
     incomes: incomes || [], assumptions: assumptions || [],
+    contribs,         // null = falta 2026-11-04-aportaciones-metas.sql
     errors
   };
 }
@@ -401,5 +403,17 @@ export function netWorthParts(f) {
   let teDeben = 0, debes = 0;
   for (const l of activeAccounts(f).filter(isLoan)) { const o = loanOwed(f, l); if (o > 0) { if (l.kind === 'lent') teDeben += o; else debes += o; } }
   return { cuentas, funds, teDeben, tarjetas, debes, fuera };
+}
+// ── Metas con aportación mensual ─────────────────────
+export const goalMonthly = g => Number(g.monthly_contribution_cents) || 0;
+export function contributedThisMonth(f, g) {
+  const ms = monthStartStr(0);
+  return (f.contribs || []).filter(c => c.goal_id === g.id && c.month === ms).reduce((x, c) => x + (Number(c.amount_cents) || 0), 0);
+}
+// Meses que faltan para la fecha de la meta (null si no tiene fecha).
+export function monthsLeft(g) {
+  if (!g.due_date) return null;
+  const d = new Date(g.due_date + 'T12:00:00'), n = new Date();
+  return Math.max(0, (d.getFullYear() - n.getFullYear()) * 12 + d.getMonth() - n.getMonth());
 }
 
