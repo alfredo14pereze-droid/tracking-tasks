@@ -1,6 +1,7 @@
-// Inicio: tareas de hoy y hábitos de la semana (solo lectura en la Fase 1).
-// Finanzas y Whoop se muestran como "pendiente" hasta sus fases.
-import { dbGet, safeGet } from '../db.js';
+// Inicio: tareas de hoy y hábitos de la semana (solo lectura) + resumen de finanzas.
+// Whoop se muestra como "pendiente" hasta la fase 4.
+import { dbGet, safeGet, AuthError } from '../db.js';
+import * as F from '../fin.js';
 import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon } from '../util.js';
 
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -12,12 +13,13 @@ export async function load() {
   // Abiertas + las que se cerraron hoy (para el "5/8 hechas").
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const since = new Date(startOfDay.getTime() - 86400000).toISOString(); // margen de un día por zona horaria
-  const [tasks, habits, weeks] = await Promise.all([
+  const [tasks, habits, weeks, fin] = await Promise.all([
     dbGet('tasks', `?select=*&or=(status.in.(todo,in_progress),completed_at.gte.${encodeURIComponent(since)})&order=position.asc,created_at.desc`),
     safeGet('habits', '?order=created_at.asc'),
-    safeGet('habit_weeks', `?week_key=eq.${weekKey()}`)
+    safeGet('habit_weeks', `?week_key=eq.${weekKey()}`),
+    F.loadFinance().catch(e => { if (e instanceof AuthError) throw e; return null; })
   ]);
-  return { tasks: tasks || [], habits, weeks };
+  return { tasks: tasks || [], habits, weeks, fin: fin && !fin.errors.length ? fin : null };
 }
 
 // ── Reglas de v1 (isTodayTask, rangos, effPriority) ──
@@ -120,6 +122,8 @@ export function render(el, data, { name = 'Alfredo' } = {}) {
   const hDone = habits ? habits.reduce((s, h) => s + Math.min(h.count, h.target), 0) : 0;
   const hTarget = habits ? habits.reduce((s, h) => s + h.target, 0) : 0;
 
+  const fs = finSummary(data.fin);
+
   const hero = (compact) => `<section class="hero" aria-label="Tu día">
       <div class="card-head">
         <span class="label">${compact ? 'Tareas de hoy' : 'Tu día'}</span>
@@ -178,7 +182,7 @@ export function render(el, data, { name = 'Alfredo' } = {}) {
     <div class="mob-only">
       ${hero(false)}
       <div class="grid-2">
-        ${soonCard('Gastado hoy', 'Llega en la fase 2')}
+        ${fs ? moneyCard('Gastado hoy', F.fmtMoney0(fs.today), fs.daily ? `de ${F.fmtMoney0(fs.daily)} diarios` : 'sin presupuesto', fs.daily && fs.today > fs.daily) : soonCard('Gastado hoy', 'Sin datos de finanzas')}
         ${soonCard('Recuperación', 'Whoop · fase 4')}
       </div>
     </div>
@@ -186,13 +190,83 @@ export function render(el, data, { name = 'Alfredo' } = {}) {
     <div class="kpis desk-only">
       ${hero(true)}
       ${habitsKpi}
-      ${soonCard('Gastado este mes', 'Llega en la fase 2')}
+      ${fs ? moneyCard(`Gastado en ${fs.month}`, F.fmtMoney0(fs.exp), fs.budget ? `de ${F.fmtMoney0(fs.budget)} · ${fs.onTrack ? 'al día' : 'vas arriba'}` : 'sin presupuesto', fs.budget && !fs.onTrack, true) : soonCard('Gastado este mes', 'Sin datos de finanzas')}
       ${soonCard('Recuperación', 'Whoop · fase 4')}
     </div>
 
     <div class="cols">
       ${tasksCard}
-      <div class="col-side">${habitsCard}</div>
+      <div class="col-side">
+        ${habitsCard}
+        ${fs ? `<div class="mob-only">${budgetCard(fs)}</div>
+        <div class="desk-only desk-stack">${chartCard(fs)}${payCard(fs)}</div>` : ''}
+      </div>
     </div>
   </div>`;
+}
+
+// ── Finanzas en Inicio ────────────────────────────────
+function finSummary(f) {
+  if (!f) return null;
+  const now = new Date();
+  const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const day = now.getDate();
+  const budget = F.monthBudgetTotal(f);
+  const { exp } = F.totals(f, F.periodRange('mes'));
+  return {
+    month: F.monthName(0), budget, exp, days, daysLeft: days - day + 1,
+    today: F.spentOn(f, localDate()),
+    daily: budget ? Math.round(budget / days) : 0,
+    onTrack: !budget || exp <= budget * day / days,
+    rows: F.budgetRows(f, F.periodRange('mes')),
+    chart: F.monthlySpend(f, 6),
+    pay: F.nextCardPayment(f)
+  };
+}
+
+function moneyCard(label, value, sub, warn, big) {
+  return `<div class="card card-sm">
+    <span class="label">${escapeHTML(label)}</span>
+    <div class="big"${big ? ' style="font-size:30px"' : ''}>${value}</div>
+    <div class="small"${warn ? ' style="color:var(--alert);font-weight:600"' : ''}>${escapeHTML(sub)}</div>
+  </div>`;
+}
+
+const SHADES = ['var(--accent)', '#7FA892', '#C9C6BD'];
+function budgetCard(fs) {
+  const head = `<div class="card-head"><h2>Presupuesto de ${escapeHTML(fs.month)}</h2>${fs.budget ? `<span class="chip ${fs.onTrack ? 'chip-soft' : 'chip-alert'}">${fs.onTrack ? 'Al día' : 'Vas arriba'}</span>` : ''}</div>`;
+  if (!fs.budget) return `<section class="card">${head}<div class="small">Aún no hay presupuesto. <a href="#finanzas">Ver finanzas</a></div></section>`;
+  const segs = fs.rows.filter(r => r.spent > 0).slice(0, 3);
+  const rest = Math.max(0, fs.exp - segs.reduce((s, r) => s + r.spent, 0));
+  const w = c => Math.max(0, Math.min(100, c / fs.budget * 100)).toFixed(1);
+  const left = fs.budget - fs.exp;
+  return `<section class="card">
+    ${head}
+    <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><div class="big">${F.fmtMoney0(fs.exp)}</div><div class="muted" style="font-size:14px">de ${F.fmtMoney0(fs.budget)}</div></div>
+    <div class="stack" role="img" aria-label="Gastado ${F.fmtMoney0(fs.exp)} de ${F.fmtMoney0(fs.budget)}">
+      ${segs.map((r, i) => `<div style="width:${w(r.spent)}%;background:${fs.exp > fs.budget ? 'var(--over)' : SHADES[i]}" title="${escapeHTML(r.cat.name)}"></div>`).join('')}
+      ${rest ? `<div style="width:${w(rest)}%;background:${fs.exp > fs.budget ? 'var(--over)' : '#E0DDD4'}"></div>` : ''}
+    </div>
+    <div class="small">${left >= 0 ? `Te quedan ${F.fmtMoney0(left)} para ${fs.daysLeft} día${fs.daysLeft === 1 ? '' : 's'}` : `Te pasaste por ${F.fmtMoney0(-left)}`}</div>
+  </section>`;
+}
+
+function chartCard(fs) {
+  const max = Math.max(1, ...fs.chart.map(m => m.value));
+  return `<section class="card" style="gap:14px">
+    <h2 style="font-size:16px;font-weight:600">Gastos · últimos 6 meses</h2>
+    <div class="bars" role="img" aria-label="${escapeHTML(fs.chart.map(m => `${m.label} ${F.fmtMoney0(m.value)}`).join(', '))}">
+      ${fs.chart.map(m => `<div class="${m.current ? 'cur' : ''}"><i style="height:${Math.round(m.value / max * 96)}px"></i><span>${escapeHTML(m.label)}</span></div>`).join('')}
+    </div>
+  </section>`;
+}
+
+function payCard(fs) {
+  if (!fs.pay) return '';
+  const d = fs.pay.date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }).replace('.', '');
+  return `<section class="dark-card">
+    <span class="label">Próximo pago</span>
+    <div style="font-size:22px;font-weight:600;overflow-wrap:anywhere">Tarjeta ${escapeHTML(fs.pay.account.name)} · ${escapeHTML(d)}</div>
+    <div class="muted">${F.fmtMoney0(fs.pay.debt)} por pagar</div>
+  </section>`;
 }

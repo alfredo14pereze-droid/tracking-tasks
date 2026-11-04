@@ -3,6 +3,7 @@ import { sb, AuthError } from './db.js';
 import { escapeHTML, showToast } from './util.js';
 import * as inicio from './views/inicio.js';
 import * as pendiente from './views/pendiente.js';
+import * as finanzas from './views/finanzas.js';
 
 const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'objetivos', 'notas', 'mas'];
 const $ = id => document.getElementById(id);
@@ -48,6 +49,15 @@ async function renderRoute() {
       if (seq !== renderSeq) return;
       if (e instanceof AuthError) return showLogin();
       main.innerHTML = `<div class="page"><div class="error-box">No se pudo conectar con Supabase.<br><small>${escapeHTML(e.message)}</small></div></div>`;
+    }
+  } else if (route === 'finanzas') {
+    skeleton();
+    try {
+      await finanzas.show(main, () => seq === renderSeq);
+    } catch (e) {
+      if (seq !== renderSeq) return;
+      if (e instanceof AuthError) return showLogin();
+      main.innerHTML = `<div class="page"><div class="error-box">No se pudieron cargar las finanzas.<br><small>${escapeHTML(e.message)}</small></div></div>`;
     }
   } else if (route === 'mas') {
     pendiente.renderMore(main);

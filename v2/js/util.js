@@ -66,3 +66,21 @@ export const ICONS = {
 export function icon(name, w = 2) {
   return `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
 }
+
+// Modal genérico (<dialog id="modal"> en index.html). Cerrar: botón ✕, [data-close], Esc o clic fuera.
+export function openModal(title, bodyHTML, footHTML = '') {
+  const d = document.getElementById('modal');
+  d.innerHTML = `<form method="dialog" class="modal-card" onsubmit="return false">
+    <div class="modal-head"><h2>${escapeHTML(title)}</h2>
+      <button type="button" class="modal-x" data-close aria-label="Cerrar">${icon('x')}</button></div>
+    <div class="modal-body">${bodyHTML}</div>
+    ${footHTML ? `<div class="modal-foot">${footHTML}</div>` : ''}
+  </form>`;
+  d.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+  d.onclick = e => { if (e.target === d) closeModal(); };
+  if (!d.open) d.showModal();
+}
+export function closeModal() {
+  const d = document.getElementById('modal');
+  if (d.open) d.close();
+}
