@@ -1,10 +1,10 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611041029';
-import { localDate } from './util.js?v=202611041029';
+import { safeGet } from './db.js?v=202611041059';
+import { localDate } from './util.js?v=202611041059';
 
 export async function loadFinance() {
-  const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap] = await Promise.all([
+  const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts] = await Promise.all([
     safeGet('accounts', '?order=sort_order.asc,name.asc'),
     safeGet('categories', '?order=name.asc'),
     safeGet('transactions', '?order=occurred_on.desc,created_at.desc'),
@@ -15,7 +15,8 @@ export async function loadFinance() {
     safeGet('card_settings', ''),
     safeGet('wallet_captures', '?order=received_at.desc&limit=200'),   // tabla nueva (v2/sql)
     safeGet('capture_tokens', '?revoked=eq.false&order=created_at.desc'),
-    safeGet('capture_card_accounts', '')                               // tabla nueva (captura-tarjetas.sql)
+    safeGet('capture_card_accounts', ''),                              // tabla nueva (captura-tarjetas.sql)
+    safeGet('capture_attempts', '?order=at.desc&limit=8')              // bitácora del Atajo (captura-bitacora.sql)
   ]);
   const errors = Object.entries({ accounts, categories, transactions: tx, budgets })
     .filter(([, v]) => v === null).map(([k]) => k);
@@ -24,6 +25,7 @@ export async function loadFinance() {
     goals: goals || [], positions: positions || [], valuations: valuations || [], cards: cards || [],
     captures, tokens, // null = la migración de captura aún no se corrió
     cardMap,          // null = falta 2026-11-03-captura-tarjetas.sql
+    attempts,         // null = falta 2026-11-04-captura-bitacora.sql
     errors
   };
 }

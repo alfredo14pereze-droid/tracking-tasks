@@ -610,3 +610,7 @@ textarea{font-family:inherit;font-size:16px}
 .st-amt.pos{color:var(--positive)}
 .week-sum{display:flex;flex-direction:column;gap:10px}
 .week-sum ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:1.45}
+/* Bitácora del Atajo (Finanzas › Apple Pay) */
+.atajo-log summary{cursor:pointer;padding:6px 0}
+.atajo-log ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.atajo-log li{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere;border-top:1px solid var(--line, rgba(0,0,0,.08));padding-top:8px}

@@ -1,11 +1,11 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041029';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041029';
-import { FIN_TABS } from '../finclasica.js?v=202611041029';
-import { openStatement } from './estado.js?v=202611041029';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041029';
-import * as F from '../fin.js?v=202611041029';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041059';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041059';
+import { FIN_TABS } from '../finclasica.js?v=202611041059';
+import { openStatement } from './estado.js?v=202611041059';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041059';
+import * as F from '../fin.js?v=202611041059';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -143,12 +143,28 @@ function shortcutCard(f) {
   const used = tok?.last_used_at ? new Date(tok.last_used_at).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : null;
   return `<section class="card" aria-labelledby="atajoT">
     <div class="card-head"><h2 id="atajoT">Apple Pay → Finanzas</h2>${tok ? '<span class="chip chip-soft">Conectado</span>' : ''}</div>
-    <p class="small" style="margin:0">${tok ? `Atajo conectado${used ? ` · último pago recibido ${escapeHTML(used)}` : ' · aún no llega ningún pago'}.` : 'Un Atajo de iOS manda cada pago con Apple Pay directo aquí.'}</p>
+    <p class="small" style="margin:0">${tok ? `Atajo conectado${used ? ` · último pago recibido ${escapeHTML(used)}` : ' · aún no llega ningún pago'}`.replace(/\.?$/, '.') : 'Un Atajo de iOS manda cada pago con Apple Pay directo aquí.'}</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button type="button" class="btn-dark" data-connect>${tok ? 'Nuevo token' : 'Conectar Atajo'}</button>
       ${tok ? '<button type="button" class="btn-ghost sm" data-revoke>Desconectar</button>' : ''}
     </div>
+    ${tok && f.attempts ? attemptsHTML(f.attempts) : ''}
   </section>`;
+}
+
+// Bitácora: lo que mandó el iPhone cada vez que corrió el Atajo (sirve para ver por qué un pago no llegó).
+const ATTEMPT = { registrado: 'Registrado', por_revisar: 'Por revisar', duplicado: 'Repetido (ignorado)',
+  'error: monto inválido': 'No se registró: el monto llegó vacío o raro', 'error: monto fuera de rango': 'No se registró: monto fuera de rango' };
+function attemptsHTML(list) {
+  const when = d => new Date(d).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  return `<details class="atajo-log">
+    <summary class="small">Últimas veces que llegó el Atajo (${list.length})</summary>
+    ${list.length ? `<ul>${list.map(a => {
+      const bad = String(a.result).startsWith('error');
+      return `<li><span class="task-meta">${escapeHTML(when(a.at))} · <b${bad ? ' style="color:var(--alert)"' : ''}>${escapeHTML(ATTEMPT[a.result] || a.result)}</b></span>
+        <span class="small">Tarjeta: ${escapeHTML(a.card_raw || '(vacío)')} · Monto: ${escapeHTML(a.amount_raw || '(vacío)')} · Comercio: ${escapeHTML(a.merchant_raw || '(vacío)')}</span></li>`;
+    }).join('')}</ul>` : '<p class="small" style="margin:6px 0 0">Todavía no llega ninguno desde que se activó la bitácora. Si pagas y no aparece nada aquí, el iPhone no corrió el Atajo.</p>'}
+  </details>`;
 }
 
 // ── Pintar ───────────────────────────────────────────

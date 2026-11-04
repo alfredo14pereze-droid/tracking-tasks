@@ -25,6 +25,9 @@ Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
    por revisar, la app guarda tarjeta → cuenta y la función la usa primero en los siguientes pagos.
    `sql/2026-11-04-captura-duplicados.sql`: el filtro anti-duplicados (2 min) compara monto + comercio
    + tarjeta; antes ignoraba la tarjeta y se perdía un pago igual hecho con otra tarjeta.
+   `sql/2026-11-04-captura-bitacora.sql`: tabla `capture_attempts` (lo que mandó el iPhone tal cual + resultado).
+   Los montos inválidos ya no lanzan error (eso borraba la bitácora): se anotan y regresan ok=false.
+   Se ve en Finanzas › Apple Pay → Finanzas › "Últimas veces que llegó el Atajo".
 3. ✅ Ejercicio + metas de actividad + Whoop (`sql/2026-11-03-ejercicio-whoop.sql`).
    - Tablas `ex_exercises`, `ex_routines`, `ex_routine_items` (series/reps/descanso por lugar),
      `ex_item_options` (varias opciones de ejercicio por lugar; position 0 = principal), `ex_workouts`,
