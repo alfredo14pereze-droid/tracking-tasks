@@ -1,6 +1,6 @@
 // Estadísticas de tareas — mismas métricas que la clásica (renderStatsView + updateStreak).
-import { escapeHTML, localDate } from '../util.js?v=202611041328';
-import * as K from '../tareas.js?v=202611041328';
+import { escapeHTML, localDate } from '../util.js?v=202611041330';
+import * as K from '../tareas.js?v=202611041330';
 
 let root = null;
 

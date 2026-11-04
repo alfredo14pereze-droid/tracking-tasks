@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041328';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041328';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041328';
-import { FIN_TABS } from '../finclasica.js?v=202611041328';
-import { openStatement } from './estado.js?v=202611041328';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041328';
-import * as F from '../fin.js?v=202611041328';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041330';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041330';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041330';
+import { FIN_TABS } from '../finclasica.js?v=202611041330';
+import { openStatement } from './estado.js?v=202611041330';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041330';
+import * as F from '../fin.js?v=202611041330';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -222,7 +222,7 @@ function paint() {
   const nw = F.netWorth(f);
   const base = nw.total - nw.change;
   const pctChange = base > 0 ? (nw.change / base * 100) : null;
-  const saved = F.savedIn(f, r);
+  const saved = (t => t.inc - t.exp)(F.totals(f, r)); // lo que te quedó: ingresos − gastos (sin cuentas que no son tuyas)
   const accounts = F.bankAccounts(f);
   const budgets = F.budgetRows(f, r);
   const caps = F.captureByTx(f);
@@ -257,7 +257,7 @@ function paint() {
           </div>
           <div class="hero-num" style="font-size:44px">${F.fmtSigned(nw.total)}</div>
           <div class="hero-split">
-            <div><span>Ahorrado ${escapeHTML(r.label)}</span><strong>${F.fmtSigned(saved)}</strong></div>
+            <div><span>Te quedó ${escapeHTML(r.label)}</span><strong>${F.fmtSigned(saved)}</strong></div>
             <div><span>Invertido</span><strong>${F.fmtMoney0(nw.invested)}</strong></div>
           </div>
           ${(() => { const p = F.netWorthParts(f); return `<div class="hero-parts">
