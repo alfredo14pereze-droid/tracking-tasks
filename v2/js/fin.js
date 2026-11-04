@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611041253';
-import { localDate } from './util.js?v=202611041253';
+import { safeGet } from './db.js?v=202611041305';
+import { localDate } from './util.js?v=202611041305';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions] = await Promise.all([
@@ -132,7 +132,7 @@ export function netWorth(f) {
   const fv = p => positionValue(f, p) || 0;
   const fprev = p => { const v = positionValue(f, p, -1); return v === null ? fv(p) : v; };
   let total = funds.reduce((s, p) => s + fv(p), 0);
-  for (const a of bankAccounts(f)) if (!accPositions(f, a.id).length) total += accBalance(f, a.id);
+  for (const a of bankAccounts(f)) if (!accPositions(f, a.id).length) total += Math.round(accBalance(f, a.id) * ownedPct(a) / 100);
   for (const l of activeAccounts(f).filter(isLoan)) {
     const o = loanOwed(f, l);
     if (o > 0) total += l.kind === 'lent' ? o : -o;
@@ -140,15 +140,18 @@ export function netWorth(f) {
   const { inc, exp } = totals(f, periodRange('mes'));
   const change = inc - exp + funds.reduce((s, p) => s + fv(p) - fprev(p), 0);
   const invested = funds.reduce((s, p) => s + fv(p), 0)
-    + bankAccounts(f).filter(a => a.kind === 'investment' && !accPositions(f, a.id).length).reduce((s, a) => s + accBalance(f, a.id), 0);
+    + bankAccounts(f).filter(a => a.kind === 'investment' && !accPositions(f, a.id).length).reduce((s, a) => s + Math.round(accBalance(f, a.id) * ownedPct(a) / 100), 0);
   return { total, change, invested };
 }
 
 // ── Movimientos y presupuesto ────────────────────────
+// Parte que es tuya de una cuenta (B-Project 50, Carro 0). Las que no son 100% tuyas no cuentan en ingresos/gastos.
+export const ownedPct = a => (a && a.owned_pct !== undefined && a.owned_pct !== null ? Number(a.owned_pct) : 100);
+const isShared = (f, id) => ownedPct(f.accounts.find(a => a.id === id)) < 100;
 export function totals(f, r) {
   let inc = 0, exp = 0;
   for (const t of f.tx) {
-    if (!inRange(t, r)) continue;
+    if (!inRange(t, r) || isShared(f, t.account_id)) continue;
     if (t.type === 'income') inc += Number(t.amount_cents) || 0;
     else if (t.type === 'expense') exp += Number(t.amount_cents) || 0;
   }

@@ -99,4 +99,8 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
 - **Pegar movimientos** (tarjeta Estado de cuenta): una línea `fecha ; descripción ; monto ; categoría` por gasto;
   `Préstamo: Nombre` crea/usa una cuenta `lent` y registra transferencia. Salta duplicados (cuenta+fecha+monto) y, por
   defecto, compensa `opening_balance_cents` para no mover el saldo de hoy. Los datos personales NO se guardan en el repo.
+- **% tuyo** (`sql/2026-11-04-cuentas-compartidas.sql`, `accounts.owned_pct`, default 100): el patrimonio cuenta solo esa
+  parte; las cuentas con menos de 100% no entran en ingresos/gastos (`F.totals`). "+ Cuenta" / "Editar" en Resumen:
+  nombre, banco, tipo, saldo de hoy (ajusta el saldo inicial), rendimiento % anual, % tuyo y "quitar" (archiva).
+  La pestaña clásica Patrimonio todavía no conoce `owned_pct`.
 

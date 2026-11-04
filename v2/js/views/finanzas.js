@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041253';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041253';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041253';
-import { FIN_TABS } from '../finclasica.js?v=202611041253';
-import { openStatement } from './estado.js?v=202611041253';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041253';
-import * as F from '../fin.js?v=202611041253';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041305';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041305';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041305';
+import { FIN_TABS } from '../finclasica.js?v=202611041305';
+import { openStatement } from './estado.js?v=202611041305';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041305';
+import * as F from '../fin.js?v=202611041305';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -64,9 +64,10 @@ function accountCard(f, a) {
   return `<div class="card card-sm acc">
     <div class="acc-head"><span class="acc-mark" style="background:${brandColor(a)}" aria-hidden="true">${escapeHTML(a.name.charAt(0).toUpperCase())}</span><span class="acc-name">${escapeHTML(a.name)}</span></div>
     <div class="acc-val${v < 0 ? ' neg' : ''}">${F.fmtSigned(v)}</div>
+    ${F.ownedPct(a) < 100 ? `<div class="small" style="margin-top:-6px">${F.ownedPct(a) === 0 ? 'No es tuyo: lo cuidas' : `Tuyo ${F.ownedPct(a)}% · ${F.fmtMoney0(Math.round(v * F.ownedPct(a) / 100))}`}</div>` : ''}
     ${credit ? `<div class="small" style="margin-top:-6px">Deuda total${(() => { const st = F.cardStatus(f, a); return st ? ` · gastado desde el corte ${F.fmtMoney0(st.spent)}` : ''; })()}</div>` : ''}
     <div class="small"${credit && F.cardStatus(f, a)?.overdue ? ' style="color:var(--alert)"' : ''}>${escapeHTML(accountSub(f, a))}</div>
-    ${credit ? `<button type="button" class="btn-ghost sm" style="align-self:flex-start" data-card-month="${escapeHTML(a.id)}">Pago del mes</button>` : ''}
+    ${credit ? `<button type="button" class="btn-ghost sm" style="align-self:flex-start" data-card-month="${escapeHTML(a.id)}">Pago del mes</button>` : F.accPositions(f, a.id).length ? '' : `<button type="button" class="btn-link" style="align-self:flex-start" data-acc-edit="${escapeHTML(a.id)}">Editar</button>`}
   </div>`;
 }
 
@@ -261,7 +262,7 @@ function paint() {
 
         <section aria-labelledby="accT" style="display:flex;flex-direction:column;gap:10px">
           <div class="card-head"><h2 id="accT" style="font-size:16px;font-weight:600">Cuentas</h2>
-            <div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="btn-link" data-rates>Rendimientos</button><button type="button" class="btn-link" data-real>Saldos reales</button><button type="button" class="btn-link" data-newcard>+ Tarjeta</button></div></div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="btn-link" data-rates>Rendimientos</button><button type="button" class="btn-link" data-real>Saldos reales</button><button type="button" class="btn-link" data-newacc>+ Cuenta</button><button type="button" class="btn-link" data-newcard>+ Tarjeta</button></div></div>
           <div class="grid-2">${accounts.length ? accounts.map(a => accountCard(f, a)).join('') : '<div class="small">Sin cuentas.</div>'}</div>
         </section>
 
@@ -309,6 +310,8 @@ function bind() {
   rootEl.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => openIncome(b.dataset.inc));
   rootEl.querySelector('[data-sources]')?.addEventListener('click', openSources);
   rootEl.querySelector('[data-newcard]')?.addEventListener('click', openNewCard);
+  rootEl.querySelector('[data-newacc]')?.addEventListener('click', () => openAccount());
+  rootEl.querySelectorAll('[data-acc-edit]').forEach(b => b.onclick = () => openAccount(b.dataset.accEdit));
   rootEl.querySelector('[data-connect]')?.addEventListener('click', connectShortcut);
   rootEl.querySelector('[data-revoke]')?.addEventListener('click', revokeShortcut);
   rootEl.querySelector('[data-statement]')?.addEventListener('click', () => openStatement(state.f, paint));
@@ -909,5 +912,58 @@ function openPaste() {
       }
       closeModal(); showToast(`${created.length} movimiento${created.length === 1 ? '' : 's'} registrado${created.length === 1 ? '' : 's'}`); paint();
     } catch { go.disabled = false; go.textContent = `Registrar ${rows.length}`; showToast('No se pudieron registrar', 'error'); paint(); }
+  };
+}
+
+// ── Cuenta (nueva o editar): nombre, tipo, saldo de hoy, % tuyo y tasa ──
+const KINDS = { debit: 'Débito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
+function openAccount(id) {
+  const f = state.f;
+  const a = id ? f.accounts.find(x => x.id === id) : null;
+  const hasPct = f.accounts.some(x => 'owned_pct' in x);
+  const bal = a ? F.accBalance(f, a.id) : 0;
+  openModal(a ? `Editar ${a.name}` : 'Nueva cuenta', `
+    <div class="row2"><div><label class="flabel" for="naName" style="margin-top:0">Nombre</label><input class="field" id="naName" maxlength="40" value="${escapeHTML(a ? a.name : '')}" placeholder="Ej. Plata Ahorros"></div>
+      <div><label class="flabel" for="naInst" style="margin-top:0">Banco</label><input class="field" id="naInst" maxlength="40" value="${escapeHTML(a ? a.institution || '' : '')}" placeholder="Ej. Plata"></div></div>
+    <div class="row2"><div><label class="flabel" for="naKind">Tipo</label><select class="field" id="naKind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${a && a.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div><label class="flabel" for="naBal">Saldo de hoy</label><input class="field" id="naBal" inputmode="decimal" autocomplete="off" value="${centsInput(bal)}"></div></div>
+    <div class="row2"><div><label class="flabel" for="naRate">Rendimiento % anual</label><input class="field" id="naRate" inputmode="decimal" autocomplete="off" placeholder="Sin rendimiento" value="${a && Number(a.annual_rate_pct) > 0 ? Number(a.annual_rate_pct) : ''}"></div>
+      ${hasPct ? `<div><label class="flabel" for="naPct">¿Cuánto es tuyo? %</label><input class="field" id="naPct" inputmode="decimal" autocomplete="off" value="${a ? F.ownedPct(a) : 100}"></div>` : '<div></div>'}</div>
+    ${hasPct ? '<p class="small" style="margin:4px 0 0">100 = todo tuyo · 50 = la mitad (p. ej. B-Project) · 0 = lo cuidas para alguien más (no cuenta en tu dinero ni en tus gastos).</p>' : ''}
+    ${a ? '<label class="small" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="naArch"> Esta cuenta no existe: quitarla (sus movimientos se conservan)</label>' : ''}
+  `, `<button type="button" class="btn-primary" id="naSave">${a ? 'Guardar' : 'Agregar cuenta'}</button>`);
+  document.getElementById('naSave').onclick = async e => {
+    const btn = e.currentTarget;
+    const name = document.getElementById('naName').value.trim();
+    const kind = document.getElementById('naKind').value;
+    const cents = F.parseCents(document.getElementById('naBal').value.replace(/[$,\s]/g, '') || '0');
+    const rateRaw = document.getElementById('naRate').value.trim().replace('%', '').replace(',', '.');
+    const rate = rateRaw === '' ? null : Number(rateRaw);
+    const pct = hasPct ? Number(document.getElementById('naPct').value.replace('%', '').trim() || '100') : null;
+    const archive = document.getElementById('naArch')?.checked;
+    if (!name) return showToast('Ponle nombre a la cuenta', 'error');
+    if (f.accounts.some(x => x !== a && !x.archived && x.name.trim().toLowerCase() === name.toLowerCase())) return showToast('Ya tienes una cuenta con ese nombre', 'error');
+    if (cents === null) return showToast('Revisa el saldo', 'error');
+    if (rate !== null && !(rate >= 0 && rate <= 100)) return showToast('Revisa el rendimiento', 'error');
+    if (hasPct && !(pct >= 0 && pct <= 100)) return showToast('El % tuyo va de 0 a 100', 'error');
+    const body = { name, institution: document.getElementById('naInst').value.trim() || null, kind };
+    if (hasNewCols(f)) {
+      body.annual_rate_pct = rate || null;
+      if (rate > 0 && !(a && Number(a.annual_rate_pct) > 0)) body.yield_since = localDate();
+    }
+    if (hasPct) body.owned_pct = pct;
+    if (archive) body.archived = true;
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      if (a) {
+        body.opening_balance_cents = (Number(a.opening_balance_cents) || 0) + (cents - bal); // el saldo de hoy queda como lo escribiste
+        await dbPatch('accounts', body, `?id=eq.${a.id}`); Object.assign(a, body);
+      } else {
+        const [row] = await dbPost('accounts', { ...body, opening_balance_cents: cents, sort_order: 10 });
+        f.accounts.push(row);
+      }
+      closeModal(); showToast(archive ? 'Cuenta quitada' : a ? 'Cuenta guardada' : 'Cuenta agregada'); paint();
+      if (await syncYields(f)) paint();
+    } catch { btn.disabled = false; btn.textContent = a ? 'Guardar' : 'Agregar cuenta'; showToast('No se pudo guardar la cuenta', 'error'); }
   };
 }

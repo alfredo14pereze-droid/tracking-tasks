@@ -2,9 +2,9 @@
 // con la tasa anual de la cuenta (accounts.annual_rate_pct) desde accounts.yield_since.
 // Se cuenta hasta ayer (los bancos pagan el día anterior). Si cambias el monto a mano
 // (amount_cents ≠ auto_amount_cents), la app ya no lo vuelve a tocar.
-import { dbPost, dbPatch } from './db.js?v=202611041253';
-import { localDate } from './util.js?v=202611041253';
-import * as F from './fin.js?v=202611041253';
+import { dbPost, dbPatch } from './db.js?v=202611041305';
+import { localDate } from './util.js?v=202611041305';
+import * as F from './fin.js?v=202611041305';
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 export const yieldKey = (accId, ym) => `yield:${accId}:${ym}`;

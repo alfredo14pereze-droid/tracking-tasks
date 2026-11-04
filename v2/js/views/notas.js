@@ -1,7 +1,7 @@
 // Notas (tabla notes: title opcional, content). Mosaico de 2 columnas (1 en móvil) con edición en el lugar,
 // como en la clásica: cada nota recuerda su columna para no brincar al editar; ⌘/Ctrl+Enter guarda, Esc cancela.
-import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611041253';
-import { escapeHTML, showToast, icon } from '../util.js?v=202611041253';
+import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611041305';
+import { escapeHTML, showToast, icon } from '../util.js?v=202611041305';
 
 let notes = [], editing = null, search = '';
 let root = null;
