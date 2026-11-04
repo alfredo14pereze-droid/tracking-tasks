@@ -614,3 +614,9 @@ textarea{font-family:inherit;font-size:16px}
 .atajo-log summary{cursor:pointer;padding:6px 0}
 .atajo-log ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
 .atajo-log li{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere;border-top:1px solid var(--line, rgba(0,0,0,.08));padding-top:8px}
+/* Fechas de pago de cada ingreso (Finanzas › Ingresos) */
+.pay-days{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pay-day{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-2);white-space:nowrap}
+.pay-day.done{background:var(--accent-soft);border-color:transparent;color:var(--positive);font-weight:600}
+.pay-day.late{border-color:var(--alert);color:var(--alert)}
+.pay-day.before{opacity:.5}

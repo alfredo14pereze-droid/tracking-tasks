@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611041305';
-import { localDate } from './util.js?v=202611041305';
+import { safeGet } from './db.js?v=202611041323';
+import { localDate } from './util.js?v=202611041323';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions] = await Promise.all([
@@ -365,5 +365,27 @@ export function incomeStatus(f, src) {
   const r = incomePeriod(src);
   const got = f.tx.filter(t => t.type === 'income' && src.category_id && t.category_id === src.category_id && t.occurred_on >= r.from && t.occurred_on < r.to);
   return { period: r, received: got.reduce((x, t) => x + (Number(t.amount_cents) || 0), 0), last: got[0] || null };
+}
+// Fechas de pago de una fuente en el mes actual, cada una marcada si ya la registraste.
+// Los pagos registrados del mes se asignan en orden a las fechas (desde la fecha de tus saldos reales).
+export function incomeSchedule(f, src) {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const y = now.getFullYear(), m = now.getMonth(), len = new Date(y, m + 1, 0).getDate();
+  let days = [];
+  if (src.frequency === 'semanal' && src.pay_weekday !== null && src.pay_weekday !== undefined) {
+    for (let d = 1; d <= len; d++) if (new Date(y, m, d).getDay() === Number(src.pay_weekday)) days.push(new Date(y, m, d));
+  } else if ((src.frequency === 'mensual' || src.frequency === 'quincenal') && src.pay_day) {
+    days = (src.frequency === 'mensual' ? [src.pay_day] : [src.pay_day, src.pay_day + 15]).filter(d => d <= len).map(d => new Date(y, m, d));
+  }
+  if (!days.length) return null;
+  const st = startDate(f);
+  const from = localDate(st && st > new Date(y, m, 1) ? st : new Date(y, m, 1));
+  const got = src.category_id ? f.tx.filter(t => t.type === 'income' && t.category_id === src.category_id && t.occurred_on >= from && t.occurred_on < monthStartStr(1)).length : 0;
+  let left = got;
+  return days.map(d => {
+    const before = localDate(d) < from; // ya estaba en tus saldos
+    const done = !before && left > 0; if (done) left--;
+    return { date: d, before, done, late: !before && !done && d < now };
+  });
 }
 

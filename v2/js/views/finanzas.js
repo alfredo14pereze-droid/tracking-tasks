@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041305';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041305';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041305';
-import { FIN_TABS } from '../finclasica.js?v=202611041305';
-import { openStatement } from './estado.js?v=202611041305';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041305';
-import * as F from '../fin.js?v=202611041305';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041323';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041323';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041323';
+import { FIN_TABS } from '../finclasica.js?v=202611041323';
+import { openStatement } from './estado.js?v=202611041323';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041323';
+import * as F from '../fin.js?v=202611041323';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -63,12 +63,20 @@ function accountCard(f, a) {
   const credit = a.kind === 'credit';
   return `<div class="card card-sm acc">
     <div class="acc-head"><span class="acc-mark" style="background:${brandColor(a)}" aria-hidden="true">${escapeHTML(a.name.charAt(0).toUpperCase())}</span><span class="acc-name">${escapeHTML(a.name)}</span></div>
-    <div class="acc-val${v < 0 ? ' neg' : ''}">${F.fmtSigned(v)}</div>
+    ${credit && F.cardStatus(f, a) ? cardBody(f, a) : `<div class="acc-val${v < 0 ? ' neg' : ''}">${F.fmtSigned(v)}</div>`}
     ${F.ownedPct(a) < 100 ? `<div class="small" style="margin-top:-6px">${F.ownedPct(a) === 0 ? 'No es tuyo: lo cuidas' : `Tuyo ${F.ownedPct(a)}% · ${F.fmtMoney0(Math.round(v * F.ownedPct(a) / 100))}`}</div>` : ''}
-    ${credit ? `<div class="small" style="margin-top:-6px">Deuda total${(() => { const st = F.cardStatus(f, a); return st ? ` · gastado desde el corte ${F.fmtMoney0(st.spent)}` : ''; })()}</div>` : ''}
-    <div class="small"${credit && F.cardStatus(f, a)?.overdue ? ' style="color:var(--alert)"' : ''}>${escapeHTML(accountSub(f, a))}</div>
+    ${credit && F.cardStatus(f, a) ? '' : `<div class="small">${escapeHTML(accountSub(f, a))}</div>`}
     ${credit ? `<button type="button" class="btn-ghost sm" style="align-self:flex-start" data-card-month="${escapeHTML(a.id)}">Pago del mes</button>` : F.accPositions(f, a.id).length ? '' : `<button type="button" class="btn-link" style="align-self:flex-start" data-acc-edit="${escapeHTML(a.id)}">Editar</button>`}
   </div>`;
+}
+
+// Tarjeta de crédito: lo que hay que pagar este mes en grande; la deuda total abajo.
+function cardBody(f, a) {
+  const s = F.cardStatus(f, a);
+  const head = s.toPay > 0 ? `${s.overdue ? 'Vencido · ' : ''}Pagar antes del ${fmtDay(s.due)}` : 'Pago del mes cubierto ✓';
+  return `<span class="label"${s.overdue ? ' style="color:var(--alert)"' : ''}>${escapeHTML(head)}</span>
+    <div class="acc-val${s.toPay > 0 ? ' neg' : ''}" style="margin-top:-4px">${F.fmtMoney0(s.toPay)}</div>
+    <div class="small">Deuda total ${F.fmtMoney0(s.debt)}${s.spent ? ` · ${F.fmtMoney0(s.spent)} desde el corte (se paga hasta el ${escapeHTML(fmtDay(F.dueDateAfter(s.nextCut, s.card.pay_day)))})` : ''}</div>`;
 }
 
 function incomesCard(f) {
@@ -82,7 +90,8 @@ function incomesCard(f) {
       return `<div class="tx">
         <span class="tx-ic in" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg></span>
         <div class="tx-main"><div class="tx-title">${escapeHTML(src.name)} · ${F.fmtMoney0(src.amount_cents)}</div>
-          <div class="task-meta">${escapeHTML(when)} · ${done ? `✓ recibido ${escapeHTML(st.period.label)} (${F.fmtMoney0(st.received)})` : `pendiente ${escapeHTML(st.period.label)}`}</div></div>
+          <div class="task-meta">${escapeHTML(when)} · ${done ? `✓ recibido ${escapeHTML(st.period.label)} (${F.fmtMoney0(st.received)})` : `pendiente ${escapeHTML(st.period.label)}`}</div>
+          ${(() => { const sch = F.incomeSchedule(f, src); return sch ? `<div class="pay-days">${sch.map(x => `<span class="pay-day${x.done ? ' done' : x.late ? ' late' : x.before ? ' before' : ''}" title="${x.done ? 'Registrado' : x.late ? 'Ya debió llegar' : x.before ? 'Ya estaba en tu saldo' : 'Por llegar'}">${escapeHTML(fmtDay(x.date))}${x.done ? ' ✓' : ''}</span>`).join('')}</div>` : ''; })()}</div>
         <button type="button" class="${done ? 'btn-ghost' : 'btn-primary'} sm" data-inc="${escapeHTML(src.id)}">${done ? 'Otro pago' : 'Ya lo recibí'}</button>
       </div>`;
     }).join('') : '<p class="small" style="margin:0">Agrega tus ingresos (Salper, mensualidad…) y aquí tendrás un botón para registrarlos cuando lleguen.</p>'}
@@ -261,8 +270,8 @@ function paint() {
         ${incomesCard(f)}
 
         <section aria-labelledby="accT" style="display:flex;flex-direction:column;gap:10px">
-          <div class="card-head"><h2 id="accT" style="font-size:16px;font-weight:600">Cuentas</h2>
-            <div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="btn-link" data-rates>Rendimientos</button><button type="button" class="btn-link" data-real>Saldos reales</button><button type="button" class="btn-link" data-newacc>+ Cuenta</button><button type="button" class="btn-link" data-newcard>+ Tarjeta</button></div></div>
+          <h2 id="accT" style="font-size:16px;font-weight:600">Cuentas</h2>
+            <div style="display:flex;gap:6px 16px;flex-wrap:wrap;margin-top:-4px"><button type="button" class="btn-link" data-rates>Rendimientos</button><button type="button" class="btn-link" data-real>Saldos reales</button><button type="button" class="btn-link" data-newacc>+ Cuenta</button><button type="button" class="btn-link" data-newcard>+ Tarjeta</button></div>
           <div class="grid-2">${accounts.length ? accounts.map(a => accountCard(f, a)).join('') : '<div class="small">Sin cuentas.</div>'}</div>
         </section>
 
@@ -689,7 +698,7 @@ function openIncome(srcId) {
     <label class="flabel" for="riAcc">¿A dónde llegó?</label>
     <select class="field" id="riAcc">${accs.map(a => `<option value="${escapeHTML(a.id)}"${a.id === pre ? ' selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
     <label class="flabel" for="riDate">Fecha</label>
-    <input class="field" id="riDate" type="date" value="${localDate()}">
+    <input class="field" id="riDate" type="date" value="${(() => { const next = (F.incomeSchedule(f, src) || []).find(x => !x.done && !x.before); return next && localDate(next.date) <= localDate() ? localDate(next.date) : localDate(); })()}">
   `, `<button type="button" class="btn-primary" id="riSave">Registrar ingreso</button>`);
   document.getElementById('riSave').onclick = async e => {
     const btn = e.currentTarget;
