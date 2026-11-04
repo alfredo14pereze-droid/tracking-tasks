@@ -39,7 +39,11 @@ Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
    día exacto / fecha límite, recordatorio, "ciertos días" (custom:) y 'monthly' viejo se conserva.
    `checkRecurring()` corre una vez por sesión al abrir Inicio o Tareas (igual que v1; el índice único evita
    duplicados si v1 y v2 corren a la vez). Inicio permite marcar tareas y días de hábitos.
-5. Claude: sugerencias y análisis (ver plan).
+5. ✅ Comidas (pestaña de Salud; `sql/2026-11-04-comidas.sql`): `meals` (día, tiempo desayuno/comida/cena/snack,
+   kcal y macros), `diet_goals` (kcal/proteína/carbs/grasa diarias) y columnas nuevas en `body_metrics`
+   (cadera, pecho, brazo, muslo). Recetario fijo en `js/recetas.js` (29 ideas con ingredientes, pasos y macros
+   aproximados; "Ideas para hoy" rota por día y prioriza proteína si falta). Calorías quemadas = kJ de Whoop ÷ 4.184.
+6. Claude: sugerencias y análisis (ver plan).
 
 ## Conectar Whoop (una vez)
 1. Corre `sql/2026-11-03-ejercicio-whoop.sql`.

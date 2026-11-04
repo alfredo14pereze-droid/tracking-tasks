@@ -1,12 +1,12 @@
 // Salud: carga de datos de ejercicio + Whoop y la lógica (progresión, rutina sugerida, metas).
-import { safeGet, dbPost, callFunction } from './db.js?v=202611040000';
-import { localDate, weekKey } from './util.js?v=202611040000';
+import { safeGet, dbPost, callFunction } from './db.js?v=202611040007';
+import { localDate, weekKey } from './util.js?v=202611040007';
 
 const daysAgoIso = n => new Date(Date.now() - n * 86400e3).toISOString();
 const daysAgoStr = n => { const d = new Date(); d.setDate(d.getDate() - n); return localDate(d); };
 
 export async function loadSalud() {
-  const [exercises, routines, items, options, workouts, sets, body, goals, wStatus, wDaily, wWorkouts] = await Promise.all([
+  const [exercises, routines, items, options, workouts, sets, body, goals, wStatus, wDaily, wWorkouts, meals, dietGoals] = await Promise.all([
     safeGet('ex_exercises', '?order=name.asc'),
     safeGet('ex_routines', '?archived=eq.false&order=position.asc,created_at.asc'),
     safeGet('ex_routine_items', '?order=position.asc,created_at.asc'),
@@ -17,12 +17,15 @@ export async function loadSalud() {
     safeGet('activity_goals', ''),
     safeGet('whoop_status', ''),
     safeGet('whoop_daily', `?day=gte.${daysAgoStr(40)}&order=day.desc`),
-    safeGet('whoop_workouts', `?day=gte.${daysAgoStr(40)}&order=started_at.desc`)
+    safeGet('whoop_workouts', `?day=gte.${daysAgoStr(40)}&order=started_at.desc`),
+    safeGet('meals', `?eaten_on=gte.${daysAgoStr(60)}&order=eaten_on.desc,created_at.desc`),
+    safeGet('diet_goals', '')
   ]);
   return {
     ready: exercises !== null && routines !== null, // false = falta correr el SQL
     exercises: exercises || [], routines: routines || [], items: items || [], options: options || [],
     workouts: workouts || [], sets: sets || [], body: body || [], goals: goals || [],
+    meals: meals || [], dietGoals: dietGoals || [], dietReady: meals !== null, // false = falta el SQL de Comidas
     whoop: { status: (wStatus || [])[0] || null, daily: wDaily || [], workouts: wWorkouts || [], ready: wStatus !== null }
   };
 }

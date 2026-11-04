@@ -1,9 +1,10 @@
 // Salud: Ejercicio (rutina de hoy, semana, progreso), Actividad (metas + Whoop) y Sueño.
-import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611040000';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040000';
-import * as S from '../salud.js?v=202611040000';
+import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611040007';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040007';
+import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611040007';
+import * as S from '../salud.js?v=202611040007';
 
-const TABS = { ejercicio: 'Ejercicio', actividad: 'Actividad', sueno: 'Sueño' };
+const TABS = { ejercicio: 'Ejercicio', comidas: 'Comidas', actividad: 'Actividad', sueno: 'Sueño' };
 const DAY = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 let st = { d: null, tab: 'ejercicio', routineId: null };
 let root = null;
@@ -250,6 +251,8 @@ function paint() {
       ? `<div class="fin-grid"><div class="fin-col">${heroCard(d)}${weekCard(d)}${historyCard(d)}</div><div class="fin-col">${routineCard(d)}${progressCard(d)}</div></div>`
       : setupCard('Tus rutinas', 'Crea las rutinas base (Push, Pull, Pierna y Full) con varias opciones de ejercicio en cada lugar. Después las puedes cambiar como quieras.',
         `<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn-dark" data-seed>Crear rutinas base</button><a class="btn-ghost sm" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--text)" href="#rutinas">Hacer la mía</a></div>`);
+  } else if (st.tab === 'comidas') {
+    body = comidasHTML(d);
   } else if (st.tab === 'actividad') {
     body = `<div class="fin-grid"><div class="fin-col">${goalsCard(d)}</div><div class="fin-col">${whoopCard(d)}${strainCard(d)}</div></div>`;
   } else {
@@ -271,7 +274,8 @@ function bind() {
   on('[data-seed]', seed);
   on('[data-start]', e => startWorkout(e.currentTarget.dataset.start));
   on('[data-change]', chooseRoutine);
-  on('[data-weight]', openWeight);
+  on('[data-weight]', () => openMeasures(st.d, paint));
+  if (st.tab === 'comidas' && st.d.ready !== undefined) bindComidas(root, st.d, paint);
   on('[data-goals]', openGoals);
   on('[data-whoop-connect]', connectWhoop);
   on('[data-whoop-sync]', syncWhoop);
@@ -324,27 +328,6 @@ function chooseRoutine() {
   document.querySelector('#modal a[data-close]').onclick = () => closeModal();
 }
 
-function openWeight() {
-  const last = st.d.body[0];
-  openModal('Peso corporal', `
-    <label class="flabel" for="bwKg">Peso (kg)</label>
-    <input class="field" id="bwKg" inputmode="decimal" autocomplete="off" value="${last?.weight_kg ?? ''}">
-    <label class="flabel" for="bwDate">Fecha</label>
-    <input class="field" id="bwDate" type="date" value="${localDate()}">`,
-    '<button type="button" class="btn-primary" id="bwSave">Guardar</button>');
-  document.getElementById('bwSave').onclick = async () => {
-    const kg = Number(String(document.getElementById('bwKg').value).replace(',', '.'));
-    const day = document.getElementById('bwDate').value;
-    if (!(kg > 20 && kg < 400)) return showToast('Escribe un peso válido', 'error');
-    closeModal();
-    const prev = st.d.body;
-    const row = { measured_on: day, weight_kg: kg };
-    st.d.body = [row, ...prev.filter(x => x.measured_on !== day)].sort((a, b) => a.measured_on < b.measured_on ? 1 : -1);
-    paint();
-    try { await dbUpsert('body_metrics', row, 'user_id,measured_on'); showToast('Peso guardado'); }
-    catch { st.d.body = prev; paint(); showToast('No se pudo guardar', 'error'); }
-  };
-}
 
 function openGoals() {
   const d = st.d;
