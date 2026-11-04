@@ -107,4 +107,9 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
   cuenta es un "sobre" (`money_goals.saved_cents`); "Aparté" registra la aportación del mes y suma; "Sacar" resta.
   `monthly_contribution_cents` = cuánto apartar al mes. La tarjeta Metas muestra "Este mes: $X de $Y".
 - "Te quedó" (antes "Ahorrado") = ingresos − gastos del periodo, sin cuentas que no son 100% tuyas.
+- **Inversiones** (Resumen): por fondo valor, % del portafolio, cambio del mes / 3 meses / desde lo aportado y mini
+  gráfica (`F.fundStats`); avisos factuales (`F.fundAlerts`: caída ≥3% en el mes, 3+ meses a la baja, debajo de lo
+  aportado, ≥50% en un fondo, valores sin actualizar). "Actualizar valores" guarda `position_valuations` del mes y puede
+  leer una captura (asistente `fondos_leer`). "Explicar cómo van" (asistente `fondos`) es solo informativo: el prompt
+  prohíbe recomendar comprar/vender/cambiar o sugerir productos.
 

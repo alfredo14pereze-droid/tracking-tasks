@@ -1,8 +1,8 @@
 // Calendario Mes (cuadrícula desde domingo) y Semana, como la clásica: "Incluir completadas", día saturado
 // (≥5 pendientes de día exacto) y tareas con fecha límite en cada día desde su inicio, con la prioridad de ese día.
-import { escapeHTML, localDate, todayStr, icon } from '../util.js?v=202611041440';
-import * as K from '../tareas.js?v=202611041440';
-import { openTaskModal } from './tareas.js?v=202611041440';
+import { escapeHTML, localDate, todayStr, icon } from '../util.js?v=202611041452';
+import * as K from '../tareas.js?v=202611041452';
+import { openTaskModal } from './tareas.js?v=202611041452';
 
 const DOW = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const PRIO = { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja', done: 'Completada', missed: 'No completada' };

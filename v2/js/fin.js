@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611041440';
-import { localDate } from './util.js?v=202611041440';
+import { safeGet } from './db.js?v=202611041452';
+import { localDate } from './util.js?v=202611041452';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions, contribs] = await Promise.all([
@@ -415,5 +415,37 @@ export function monthsLeft(g) {
   if (!g.due_date) return null;
   const d = new Date(g.due_date + 'T12:00:00'), n = new Date();
   return Math.max(0, (d.getFullYear() - n.getFullYear()) * 12 + d.getMonth() - n.getMonth());
+}
+// ── Inversiones: seguimiento por fondo y avisos (informativo, sin recomendaciones) ──
+export function fundStats(f) {
+  const funds = f.positions.filter(p => !p.archived);
+  const total = funds.reduce((x, p) => x + (positionValue(f, p) || 0), 0);
+  const cur = monthStartStr(0);
+  return funds.map(p => {
+    const hist = f.valuations.filter(v => v.position_id === p.id).sort((a, b) => a.month < b.month ? -1 : 1)
+      .map(v => ({ month: v.month, value: Number(v.value_cents) || 0 }));
+    const last = hist.at(-1), prev = hist.at(-2), back3 = hist.length > 3 ? hist.at(-4) : null;
+    const cost = Number(p.cost_basis_cents) || 0, value = last ? last.value : 0;
+    const pct = (a, b) => b ? (a - b) / b * 100 : null;
+    let downs = 0; for (let i = hist.length - 1; i > 0 && hist[i].value < hist[i - 1].value; i--) downs++;
+    return {
+      p, hist, value, cost, share: total ? value / total * 100 : 0,
+      m1: prev ? pct(value, prev.value) : null, m3: back3 ? pct(value, back3.value) : null,
+      gain: value - cost, gainPct: pct(value, cost), downs, stale: !last || last.month < cur, lastMonth: last ? last.month : null
+    };
+  }).sort((a, b) => b.value - a.value);
+}
+// Avisos: caída fuerte en el mes, varios meses a la baja, mucha concentración, valores sin actualizar.
+export function fundAlerts(rows) {
+  const out = [];
+  for (const r of rows) {
+    const n = r.p.fund_name;
+    if (r.m1 !== null && r.m1 <= -3) out.push({ level: 'aviso', text: `${n} bajó ${Math.abs(r.m1).toFixed(1)}% este mes.` });
+    if (r.downs >= 3) out.push({ level: 'aviso', text: `${n} lleva ${r.downs} meses seguidos a la baja.` });
+    if (r.cost && r.gainPct !== null && r.gainPct < 0) out.push({ level: 'aviso', text: `${n} vale menos de lo que se aportó (${r.gainPct.toFixed(1)}%).` });
+    if (r.share >= 50) out.push({ level: 'info', text: `${n} es el ${r.share.toFixed(0)}% de tu portafolio.` });
+  }
+  if (rows.some(r => r.stale)) out.push({ level: 'info', text: 'Faltan los valores de este mes: toca "Actualizar valores".' });
+  return out;
 }
 

@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041440';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041440';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041440';
-import { FIN_TABS } from '../finclasica.js?v=202611041440';
-import { openStatement } from './estado.js?v=202611041440';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041440';
-import * as F from '../fin.js?v=202611041440';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041452';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041452';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041452';
+import { FIN_TABS } from '../finclasica.js?v=202611041452';
+import { openStatement } from './estado.js?v=202611041452';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041452';
+import * as F from '../fin.js?v=202611041452';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -162,6 +162,99 @@ function goalRow(f, g) {
     </div>
     ${canContrib ? `<button type="button" class="${monthly && done < monthly ? 'btn-primary' : 'btn-ghost'} sm" style="align-self:center" data-contrib="${escapeHTML(g.id)}">${monthly && done < monthly ? 'Aparté' : 'Mover'}</button>` : ''}
   </div>`;
+}
+
+// ── Inversiones ──────────────────────────────────────
+const pctTxt = v => v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}%`;
+function spark(hist) {
+  if (hist.length < 2) return '';
+  const vs = hist.map(h => h.value), lo = Math.min(...vs), hi = Math.max(...vs), w = 64, h = 22;
+  const pts = vs.map((v, i) => `${(i / (vs.length - 1) * w).toFixed(1)},${(hi === lo ? h / 2 : h - (v - lo) / (hi - lo) * h).toFixed(1)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function investCard(f) {
+  const rows = F.fundStats(f);
+  if (!rows.length) return '';
+  const alerts = F.fundAlerts(rows);
+  const total = rows.reduce((x, r) => x + r.value, 0), cost = rows.reduce((x, r) => x + r.cost, 0);
+  return `<section class="card" aria-labelledby="invT" style="gap:10px">
+    <div class="card-head"><h2 id="invT">Inversiones</h2><span class="small">${F.fmtMoney0(total)}${cost ? ` · ${pctTxt((total - cost) / cost * 100)} vs aportado` : ''}</span></div>
+    ${alerts.length ? `<ul class="fund-alerts">${alerts.map(a => `<li class="${a.level}">${escapeHTML(a.text)}</li>`).join('')}</ul>` : ''}
+    ${rows.map(r => `<div class="fund">
+      <div class="fund-main"><div class="tx-title">${escapeHTML(r.p.fund_name)}</div>
+        <div class="task-meta">${r.share.toFixed(1)}% · este mes <b class="${r.m1 !== null && r.m1 < 0 ? 'neg' : 'pos'}">${pctTxt(r.m1)}</b>${r.m3 !== null ? ` · 3 meses ${pctTxt(r.m3)}` : ''}${r.cost ? ` · desde que se aportó <b class="${r.gain < 0 ? 'neg' : 'pos'}">${pctTxt(r.gainPct)}</b>` : ''}</div></div>
+      <span class="fund-spark ${r.m1 !== null && r.m1 < 0 ? 'neg' : 'pos'}">${spark(r.hist)}</span>
+      <div class="tx-amt">${F.fmtMoney0(r.value)}</div>
+    </div>`).join('')}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px">
+      <button type="button" class="btn-ghost sm" data-fund-values>Actualizar valores</button>
+      <button type="button" class="btn-ghost sm ai-btn" data-fund-ai>${aiLabel('Explicar cómo van')}</button>
+    </div>
+    <p class="small" style="margin:0">Informativo: la app no te dice qué comprar ni vender. Para eso, un asesor certificado.</p>
+  </section>`;
+}
+
+function openFundValues() {
+  const f = state.f, rows = F.fundStats(f), ms = F.monthStartStr(0);
+  const curVal = r => f.valuations.find(v => v.position_id === r.p.id && v.month === ms);
+  openModal(`Valores de ${F.monthName(0)}`, `
+    <p class="small" style="margin:0">Escribe el valor de hoy de cada fondo, o sube una captura de tu app de inversiones y lo leo por ti.</p>
+    <label class="flabel" for="fvImg">Captura (opcional)</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input class="field" id="fvImg" type="file" accept="image/*" style="flex:1;min-width:0;padding:10px;height:auto">
+      <button type="button" class="btn-ghost sm ai-btn" id="fvRead">${aiLabel('Leer captura')}</button></div>
+    ${rows.map((r, i) => `<label class="flabel" for="fv${i}">${escapeHTML(r.p.fund_name)}</label>
+      <input class="field" id="fv${i}" data-fv="${escapeHTML(r.p.id)}" inputmode="decimal" autocomplete="off" placeholder="${r.value ? centsInput(r.value) : '0.00'}" value="${curVal(r) ? centsInput(curVal(r).value_cents) : ''}">`).join('')}
+    <p class="small" id="fvNote" style="margin:6px 0 0"></p>
+  `, `<button type="button" class="btn-primary" id="fvSave">Guardar valores</button>`);
+  document.getElementById('fvRead').onclick = async e => {
+    const btn = e.currentTarget, file = document.getElementById('fvImg').files[0];
+    if (!file) return showToast('Elige la captura', 'error');
+    if (file.size > 5 * 1024 * 1024) return showToast('La captura pesa más de 5 MB', 'error');
+    try {
+      const image = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(new Error('No pude leer la imagen')); r.readAsDataURL(file); });
+      const out = await withBusy(btn, 'Leyendo…', () => ask('fondos_leer', { image, media_type: file.type || 'image/png', funds: rows.map(r => r.p.fund_name) }));
+      let n = 0;
+      for (const x of out.funds || []) {
+        const i = rows.findIndex(r => r.p.fund_name === x.fund);
+        if (i >= 0) { document.getElementById(`fv${i}`).value = Number(x.value).toFixed(2); n++; }
+      }
+      const miss = rows.filter((r, i) => !document.getElementById(`fv${i}`).value).map(r => r.p.fund_name);
+      document.getElementById('fvNote').textContent = `Leí ${n} de ${rows.length} fondos.${miss.length ? ` Faltan: ${miss.join(', ')}.` : ''}${out.total ? ` Total en la captura: ${F.fmtMoney(Math.round(out.total * 100))}.` : ''} Revisa antes de guardar.`;
+    } catch (err) { showToast(err.message, 'error'); }
+  };
+  document.getElementById('fvSave').onclick = async e => {
+    const btn = e.currentTarget, work = [];
+    for (const inp of document.querySelectorAll('#modal [data-fv]')) {
+      if (!inp.value.trim()) continue;
+      const c = F.parseCents(inp.value.replace(/[$,\s]/g, ''));
+      if (c === null) return showToast('Revisa los valores', 'error');
+      work.push({ id: inp.dataset.fv, c });
+    }
+    if (!work.length) return showToast('Escribe al menos un valor', 'error');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      for (const w of work) {
+        const ex = f.valuations.find(v => v.position_id === w.id && v.month === ms);
+        if (ex) { await dbPatch('position_valuations', { value_cents: w.c }, `?id=eq.${ex.id}`); ex.value_cents = w.c; }
+        else { const [row] = await dbPost('position_valuations', { position_id: w.id, month: ms, value_cents: w.c }); f.valuations.push(row); }
+      }
+      closeModal(); showToast('Valores guardados'); paint();
+    } catch { btn.disabled = false; btn.textContent = 'Guardar valores'; showToast('No se pudieron guardar', 'error'); }
+  };
+}
+
+async function explainFunds(e) {
+  const btn = e.currentTarget, f = state.f, rows = F.fundStats(f);
+  const funds = rows.map(r => ({ fund: r.p.fund_name, origen: r.p.origin, aportado: r.cost / 100, porcentaje_portafolio: Math.round(r.share * 10) / 10,
+    valores_por_mes: r.hist.map(h => ({ mes: h.month.slice(0, 7), valor: h.value / 100 })) }));
+  try {
+    const out = await withBusy(btn, 'Revisando…', () => ask('fondos', { funds, alerts: F.fundAlerts(rows).map(a => a.text) }));
+    openModal(out.headline || 'Tus inversiones', `
+      ${(out.alerts || []).length ? `<ul class="fund-alerts">${out.alerts.map(a => `<li class="${a.level === 'aviso' ? 'aviso' : 'info'}">${escapeHTML(a.text)}</li>`).join('')}</ul>` : ''}
+      ${(out.funds || []).map(x => `<div style="margin-top:10px"><div class="tx-title">${escapeHTML(x.fund)}</div><p class="small" style="margin:2px 0 0">${escapeHTML(x.note)}</p></div>`).join('')}
+      ${(out.questions || []).length ? `<h3 style="font-size:15px;margin:14px 0 4px">Preguntas para tu asesor</h3><ul class="ai-assump">${out.questions.map(q => `<li>${escapeHTML(q)}</li>`).join('')}</ul>` : ''}
+      <p class="small" style="margin:12px 0 0">Esto es informativo y no es asesoría de inversión. Antes de mover tu dinero, consúltalo con un asesor certificado.</p>`);
+  } catch (err) { showToast(err.message, 'error'); }
 }
 
 function goalsCard(f) {
@@ -327,6 +420,8 @@ function paint() {
           <div class="grid-2">${accounts.length ? accounts.map(a => accountCard(f, a)).join('') : '<div class="small">Sin cuentas.</div>'}</div>
         </section>
 
+        ${investCard(f)}
+
         ${goalsCard(f)}
       </div>
 
@@ -370,6 +465,8 @@ function bind() {
   rootEl.querySelectorAll('[data-card-month]').forEach(b => b.onclick = () => openCardMonth(b.dataset.cardMonth));
   rootEl.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => openIncome(b.dataset.inc));
   rootEl.querySelectorAll('[data-contrib]').forEach(b => b.onclick = () => openContribution(b.dataset.contrib));
+  rootEl.querySelector('[data-fund-values]')?.addEventListener('click', openFundValues);
+  rootEl.querySelector('[data-fund-ai]')?.addEventListener('click', explainFunds);
   rootEl.querySelector('[data-sources]')?.addEventListener('click', openSources);
   rootEl.querySelector('[data-newcard]')?.addEventListener('click', openNewCard);
   rootEl.querySelector('[data-newacc]')?.addEventListener('click', () => openAccount());

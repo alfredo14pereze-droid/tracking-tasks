@@ -4,6 +4,8 @@
 //   categorias   → sugiere la categoría de pagos de Apple Pay por revisar
 //   ideas        → 3 ideas de comida para lo que falta del día (sin pescado ni mariscos)
 //   semana       → resumen de la semana con 2–3 cosas a mejorar
+//   fondos_leer  → lee una captura de su app de inversiones y regresa el valor de cada fondo
+//   fondos       → explica cómo van sus fondos (informativo: NO recomienda comprar, vender ni cambiar)
 // POST /functions/v1/asistente  { action, ...datos }   (con la sesión del usuario)
 // La app manda los datos ya resumidos; la función no lee la base de datos.
 // Secrets: ANTHROPIC_API_KEY (obligatorio) y ALLOWED_EMAILS (opcional). "Verify JWT" puede quedar encendido.
@@ -88,6 +90,28 @@ Escribes su resumen semanal a partir de sus números (tareas, hábitos, entrenos
 Da: un título corto (máx. 60 caracteres), 2–4 logros o datos destacados con números concretos, 2–3 cosas a mejorar la próxima semana (concretas y realistas) y un enfoque de una frase. Si falta un área (por ejemplo sin Whoop o sin comidas registradas), no la inventes: ignórala.`,
     schema: S({ title: str, highlights: arr(str), improvements: arr(str), focus: str }),
     user: d => `Números de la semana (JSON):\n${JSON.stringify(d.stats)}`
+  },
+  fondos_leer: {
+    effort: 'low', maxTokens: 3000,
+    system: `${PERSONA}
+Lees una captura de pantalla de su app de inversiones (por ejemplo GBM) y extraes el valor actual en pesos de cada fondo.
+Recibes la lista de fondos que ya tiene registrados. Para cada fondo que SÍ aparece en la captura regresa su nombre EXACTAMENTE como está en la lista y su valor en pesos (número, sin símbolos). Si un fondo de la lista no se ve en la captura, no lo incluyas. Si ves un fondo que no está en la lista, ponlo en extra.
+Si la captura muestra el valor total del portafolio, ponlo en total (0 si no se ve). No inventes cifras.`,
+    schema: S({ funds: arr(S({ fund: str, value: num })), extra: arr(S({ name: str, value: num })), total: num }),
+    user: d => [
+      { type: 'image', source: { type: 'base64', media_type: d.media_type, data: d.image } },
+      { type: 'text', text: `Fondos registrados: ${JSON.stringify(d.funds || [])}` }
+    ]
+  },
+  fondos: {
+    effort: 'medium', maxTokens: 6000,
+    system: `${PERSONA}
+Le explicas cómo van sus fondos de inversión a partir de sus números (valor por mes, lo aportado, % del portafolio y avisos calculados por la app).
+IMPORTANTE: NO eres asesor financiero con licencia. NUNCA recomiendes comprar, vender, mantener, cambiar ni rebalancear fondos, ni sugieras otros fondos o productos, ni digas que uno es mejor opción. Solo describe y explica con sus números.
+Da: un titular corto; para cada fondo una nota de 1–2 frases (qué pasó este mes y desde que se aportó, en palabras sencillas, y qué tipo de fondo parece por su nombre — renta variable o deuda — si lo sabes con seguridad; si no, no lo digas); 0–4 avisos factuales (caídas fuertes, varios meses a la baja, mucha concentración en un fondo, datos viejos); y 3–5 preguntas que le conviene hacerle a un asesor certificado según sus números.
+Con poco historial (1–2 meses), dilo y no saques conclusiones de tendencia.`,
+    schema: S({ headline: str, funds: arr(S({ fund: str, note: str })), alerts: arr(S({ level: enm('info', 'aviso'), text: str })), questions: arr(str) }),
+    user: d => `Fondos (JSON):\n${JSON.stringify(d.funds)}\nAvisos de la app: ${JSON.stringify(d.alerts || [])}`
   }
 };
 
@@ -101,12 +125,19 @@ export function validate(action, body) {
     if (body.pdf.length > 14_000_000) return 'El PDF es muy grande (máx. ~10 MB)';
     if (!/^[A-Za-z0-9+/=]+$/.test(body.pdf.slice(0, 2000))) return 'El PDF no viene en base64';
     if (!body.account) return 'Elige la cuenta';
-  } else if (size > 200_000) return 'Demasiados datos';
+  } else if (action !== 'fondos_leer' && size > 200_000) return 'Demasiados datos';
   if (action === 'gym' && !body.data) return 'Faltan datos de entrenamiento';
   if (action === 'categorias' && !(Array.isArray(body.payments) && body.payments.length)) return 'No hay pagos para clasificar';
   if (action === 'categorias' && body.payments.length > 60) return 'Máximo 60 pagos a la vez';
   if (action === 'ideas' && !body.slot) return 'Falta el tiempo de comida';
   if (action === 'semana' && !body.stats) return 'Faltan los números de la semana';
+  if (action === 'fondos_leer') {
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(body.media_type)) return 'La captura debe ser PNG, JPG o WEBP';
+    if (typeof body.image !== 'string' || body.image.length < 100) return 'Falta la captura';
+    if (body.image.length > 7_000_000) return 'La captura es muy grande (máx. ~5 MB)';
+    if (!Array.isArray(body.funds) || !body.funds.length) return 'No hay fondos registrados';
+  }
+  if (action === 'fondos' && !(Array.isArray(body.funds) && body.funds.length)) return 'No hay fondos para revisar';
   return '';
 }
 
@@ -120,6 +151,9 @@ export function finish(action, out) {
   if (action === 'estado') {
     out.transactions = (out.transactions || []).filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t.date) && Number(t.amount) > 0)
       .map(t => ({ ...t, amount: Math.round(Number(t.amount) * 100) / 100 }));
+  }
+  if (action === 'fondos_leer') {
+    out.funds = (out.funds || []).filter(x => Number(x.value) > 0).map(x => ({ fund: x.fund, value: Math.round(Number(x.value) * 100) / 100 }));
   }
   if (action === 'gym') {
     out.suggestions = (out.suggestions || []).slice(0, 6);
