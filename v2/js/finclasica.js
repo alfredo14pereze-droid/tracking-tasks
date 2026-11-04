@@ -1,8 +1,8 @@
 // GENERADO por build_finclasica.py desde clasica/index.html (sección FINANZAS). No editar a mano:
 // cambia la clásica o el script y vuelve a generar. Es la misma lógica de la clásica (saldos, tarjetas,
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
-import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611040943';
-import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611040943';
+import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611040944';
+import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611040944';
 
 // ── Adaptador ──
 let currentSection = 'finance', finView = 'home', currentView = 'today';

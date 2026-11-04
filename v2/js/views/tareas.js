@@ -1,6 +1,6 @@
 // Tareas: Hoy, Orden del día, Mañana, Próximas, Sin completar, Todas, Pasadas y categorías.
-import { escapeHTML, localDate, todayStr, daysUntil, showToast, icon, openModal, closeModal } from '../util.js?v=202611040943';
-import * as K from '../tareas.js?v=202611040943';
+import { escapeHTML, localDate, todayStr, daysUntil, showToast, icon, openModal, closeModal } from '../util.js?v=202611040944';
+import * as K from '../tareas.js?v=202611040944';
 
 const { T } = K;
 const VIEWS = { today: 'Hoy', order: 'Orden del día', tomorrow: 'Mañana', upcoming: 'Próximas', missed: 'Sin completar', all: 'Todas', past: 'Pasadas' };
@@ -226,6 +226,7 @@ function actionsSheet(id) {
     !closed && ['missed', 'No la completé (no se repite)'],
     !closed && t.due_date !== K.tomorrowStr() && ['tomorrow', 'Pasar a mañana'],
     ['duplicate', 'Duplicar para mañana'],
+    ['gcal', 'Agregar a Google Calendar'],
     ['edit', 'Editar'],
     ['delete', 'Eliminar']
   ].filter(Boolean);
@@ -238,9 +239,23 @@ function actionsSheet(id) {
     else if (a === 'missed') K.markMissed(id, rerender);
     else if (a === 'tomorrow') K.moveToTomorrow(id, rerender);
     else if (a === 'duplicate') K.duplicateToTomorrow(id, rerender);
+    else if (a === 'gcal') addToGCal(t);
     else if (a === 'edit') openTaskModal(id);
     else if (a === 'delete') K.deleteTask(id, rerender);
   });
+}
+
+// Igual que la clásica: abre Google Calendar con el evento listo (sin pedir permisos).
+function addToGCal(t) {
+  const date = t.due_date || localDate(), start = t.due_time ? t.due_time.slice(0, 5) : '09:00';
+  const dur = Number(t.estimated_minutes) || 60;
+  const pad = n => String(n).padStart(2, '0');
+  const s = date.replace(/-/g, '') + 'T' + start.replace(':', '') + '00';
+  const e = new Date(date + 'T' + start + ':00'); e.setMinutes(e.getMinutes() + dur);
+  const end = `${e.getFullYear()}${pad(e.getMonth() + 1)}${pad(e.getDate())}T${pad(e.getHours())}${pad(e.getMinutes())}00`;
+  const q = new URLSearchParams({ action: 'TEMPLATE', text: t.title, dates: `${s}/${end}`, ctz: 'America/Monterrey' });
+  window.open(`https://calendar.google.com/calendar/render?${q}`, '_blank', 'noopener');
+  showToast('Abriendo Google Calendar…');
 }
 
 // ── Orden del día ────────────────────────────────────

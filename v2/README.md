@@ -43,7 +43,13 @@ Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
    kcal y macros), `diet_goals` (kcal/proteína/carbs/grasa diarias) y columnas nuevas en `body_metrics`
    (cadera, pecho, brazo, muslo). Recetario fijo en `js/recetas.js` (29 ideas con ingredientes, pasos y macros
    aproximados; "Ideas para hoy" rota por día y prioriza proteína si falta). Calorías quemadas = kJ de Whoop ÷ 4.184.
-6. Claude: sugerencias y análisis (ver plan).
+6. ✅ Resto de la clásica (4-nov-2026): Objetivos y hábitos (`views/objetivos.js`, `habitos.js`), Recordatorios,
+   Notas, Calendario, Estadísticas y "Agregar a Google Calendar" en tareas. Finanzas avanzada (`#finanzas/<tab>`:
+   movs, accounts, patrimonio, recurrentes, loans, budget, goals, revision + asistente) = `js/finclasica.js`,
+   GENERADO con `python3 v2/build-finclasica.py .` desde la sección FINANZAS de `clasica/index.html` (misma lógica,
+   adaptador mínimo; estilos en `css/finclasica.css` con alcance `.fc`). No editar finclasica.js a mano.
+   La clásica ya no está en el menú; `clasica/` queda como respaldo.
+7. Claude: sugerencias y análisis (ver plan).
 
 ## Conectar Whoop (una vez)
 1. Corre `sql/2026-11-03-ejercicio-whoop.sql`.

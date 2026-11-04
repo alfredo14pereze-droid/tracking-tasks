@@ -1,6 +1,6 @@
 // Salud: carga de datos de ejercicio + Whoop y la lógica (progresión, rutina sugerida, metas).
-import { safeGet, dbPost, callFunction } from './db.js?v=202611040943';
-import { localDate, weekKey } from './util.js?v=202611040943';
+import { safeGet, dbPost, callFunction } from './db.js?v=202611040944';
+import { localDate, weekKey } from './util.js?v=202611040944';
 
 const daysAgoIso = n => new Date(Date.now() - n * 86400e3).toISOString();
 const daysAgoStr = n => { const d = new Date(); d.setDate(d.getDate() - n); return localDate(d); };

@@ -3,8 +3,11 @@
 > **Cambio a v2 (3-nov-2026):** la página oficial ya es v2. `index.html` de la raíz solo redirige a `v2/`
 > (conserva `?…` y `#…`). La app anterior completa (todo lo descrito abajo) vive ahora en **`clasica/index.html`**
 > con sus rutas a `../manifest.json`, `../icons/` y `../service-worker.js`. El código nuevo y sus reglas están en
-> `v2/README.md`. Mismas tablas de Supabase en ambas. Calendario, Notas, Recordatorios, Objetivos y Estadísticas
-> siguen solo en la clásica. Antes de cada commit de v2: `sh v2/bump-version.sh`.
+> `v2/README.md`. Mismas tablas de Supabase en ambas. **Desde el 4-nov-2026 todo vive en la app nueva** (Calendario,
+> Notas, Recordatorios, Objetivos, Estadísticas y Finanzas avanzada incluidos) y la clásica ya no está enlazada en el
+> menú; queda en `clasica/` solo como respaldo (tiene un botón "← App nueva"). Finanzas avanzada (`v2/js/finclasica.js`)
+> se GENERA desde `clasica/index.html` con `python3 v2/build-finclasica.py .`. Antes de cada commit de v2:
+> `sh v2/bump-version.sh`.
 
 App personal de tareas de Alfredo (idioma de la UI y del trato: **español**). Un solo usuario, con login por enlace mágico (Supabase Auth).
 Producción: https://alfredo14pereze-droid.github.io/tracking-tasks/ · Repo: `alfredo14pereze-droid/tracking-tasks` (rama `main`).
