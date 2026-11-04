@@ -61,7 +61,12 @@ export const ICONS = {
   check: '<path d="M5 12l5 5L20 7"/>',
   x: '<path d="M7 7l10 10M17 7L7 17"/>',
   salir: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H4"/>',
-  volver: '<path d="M10 6l-6 6 6 6M4 12h16"/>'
+  volver: '<path d="M10 6l-6 6 6 6M4 12h16"/>',
+  play: '<path d="M7 4v16l13-8z" fill="currentColor"/>',
+  back: '<path d="M15 18l-6-6 6-6"/>',
+  up: '<path d="M6 15l6-6 6 6"/>',
+  down: '<path d="M6 9l6 6 6-6"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'
 };
 export function icon(name, w = 2) {
   return `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;

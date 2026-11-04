@@ -44,3 +44,18 @@ export async function safeGet(table, query) {
   try { return (await dbGet(table, query)) || []; }
   catch (e) { if (e instanceof AuthError) throw e; console.warn(table, e); return null; }
 }
+
+// Llama una Edge Function de Supabase con la sesión actual (p. ej. 'whoop/sync').
+export async function callFunction(path, body) {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new AuthError('Sesión expirada');
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: 'Bearer ' + session.access_token },
+    body: JSON.stringify(body || {})
+  });
+  const text = await r.text();
+  let j = null; try { j = text ? JSON.parse(text) : null; } catch { /* no es JSON */ }
+  if (!r.ok) throw new Error((j && j.error) || `Error ${r.status}`);
+  return j;
+}

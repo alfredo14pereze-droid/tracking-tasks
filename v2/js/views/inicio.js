@@ -13,13 +13,14 @@ export async function load() {
   // Abiertas + las que se cerraron hoy (para el "5/8 hechas").
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const since = new Date(startOfDay.getTime() - 86400000).toISOString(); // margen de un día por zona horaria
-  const [tasks, habits, weeks, fin] = await Promise.all([
+  const [tasks, habits, weeks, fin, whoop] = await Promise.all([
     dbGet('tasks', `?select=*&or=(status.in.(todo,in_progress),completed_at.gte.${encodeURIComponent(since)})&order=position.asc,created_at.desc`),
     safeGet('habits', '?order=created_at.asc'),
     safeGet('habit_weeks', `?week_key=eq.${weekKey()}`),
-    F.loadFinance().catch(e => { if (e instanceof AuthError) throw e; return null; })
+    F.loadFinance().catch(e => { if (e instanceof AuthError) throw e; return null; }),
+    safeGet('whoop_daily', '?order=day.desc&limit=3')
   ]);
-  return { tasks: tasks || [], habits, weeks, fin: fin && !fin.errors.length ? fin : null };
+  return { tasks: tasks || [], habits, weeks, fin: fin && !fin.errors.length ? fin : null, whoop: whoop || [] };
 }
 
 // ── Reglas de v1 (isTodayTask, rangos, effPriority) ──
@@ -183,7 +184,7 @@ export function render(el, data, { name = 'Alfredo' } = {}) {
       ${hero(false)}
       <div class="grid-2">
         ${fs ? moneyCard('Gastado hoy', F.fmtMoney0(fs.today), fs.daily ? `de ${F.fmtMoney0(fs.daily)} diarios` : 'sin presupuesto', fs.daily && fs.today > fs.daily) : soonCard('Gastado hoy', 'Sin datos de finanzas')}
-        ${soonCard('Recuperación', 'Whoop · fase 4')}
+        ${recoveryCard(data.whoop, false)}
       </div>
     </div>
 
@@ -191,7 +192,7 @@ export function render(el, data, { name = 'Alfredo' } = {}) {
       ${hero(true)}
       ${habitsKpi}
       ${fs ? moneyCard(`Gastado en ${fs.month}`, F.fmtMoney0(fs.exp), fs.budget ? `de ${F.fmtMoney0(fs.budget)} · ${fs.onTrack ? 'al día' : 'vas arriba'}` : 'sin presupuesto', fs.budget && !fs.onTrack, true) : soonCard('Gastado este mes', 'Sin datos de finanzas')}
-      ${soonCard('Recuperación', 'Whoop · fase 4')}
+      ${recoveryCard(data.whoop, true)}
     </div>
 
     <div class="cols">
@@ -269,4 +270,23 @@ function payCard(fs) {
     <div style="font-size:22px;font-weight:600;overflow-wrap:anywhere">Tarjeta ${escapeHTML(fs.pay.account.name)} · ${escapeHTML(d)}</div>
     <div class="muted">${F.fmtMoney0(fs.pay.debt)} por pagar</div>
   </section>`;
+}
+
+// ── Whoop en Inicio ───────────────────────────────────
+function recoveryCard(days, desk) {
+  const t = (days || []).find(x => x.recovery_score != null);
+  if (!t) return `<a class="card card-sm" href="#salud" style="text-decoration:none;color:inherit">
+      <span class="label">Recuperación</span>
+      <div class="big pending-val" aria-label="Sin datos">—</div>
+      <div class="small">Conecta Whoop en Salud</div>
+    </a>`;
+  const s = t.recovery_score;
+  const zone = s >= 67 ? 'día verde' : s >= 34 ? 'día amarillo' : 'día rojo';
+  const color = s >= 67 ? 'var(--positive)' : s >= 34 ? '#8A6D1A' : 'var(--alert)';
+  const sleep = t.sleep_minutes != null ? `Sueño ${Math.floor(t.sleep_minutes / 60)} h ${String(t.sleep_minutes % 60).padStart(2, '0')} min · Whoop` : 'Whoop';
+  return `<a class="card card-sm" href="#salud" style="text-decoration:none;color:inherit">
+    <span class="label">Recuperación</span>
+    <div class="big"${desk ? ' style="font-size:30px"' : ''}>${s}%</div>
+    <div class="small" style="color:${color};font-weight:500">${escapeHTML(desk ? sleep : 'Whoop · ' + zone)}</div>
+  </a>`;
 }

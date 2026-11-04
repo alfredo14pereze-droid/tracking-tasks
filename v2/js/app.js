@@ -4,23 +4,31 @@ import { escapeHTML, showToast } from './util.js';
 import * as inicio from './views/inicio.js';
 import * as pendiente from './views/pendiente.js';
 import * as finanzas from './views/finanzas.js';
+import * as salud from './views/salud.js';
+import * as entreno from './views/entreno.js';
+import * as rutinas from './views/rutinas.js';
 
-const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'objetivos', 'notas', 'mas'];
+const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'notas', 'mas'];
+// Pantallas de Salud que marcan la pestaña Salud.
+const SALUD = ['salud', 'entreno', 'rutinas', 'rutina'];
 const $ = id => document.getElementById(id);
 const main = $('main');
 let started = false;
 let renderSeq = 0;
 
-function currentRoute() {
-  const r = location.hash.replace(/^#\/?/, '').split(/[?&]/)[0];
-  return ROUTES.includes(r) ? r : 'inicio';
+// "#rutina/abc?x=1" → { route: 'rutina', param: 'abc' }
+function parseHash() {
+  const [r, param] = location.hash.replace(/^#\/?/, '').split(/[?&]/)[0].split('/');
+  return ROUTES.includes(r) ? { route: r, param: param ? decodeURIComponent(param) : null } : { route: 'inicio', param: null };
 }
+const currentRoute = () => parseHash().route;
 
 function markNav(route) {
   // En móvil, las secciones que viven en "Más" marcan la pestaña Más.
-  const tabRoute = ['calendario', 'objetivos', 'notas'].includes(route) ? 'mas' : route;
+  const base = SALUD.includes(route) ? 'salud' : route;
+  const tabRoute = ['calendario', 'objetivos', 'notas'].includes(base) ? 'mas' : base;
   document.querySelectorAll('[data-route]').forEach(a => {
-    const on = a.closest('.tabbar') ? a.dataset.route === tabRoute : a.dataset.route === route;
+    const on = a.closest('.tabbar') ? a.dataset.route === tabRoute : a.dataset.route === base;
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
 }
@@ -58,6 +66,18 @@ async function renderRoute() {
       if (seq !== renderSeq) return;
       if (e instanceof AuthError) return showLogin();
       main.innerHTML = `<div class="page"><div class="error-box">No se pudieron cargar las finanzas.<br><small>${escapeHTML(e.message)}</small></div></div>`;
+    }
+  } else if (SALUD.includes(route)) {
+    skeleton();
+    const isCurrent = () => seq === renderSeq;
+    try {
+      if (route === 'salud') await salud.show(main, isCurrent);
+      else if (route === 'entreno') await entreno.show(main, isCurrent);
+      else await rutinas.show(main, route === 'rutina' ? parseHash().param : null, isCurrent);
+    } catch (e) {
+      if (seq !== renderSeq) return;
+      if (e instanceof AuthError) return showLogin();
+      main.innerHTML = `<div class="page"><div class="error-box">No se pudo cargar Salud.<br><small>${escapeHTML(e.message)}</small></div></div>`;
     }
   } else if (route === 'mas') {
     pendiente.renderMore(main);
