@@ -1,6 +1,6 @@
 // Tareas: Hoy, Orden del día, Mañana, Próximas, Sin completar, Todas, Pasadas y categorías.
-import { escapeHTML, localDate, todayStr, daysUntil, showToast, icon, openModal, closeModal } from '../util.js?v=202611041203';
-import * as K from '../tareas.js?v=202611041203';
+import { escapeHTML, localDate, todayStr, daysUntil, showToast, icon, openModal, closeModal } from '../util.js?v=202611041208';
+import * as K from '../tareas.js?v=202611041208';
 
 const { T } = K;
 const VIEWS = { today: 'Hoy', order: 'Orden del día', tomorrow: 'Mañana', upcoming: 'Próximas', missed: 'Sin completar', all: 'Todas', past: 'Pasadas' };

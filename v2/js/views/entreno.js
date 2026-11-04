@@ -1,8 +1,8 @@
 // Entreno en curso: una tarjeta por ejercicio con sus series, "anterior", opciones y timer de descanso.
 // Cada serie se guarda al marcarla (optimista + rollback). Lo no marcado vive en un borrador local.
-import { dbPost, dbPatch, dbDelete } from '../db.js?v=202611041203';
-import { escapeHTML, showToast, icon, openModal, closeModal } from '../util.js?v=202611041203';
-import * as S from '../salud.js?v=202611041203';
+import { dbPost, dbPatch, dbDelete } from '../db.js?v=202611041208';
+import { escapeHTML, showToast, icon, openModal, closeModal } from '../util.js?v=202611041208';
+import * as S from '../salud.js?v=202611041208';
 
 let st = null;     // { d, w, slots, current, restEnd, restTotal }
 let root = null;

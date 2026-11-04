@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611041203';
-import { localDate } from './util.js?v=202611041203';
+import { safeGet } from './db.js?v=202611041208';
+import { localDate } from './util.js?v=202611041208';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions] = await Promise.all([
@@ -257,9 +257,11 @@ export function cardStatus(f, a) {
     if (t.type === 'transfer' && t.to_account_id === a.id) paid += amt;
     else if (t.type === 'income' && t.account_id === a.id) paid += amt;
   }
+  const spent = f.tx.filter(t => t.type === 'expense' && t.account_id === a.id && t.occurred_on > cutStr)
+    .reduce((x, t) => x + (Number(t.amount_cents) || 0), 0);
   const today = new Date(); today.setHours(0, 0, 0, 0);
   return {
-    card: c, cut, cutStr, due, fromBank, statement, paid,
+    card: c, cut, cutStr, due, fromBank, statement, paid, spent,
     toPay: Math.max(0, statement - paid), debt: Math.max(0, -accBalance(f, a.id)),
     overdue: today > due && statement - paid > 0,
     nextCut: dayIn(cut.getFullYear(), cut.getMonth() + 1, c.cut_day)
@@ -344,3 +346,21 @@ export function capturesToReview(f) {
     return t && !t.category_id;
   });
 }
+
+// ── Ingresos: periodo de cada fuente (semana lun–dom o mes) y lo recibido en él ──
+export const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+export function incomePeriod(src) {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  if (src.frequency === 'semanal') {
+    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    const next = new Date(mon); next.setDate(mon.getDate() + 7);
+    return { from: localDate(mon), to: localDate(next), label: 'esta semana' };
+  }
+  return { from: monthStartStr(0), to: monthStartStr(1), label: `en ${monthName(0)}` };
+}
+export function incomeStatus(f, src) {
+  const r = incomePeriod(src);
+  const got = f.tx.filter(t => t.type === 'income' && src.category_id && t.category_id === src.category_id && t.occurred_on >= r.from && t.occurred_on < r.to);
+  return { period: r, received: got.reduce((x, t) => x + (Number(t.amount_cents) || 0), 0), last: got[0] || null };
+}
+

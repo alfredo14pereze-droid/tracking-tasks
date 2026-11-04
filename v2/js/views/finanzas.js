@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041203';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041203';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041203';
-import { FIN_TABS } from '../finclasica.js?v=202611041203';
-import { openStatement } from './estado.js?v=202611041203';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041203';
-import * as F from '../fin.js?v=202611041203';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041208';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041208';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041208';
+import { FIN_TABS } from '../finclasica.js?v=202611041208';
+import { openStatement } from './estado.js?v=202611041208';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041208';
+import * as F from '../fin.js?v=202611041208';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -64,23 +64,27 @@ function accountCard(f, a) {
   return `<div class="card card-sm acc">
     <div class="acc-head"><span class="acc-mark" style="background:${brandColor(a)}" aria-hidden="true">${escapeHTML(a.name.charAt(0).toUpperCase())}</span><span class="acc-name">${escapeHTML(a.name)}</span></div>
     <div class="acc-val${v < 0 ? ' neg' : ''}">${F.fmtSigned(v)}</div>
-    ${credit ? '<div class="small" style="margin-top:-6px">Deuda total</div>' : ''}
+    ${credit ? `<div class="small" style="margin-top:-6px">Deuda total${(() => { const st = F.cardStatus(f, a); return st ? ` · gastado desde el corte ${F.fmtMoney0(st.spent)}` : ''; })()}</div>` : ''}
     <div class="small"${credit && F.cardStatus(f, a)?.overdue ? ' style="color:var(--alert)"' : ''}>${escapeHTML(accountSub(f, a))}</div>
     ${credit ? `<button type="button" class="btn-ghost sm" style="align-self:flex-start" data-card-month="${escapeHTML(a.id)}">Pago del mes</button>` : ''}
   </div>`;
 }
 
 function incomesCard(f) {
-  const list = F.expectedIncomes(f).filter(x => x.left > 0);
-  if (!list.length) return '';
+  const list = f.incomes;
   return `<section class="card" aria-labelledby="incT" style="gap:4px">
-    <div class="card-head" style="padding-bottom:8px"><h2 id="incT">Ingresos por recibir</h2><span class="small">${escapeHTML(F.monthName(0))}</span></div>
-    ${list.map(x => `<div class="tx">
-      <span class="tx-ic in" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg></span>
-      <div class="tx-main"><div class="tx-title">${escapeHTML(x.src.name)}</div>
-        <div class="task-meta">${x.received ? `Recibido ${F.fmtMoney0(x.received)} · faltan ${F.fmtMoney0(x.left)}` : `Esperado ${F.fmtMoney0(x.expected)}`}</div></div>
-      <button type="button" class="btn-primary sm" data-inc="${escapeHTML(x.src.id)}">Ya lo recibí</button>
-    </div>`).join('')}
+    <div class="card-head" style="padding-bottom:8px"><h2 id="incT">Ingresos</h2><button type="button" class="btn-link" data-sources>${list.length ? 'Editar' : 'Configurar'}</button></div>
+    ${list.length ? list.map(src => {
+      const st = F.incomeStatus(f, src), done = st.received > 0;
+      const when = src.frequency === 'semanal' && src.pay_weekday !== null && src.pay_weekday !== undefined ? `cada ${F.WEEKDAYS[src.pay_weekday]}`
+        : src.frequency === 'semanal' ? 'cada semana' : src.frequency === 'quincenal' ? 'cada quincena' : src.frequency === 'irregular' ? 'cuando llegue' : 'cada mes';
+      return `<div class="tx">
+        <span class="tx-ic in" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg></span>
+        <div class="tx-main"><div class="tx-title">${escapeHTML(src.name)} · ${F.fmtMoney0(src.amount_cents)}</div>
+          <div class="task-meta">${escapeHTML(when)} · ${done ? `✓ recibido ${escapeHTML(st.period.label)} (${F.fmtMoney0(st.received)})` : `pendiente ${escapeHTML(st.period.label)}`}</div></div>
+        <button type="button" class="${done ? 'btn-ghost' : 'btn-primary'} sm" data-inc="${escapeHTML(src.id)}">${done ? 'Otro pago' : 'Ya lo recibí'}</button>
+      </div>`;
+    }).join('') : '<p class="small" style="margin:0">Agrega tus ingresos (Salper, mensualidad…) y aquí tendrás un botón para registrarlos cuando lleguen.</p>'}
   </section>`;
 }
 
@@ -257,7 +261,7 @@ function paint() {
 
         <section aria-labelledby="accT" style="display:flex;flex-direction:column;gap:10px">
           <div class="card-head"><h2 id="accT" style="font-size:16px;font-weight:600">Cuentas</h2>
-            <div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="btn-link" data-rates>Rendimientos</button><button type="button" class="btn-link" data-real>Saldos reales</button></div></div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="btn-link" data-rates>Rendimientos</button><button type="button" class="btn-link" data-real>Saldos reales</button><button type="button" class="btn-link" data-newcard>+ Tarjeta</button></div></div>
           <div class="grid-2">${accounts.length ? accounts.map(a => accountCard(f, a)).join('') : '<div class="small">Sin cuentas.</div>'}</div>
         </section>
 
@@ -302,6 +306,8 @@ function bind() {
   rootEl.querySelector('[data-rates]')?.addEventListener('click', openRates);
   rootEl.querySelectorAll('[data-card-month]').forEach(b => b.onclick = () => openCardMonth(b.dataset.cardMonth));
   rootEl.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => openIncome(b.dataset.inc));
+  rootEl.querySelector('[data-sources]')?.addEventListener('click', openSources);
+  rootEl.querySelector('[data-newcard]')?.addEventListener('click', openNewCard);
   rootEl.querySelector('[data-connect]')?.addEventListener('click', connectShortcut);
   rootEl.querySelector('[data-revoke]')?.addEventListener('click', revokeShortcut);
   rootEl.querySelector('[data-statement]')?.addEventListener('click', () => openStatement(state.f, paint));
@@ -663,19 +669,20 @@ function openCardMonth(accId) {
 }
 
 // ── Ya lo recibí ─────────────────────────────────────
+const lastIncAcc = id => { try { return localStorage.getItem('v2IncAcc:' + id); } catch { return null; } };
 function openIncome(srcId) {
   const f = state.f;
-  const x = F.expectedIncomes(f).find(i => i.src.id === srcId);
-  if (!x) return;
-  const step = x.src.frequency !== 'irregular' ? Math.min(Number(x.src.amount_cents) || 0, x.left) : x.left;
-  const accs = F.bankAccounts(f).filter(a => a.kind !== 'investment');
-  const recent = f.tx.filter(t => t.type === 'income' && t.category_id === x.src.category_id && t.occurred_on >= (() => { const d = new Date(); d.setDate(d.getDate() - 5); return localDate(d); })())[0];
-  openModal(`Recibí ${x.src.name}`, `
-    ${recent ? `<p class="small" style="margin:0;color:var(--alert)">Ojo: ya registraste ${escapeHTML(F.fmtMoney(recent.amount_cents))} de ${escapeHTML(x.src.name)} el ${escapeHTML(fmtDay(new Date(recent.occurred_on + 'T12:00:00')))}. Regístralo solo si es otro pago.</p>` : ''}
+  const src = f.incomes.find(x => x.id === srcId);
+  if (!src) return;
+  const st = F.incomeStatus(f, src);
+  const accs = F.bankAccounts(f).filter(a => ['debit', 'savings', 'cash'].includes(a.kind));
+  const pre = [lastIncAcc(src.id), src.account_id].find(id => id && accs.some(a => a.id === id));
+  openModal(`Recibí ${src.name}`, `
+    ${st.last ? `<p class="small" style="margin:0;color:var(--alert)">Ojo: ya registraste ${escapeHTML(F.fmtMoney(st.received))} de ${escapeHTML(src.name)} ${escapeHTML(st.period.label)} (el ${escapeHTML(fmtDay(new Date(st.last.occurred_on + 'T12:00:00')))}). Regístralo solo si es otro pago.</p>` : ''}
     <label class="flabel" for="riAmt">Monto</label>
-    <input class="field" id="riAmt" inputmode="decimal" autocomplete="off" value="${centsInput(step)}">
-    <label class="flabel" for="riAcc">Cuenta</label>
-    <select class="field" id="riAcc">${accs.map(a => `<option value="${escapeHTML(a.id)}"${a.id === x.src.account_id ? ' selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
+    <input class="field" id="riAmt" inputmode="decimal" autocomplete="off" value="${centsInput(src.amount_cents)}">
+    <label class="flabel" for="riAcc">¿A dónde llegó?</label>
+    <select class="field" id="riAcc">${accs.map(a => `<option value="${escapeHTML(a.id)}"${a.id === pre ? ' selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
     <label class="flabel" for="riDate">Fecha</label>
     <input class="field" id="riDate" type="date" value="${localDate()}">
   `, `<button type="button" class="btn-primary" id="riSave">Registrar ingreso</button>`);
@@ -683,13 +690,140 @@ function openIncome(srcId) {
     const btn = e.currentTarget;
     const amount = F.parseCents(document.getElementById('riAmt').value.replace(/[$,\s]/g, ''));
     const date = document.getElementById('riDate').value;
+    const acc = document.getElementById('riAcc').value;
     if (!amount) return showToast('Escribe el monto', 'error');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return showToast('Elige la fecha', 'error');
     btn.disabled = true;
     try {
-      const [row] = await dbPost('transactions', { type: 'income', amount_cents: amount, account_id: document.getElementById('riAcc').value, to_account_id: null, category_id: x.src.category_id, occurred_on: date, note: x.src.name });
+      if (!src.category_id) { // fuentes viejas sin categoría: se le crea una con su nombre
+        const c = await ensureIncomeCategory(f, src.name);
+        await dbPatch('income_sources', { category_id: c.id }, `?id=eq.${src.id}`); src.category_id = c.id;
+      }
+      const [row] = await dbPost('transactions', { type: 'income', amount_cents: amount, account_id: acc, to_account_id: null, category_id: src.category_id, occurred_on: date, note: src.name });
       f.tx.unshift(row); sortTx();
-      closeModal(); showToast(`${x.src.name} registrado`); paint();
+      try { localStorage.setItem('v2IncAcc:' + src.id, acc); } catch { /* sin storage */ }
+      closeModal(); showToast(`${src.name} registrado en ${F.accName(f, acc)}`); paint();
     } catch { btn.disabled = false; showToast('No se pudo registrar', 'error'); }
+  };
+}
+async function ensureIncomeCategory(f, name) {
+  let c = f.categories.find(x => x.kind === 'income' && x.name.trim().toLowerCase() === name.trim().toLowerCase());
+  if (c && c.archived) { await dbPatch('categories', { archived: false }, `?id=eq.${c.id}`); c.archived = false; }
+  if (!c) { [c] = await dbPost('categories', { name: name.trim(), kind: 'income' }); f.categories.push(c); }
+  return c;
+}
+
+// ── Mis ingresos (fuentes) ───────────────────────────
+const FREQ = { semanal: 'Cada semana', quincenal: 'Cada quincena', mensual: 'Cada mes', irregular: 'Cuando llegue' };
+function sourceRow(x, i) {
+  const wd = F.WEEKDAYS.map((d, k) => `<option value="${k}"${Number(x.pay_weekday) === k && x.pay_weekday !== null && x.pay_weekday !== undefined ? ' selected' : ''}>${d.charAt(0).toUpperCase() + d.slice(1)}</option>`).join('');
+  return `<fieldset class="src-row" data-src="${i}" style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0 0;display:flex;flex-direction:column;gap:6px;min-width:0">
+    <div class="row2"><div><label class="flabel" for="sn${i}" style="margin-top:0">Nombre</label><input class="field" id="sn${i}" data-sn value="${escapeHTML(x.name || '')}" maxlength="60"></div>
+      <div><label class="flabel" for="sa${i}" style="margin-top:0">Monto</label><input class="field" id="sa${i}" data-sa inputmode="decimal" value="${x.amount_cents ? centsInput(x.amount_cents) : ''}"></div></div>
+    <div class="row2"><div><label class="flabel" for="sf${i}">Frecuencia</label><select class="field" id="sf${i}" data-sf>${Object.entries(FREQ).map(([k, v]) => `<option value="${k}"${x.frequency === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div><label class="flabel" for="sw${i}">Día</label><select class="field" id="sw${i}" data-sw><option value="">Varía</option>${wd}</select></div></div>
+    <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-sdel> Quitar este ingreso</label>
+  </fieldset>`;
+}
+function openSources() {
+  const f = state.f;
+  const rows = f.incomes.map(x => ({ ...x }));
+  const has = re => rows.some(x => re.test(x.name));
+  if (!has(/salper/i)) rows.push({ name: 'Salper', amount_cents: 450000, frequency: 'semanal', pay_weekday: 5 });
+  if (!has(/mensual|papá|papa/i)) rows.push({ name: 'Mensualidad', amount_cents: 600000, frequency: 'mensual', pay_weekday: null });
+  openModal('Mis ingresos', `
+    <p class="small" style="margin:0">Así se ven en Finanzas, cada uno con su botón "Ya lo recibí". Quita los que ya no apliquen.</p>
+    <div id="srcList">${rows.map(sourceRow).join('')}</div>
+    <button type="button" class="btn-link" id="srcAdd" style="align-self:flex-start;margin-top:8px">+ Otro ingreso</button>
+  `, `<button type="button" class="btn-primary" id="srcSave">Guardar</button>`);
+  const syncDay = fs => { const sel = fs.querySelector('[data-sw]'); sel.closest('div').style.display = fs.querySelector('[data-sf]').value === 'semanal' ? '' : 'none'; };
+  const wire = () => document.querySelectorAll('#modal [data-src]').forEach(fs => { fs.querySelector('[data-sf]').onchange = () => syncDay(fs); syncDay(fs); });
+  wire();
+  document.getElementById('srcAdd').onclick = () => {
+    rows.push({ name: '', amount_cents: 0, frequency: 'mensual' });
+    document.getElementById('srcList').insertAdjacentHTML('beforeend', sourceRow(rows[rows.length - 1], rows.length - 1)); wire();
+  };
+  document.getElementById('srcSave').onclick = async e => {
+    const btn = e.currentTarget;
+    const work = [];
+    for (const fs of document.querySelectorAll('#modal [data-src]')) {
+      const x = rows[Number(fs.dataset.src)];
+      const del = fs.querySelector('[data-sdel]').checked;
+      const name = fs.querySelector('[data-sn]').value.trim();
+      if (del) { if (x.id) work.push({ x, del }); continue; }
+      if (!name && !x.id) continue;
+      const amount = F.parseCents(fs.querySelector('[data-sa]').value.replace(/[$,\s]/g, ''));
+      if (!name || !amount) return showToast('Cada ingreso necesita nombre y monto', 'error');
+      const frequency = fs.querySelector('[data-sf]').value, wd = fs.querySelector('[data-sw]').value;
+      work.push({ x, body: { name, amount_cents: amount, frequency, pay_weekday: frequency === 'semanal' && wd !== '' ? Number(wd) : null } });
+    }
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      for (const w of work) {
+        if (w.del) { await dbPatch('income_sources', { active: false }, `?id=eq.${w.x.id}`); f.incomes = f.incomes.filter(s => s.id !== w.x.id); continue; }
+        if (w.x.id) {
+          await dbPatch('income_sources', w.body, `?id=eq.${w.x.id}`);
+          Object.assign(f.incomes.find(s => s.id === w.x.id), w.body);
+        } else {
+          const c = await ensureIncomeCategory(f, w.body.name);
+          const [row] = await dbPost('income_sources', { ...w.body, category_id: c.id, active: true, counts_for_budget: true });
+          f.incomes.push(row);
+        }
+      }
+      closeModal(); showToast('Ingresos guardados'); paint();
+    } catch { btn.disabled = false; btn.textContent = 'Guardar'; showToast('No se pudieron guardar', 'error'); paint(); }
+  };
+}
+
+// ── Nueva tarjeta de crédito ─────────────────────────
+function openNewCard() {
+  const f = state.f;
+  const hasPlataCredit = F.bankAccounts(f).some(a => a.kind === 'credit' && /plata/i.test(a.name));
+  const cardNames = [...new Set((f.captures || []).map(c => c.card_name).filter(Boolean))];
+  openModal('Nueva tarjeta de crédito', `
+    <label class="flabel" for="ncName" style="margin-top:0">Nombre</label>
+    <input class="field" id="ncName" maxlength="40" value="${hasPlataCredit ? '' : 'Plata crédito'}" placeholder="Ej. Plata crédito">
+    <label class="flabel" for="ncDebt">Deuda de hoy (lo que debes en total)</label>
+    <input class="field" id="ncDebt" inputmode="decimal" autocomplete="off" placeholder="0.00">
+    <div class="row2"><div><label class="flabel" for="ncCut">Día de corte</label><input class="field" id="ncCut" inputmode="numeric" maxlength="2" placeholder="1–31"></div>
+      <div><label class="flabel" for="ncPay">Día límite de pago</label><input class="field" id="ncPay" inputmode="numeric" maxlength="2" placeholder="1–31"></div></div>
+    <label class="flabel" for="ncLim">Límite de crédito (opcional)</label>
+    <input class="field" id="ncLim" inputmode="decimal" autocomplete="off" placeholder="0.00">
+    ${cardNames.length ? `<div class="flabel">Pagos de Apple Pay que van a esta tarjeta</div>
+      ${cardNames.map((n, i) => `<label class="small" style="display:flex;gap:8px;align-items:center;margin-top:4px"><input type="checkbox" data-nccard="${i}"${/plata/i.test(n) && !hasPlataCredit ? ' checked' : ''}> ${escapeHTML(n)}</label>`).join('')}
+      <label class="small" style="display:flex;gap:8px;align-items:flex-start;margin-top:10px"><input type="checkbox" id="ncMove" checked> Mover aquí los gastos de Apple Pay de esas tarjetas que ya se registraron en otra cuenta</label>` : ''}
+  `, `<button type="button" class="btn-primary" id="ncSave">Agregar tarjeta</button>`);
+  document.getElementById('ncSave').onclick = async e => {
+    const btn = e.currentTarget;
+    const name = document.getElementById('ncName').value.trim();
+    const debt = document.getElementById('ncDebt').value.trim() ? F.parseCents(document.getElementById('ncDebt').value.replace(/[$,\s]/g, '')) : 0;
+    const cut = Number(document.getElementById('ncCut').value), pay = Number(document.getElementById('ncPay').value);
+    const lim = document.getElementById('ncLim').value.trim() ? F.parseCents(document.getElementById('ncLim').value.replace(/[$,\s]/g, '')) : 0;
+    if (!name) return showToast('Ponle nombre a la tarjeta', 'error');
+    if (f.accounts.some(a => !a.archived && a.name.trim().toLowerCase() === name.toLowerCase())) return showToast('Ya tienes una cuenta con ese nombre', 'error');
+    if (debt === null) return showToast('Revisa la deuda', 'error');
+    if (!(cut >= 1 && cut <= 31) || !(pay >= 1 && pay <= 31)) return showToast('Revisa los días de corte y de pago', 'error');
+    if (lim === null) return showToast('Revisa el límite', 'error');
+    const picked = [...document.querySelectorAll('#modal [data-nccard]:checked')].map(c => cardNames[Number(c.dataset.nccard)]);
+    const move = document.getElementById('ncMove')?.checked;
+    const caps = move ? (f.captures || []).filter(c => picked.includes(c.card_name) && c.transaction_id) : [];
+    const txs = caps.map(c => f.tx.find(t => t.id === c.transaction_id)).filter(t => t && t.type === 'expense');
+    const moved = txs.reduce((x, t) => x + (Number(t.amount_cents) || 0), 0);
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      // Saldo inicial para que, con los gastos movidos, la deuda de hoy sea la que escribiste.
+      const [acc] = await dbPost('accounts', { name, kind: 'credit', institution: name.split(/\s+/)[0], opening_balance_cents: -debt + moved, sort_order: 3 });
+      f.accounts.push(acc);
+      const [card] = await dbPost('card_settings', { account_id: acc.id, cut_day: cut, pay_day: pay, credit_limit_cents: lim || 0 });
+      f.cards.push(card);
+      for (const n of picked) {
+        const [m] = await dbUpsert('capture_card_accounts', { card_name: n, account_id: acc.id }, 'user_id,card_name');
+        if (f.cardMap) { f.cardMap = f.cardMap.filter(x => x.card_name !== n); if (m) f.cardMap.push(m); }
+      }
+      for (const t of txs) { await dbPatch('transactions', { account_id: acc.id }, `?id=eq.${t.id}`); t.account_id = acc.id; }
+      for (const c of caps) { await dbPatch('wallet_captures', { account_id: acc.id }, `?id=eq.${c.id}`); c.account_id = acc.id; }
+      closeModal(); paint();
+      showToast(txs.length ? `Tarjeta agregada y ${txs.length} gasto${txs.length === 1 ? '' : 's'} movido${txs.length === 1 ? '' : 's'}. Revisa Saldos reales.` : 'Tarjeta agregada');
+    } catch { btn.disabled = false; btn.textContent = 'Agregar tarjeta'; showToast('No se pudo agregar la tarjeta', 'error'); paint(); }
   };
 }

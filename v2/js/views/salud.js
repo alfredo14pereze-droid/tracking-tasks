@@ -1,9 +1,9 @@
 // Salud: Ejercicio (rutina de hoy, semana, progreso), Actividad (metas + Whoop) y Sueño.
-import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611041203';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041203';
-import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611041203';
-import { coachHTML, bindCoach } from './coach.js?v=202611041203';
-import * as S from '../salud.js?v=202611041203';
+import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611041208';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041208';
+import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611041208';
+import { coachHTML, bindCoach } from './coach.js?v=202611041208';
+import * as S from '../salud.js?v=202611041208';
 
 const TABS = { ejercicio: 'Ejercicio', comidas: 'Comidas', actividad: 'Actividad', sueno: 'Sueño' };
 const DAY = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];

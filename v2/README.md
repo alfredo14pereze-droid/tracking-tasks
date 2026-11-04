@@ -90,4 +90,10 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
   como transferencia.
 - **Ingresos por recibir** en Resumen (`F.expectedIncomes`, mismas reglas que "Este mes"), con aviso si ya registraste
   uno de esa categoría en los últimos 5 días.
+- **Ingresos** (Resumen): un botón fijo por fuente (`income_sources`) con su periodo (`F.incomePeriod`: semana lun–dom o
+  mes). "Editar" abre "Mis ingresos" (alta/baja/edición; crea la categoría de ingreso con el nombre). Recuerda la última
+  cuenta destino por fuente (localStorage `v2IncAcc:<id>`).
+- **+ Tarjeta**: crea cuenta `credit` + `card_settings`, apunta en `capture_card_accounts` las tarjetas de Apple Pay
+  elegidas y puede mover a la nueva cuenta los gastos ya capturados (el saldo inicial compensa para que la deuda de hoy
+  sea la capturada). Cada tarjeta muestra "gastado desde el corte".
 
