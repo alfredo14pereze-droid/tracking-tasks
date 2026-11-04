@@ -2,8 +2,8 @@
 // (checkRecurring / spawnNextRecurring / shouldRecurOnDate), missed, pasar/duplicar a mañana,
 // "avancé hoy" y Orden del día. Mismas tablas y columnas; nada de esquema nuevo.
 // Diferencia con v1: las acciones son optimistas (se ven al instante) con rollback + toast.
-import { dbGet, dbPost, dbPatch, dbDelete, safeGet } from './db.js?v=202611041208';
-import { localDate, todayStr, daysUntil, showToast } from './util.js?v=202611041208';
+import { dbGet, dbPost, dbPatch, dbDelete, safeGet } from './db.js?v=202611041253';
+import { localDate, todayStr, daysUntil, showToast } from './util.js?v=202611041253';
 
 export const T = { tasks: [], subtasks: [], quick: [], loaded: false, recurringChecked: false };
 

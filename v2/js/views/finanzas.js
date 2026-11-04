@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041208';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041208';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041208';
-import { FIN_TABS } from '../finclasica.js?v=202611041208';
-import { openStatement } from './estado.js?v=202611041208';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041208';
-import * as F from '../fin.js?v=202611041208';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041253';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041253';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041253';
+import { FIN_TABS } from '../finclasica.js?v=202611041253';
+import { openStatement } from './estado.js?v=202611041253';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041253';
+import * as F from '../fin.js?v=202611041253';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -286,7 +286,8 @@ function paint() {
         <section class="card" aria-labelledby="stT" style="gap:10px">
           <div class="card-head"><h2 id="stT">Estado de cuenta</h2></div>
           <p class="small" style="margin:0">Sube el PDF de tu banco o tarjeta: Claude saca los movimientos, marca cuáles ya tenías y registras los nuevos.</p>
-          <button type="button" class="btn-dark ai-btn" style="align-self:flex-start" data-statement>${aiLabel('Analizar PDF')}</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn-dark ai-btn" data-statement>${aiLabel('Analizar PDF')}</button>
+            <button type="button" class="btn-ghost" data-paste>Pegar movimientos</button></div>
         </section>
 
         ${shortcutCard(f)}
@@ -311,6 +312,7 @@ function bind() {
   rootEl.querySelector('[data-connect]')?.addEventListener('click', connectShortcut);
   rootEl.querySelector('[data-revoke]')?.addEventListener('click', revokeShortcut);
   rootEl.querySelector('[data-statement]')?.addEventListener('click', () => openStatement(state.f, paint));
+  rootEl.querySelector('[data-paste]')?.addEventListener('click', openPaste);
   rootEl.querySelector('[data-ai-cats]')?.addEventListener('click', suggestCats);
   rootEl.querySelector('[data-r-saveall]')?.addEventListener('click', async e => {
     const rows = [...rootEl.querySelectorAll('[data-cap]')];
@@ -825,5 +827,87 @@ function openNewCard() {
       closeModal(); paint();
       showToast(txs.length ? `Tarjeta agregada y ${txs.length} gasto${txs.length === 1 ? '' : 's'} movido${txs.length === 1 ? '' : 's'}. Revisa Saldos reales.` : 'Tarjeta agregada');
     } catch { btn.disabled = false; btn.textContent = 'Agregar tarjeta'; showToast('No se pudo agregar la tarjeta', 'error'); paint(); }
+  };
+}
+
+// ── Pegar movimientos ────────────────────────────────
+// Una línea por gasto: fecha ; descripción ; monto ; categoría
+// Si la categoría es "Préstamo: Nombre", no es gasto tuyo: se registra como préstamo (te debe) desde esa cuenta.
+// Por defecto el saldo de hoy de la cuenta no cambia (son gastos que ya están en tu saldo real).
+function parsePaste(text) {
+  const out = [], bad = [];
+  text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach((line, i) => {
+    const p = line.split(/\s*[;|\t]\s*/);
+    const date = p[0], desc = (p[1] || '').trim(), amount = F.parseCents(String(p[2] || '').replace(/[$,\s]/g, '')), cat = (p[3] || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !desc || !amount) { bad.push(i + 1); return; }
+    const loan = cat.match(/^pr[eé]stamo\s*:\s*(.+)$/i);
+    out.push({ date, desc: desc.slice(0, 120), amount, cat: loan ? '' : cat, loan: loan ? loan[1].trim() : '' });
+  });
+  return { rows: out, bad };
+}
+function openPaste() {
+  const f = state.f;
+  const accs = F.bankAccounts(f).filter(a => a.kind !== 'investment');
+  const pre = accs.find(a => a.kind === 'credit' && /bbva/i.test(a.name)) || accs[0];
+  openModal('Pegar movimientos', `
+    <p class="small" style="margin:0">Una línea por gasto: <code>fecha ; descripción ; monto ; categoría</code>. Para algo que pagaste por otra persona usa la categoría <code>Préstamo: Nombre</code>.</p>
+    <label class="flabel" for="pAcc">Cuenta o tarjeta</label>
+    <select class="field" id="pAcc">${accs.map(a => `<option value="${escapeHTML(a.id)}"${a === pre ? ' selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
+    <label class="flabel" for="pText">Movimientos</label>
+    <textarea class="field" id="pText" rows="7" style="height:auto;font-size:14px" placeholder="2026-10-31; H&M; 1988; Ropa"></textarea>
+    <label class="small" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="pKeep" checked> Ya están en el saldo de hoy de la cuenta (no cambiar su saldo)</label>
+    <div id="pPrev"></div>
+  `, `<button type="button" class="btn-primary" id="pGo">Revisar</button>`);
+  let parsed = null;
+  const go = document.getElementById('pGo');
+  document.getElementById('pText').oninput = () => { parsed = null; go.textContent = 'Revisar'; document.getElementById('pPrev').innerHTML = ''; };
+  go.onclick = async () => {
+    const accId = document.getElementById('pAcc').value;
+    if (!parsed) {
+      parsed = parsePaste(document.getElementById('pText').value);
+      if (!parsed.rows.length) { parsed = null; return showToast('No encontré líneas válidas', 'error'); }
+      const dup = r => f.tx.some(t => t.account_id === accId && t.occurred_on === r.date && Number(t.amount_cents) === r.amount && (t.type === 'expense' || t.type === 'transfer'));
+      parsed.rows.forEach(r => { r.dup = dup(r); });
+      const byCat = {};
+      parsed.rows.filter(r => !r.dup).forEach(r => { const k = r.loan ? `Préstamo: ${r.loan}` : (r.cat || 'Sin categoría'); byCat[k] = (byCat[k] || 0) + r.amount; });
+      const fresh = parsed.rows.filter(r => !r.dup);
+      document.getElementById('pPrev').innerHTML = `
+        <div class="flabel">${fresh.length} por registrar · ${F.fmtMoney(fresh.reduce((x, r) => x + r.amount, 0))}</div>
+        ${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="bud-line"><span>${escapeHTML(k)}</span><span>${F.fmtMoney(v)}</span></div>`).join('')}
+        ${parsed.rows.some(r => r.dup) ? `<p class="small" style="margin:6px 0 0">${parsed.rows.filter(r => r.dup).length} ya estaban registrados (misma fecha y monto) y se saltan.</p>` : ''}
+        ${parsed.bad.length ? `<p class="small" style="margin:6px 0 0;color:var(--alert)">No entendí las líneas ${parsed.bad.join(', ')}.</p>` : ''}`;
+      go.textContent = fresh.length ? `Registrar ${fresh.length}` : 'Nada nuevo';
+      return;
+    }
+    const rows = parsed.rows.filter(r => !r.dup);
+    if (!rows.length) return closeModal();
+    const acc = f.accounts.find(a => a.id === accId);
+    go.disabled = true; go.textContent = 'Guardando…';
+    try {
+      const cats = {}, loans = {};
+      for (const r of rows) {
+        if (r.loan && !loans[r.loan]) {
+          let l = f.accounts.find(a => a.kind === 'lent' && !a.archived && a.name.trim().toLowerCase() === r.loan.toLowerCase());
+          if (!l) { [l] = await dbPost('accounts', { name: r.loan, kind: 'lent', opening_balance_cents: 0, sort_order: 100 }); f.accounts.push(l); }
+          loans[r.loan] = l;
+        } else if (r.cat && !cats[r.cat]) {
+          let c = f.categories.find(x => x.kind === 'expense' && x.name.trim().toLowerCase() === r.cat.toLowerCase());
+          if (c && c.archived) { await dbPatch('categories', { archived: false }, `?id=eq.${c.id}`); c.archived = false; }
+          if (!c) { [c] = await dbPost('categories', { name: r.cat, kind: 'expense' }); f.categories.push(c); }
+          cats[r.cat] = c;
+        }
+      }
+      const body = rows.map(r => r.loan
+        ? { type: 'transfer', amount_cents: r.amount, account_id: accId, to_account_id: loans[r.loan].id, category_id: null, occurred_on: r.date, note: r.desc }
+        : { type: 'expense', amount_cents: r.amount, account_id: accId, to_account_id: null, category_id: r.cat ? cats[r.cat].id : null, occurred_on: r.date, note: r.desc });
+      const created = await dbPost('transactions', body);
+      f.tx.push(...created); sortTx();
+      if (document.getElementById('pKeep').checked) { // el saldo de hoy no cambia: ya incluía estos gastos
+        const total = rows.reduce((x, r) => x + r.amount, 0);
+        const opening = (Number(acc.opening_balance_cents) || 0) + total;
+        await dbPatch('accounts', { opening_balance_cents: opening }, `?id=eq.${acc.id}`); acc.opening_balance_cents = opening;
+      }
+      closeModal(); showToast(`${created.length} movimiento${created.length === 1 ? '' : 's'} registrado${created.length === 1 ? '' : 's'}`); paint();
+    } catch { go.disabled = false; go.textContent = `Registrar ${rows.length}`; showToast('No se pudieron registrar', 'error'); paint(); }
   };
 }

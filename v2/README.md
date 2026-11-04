@@ -96,4 +96,7 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
 - **+ Tarjeta**: crea cuenta `credit` + `card_settings`, apunta en `capture_card_accounts` las tarjetas de Apple Pay
   elegidas y puede mover a la nueva cuenta los gastos ya capturados (el saldo inicial compensa para que la deuda de hoy
   sea la capturada). Cada tarjeta muestra "gastado desde el corte".
+- **Pegar movimientos** (tarjeta Estado de cuenta): una línea `fecha ; descripción ; monto ; categoría` por gasto;
+  `Préstamo: Nombre` crea/usa una cuenta `lent` y registra transferencia. Salta duplicados (cuenta+fecha+monto) y, por
+  defecto, compensa `opening_balance_cents` para no mover el saldo de hoy. Los datos personales NO se guardan en el repo.
 
