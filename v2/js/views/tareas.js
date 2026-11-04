@@ -1,6 +1,6 @@
 // Tareas: Hoy, Orden del día, Mañana, Próximas, Sin completar, Todas, Pasadas y categorías.
-import { escapeHTML, localDate, todayStr, daysUntil, showToast, icon, openModal, closeModal } from '../util.js?v=202611040935';
-import * as K from '../tareas.js?v=202611040935';
+import { escapeHTML, localDate, todayStr, daysUntil, showToast, icon, openModal, closeModal } from '../util.js?v=202611040937';
+import * as K from '../tareas.js?v=202611040937';
 
 const { T } = K;
 const VIEWS = { today: 'Hoy', order: 'Orden del día', tomorrow: 'Mañana', upcoming: 'Próximas', missed: 'Sin completar', all: 'Todas', past: 'Pasadas' };
@@ -290,11 +290,11 @@ function startDrag(e) {
 
 // ── Formulario ───────────────────────────────────────
 const DAY_BTNS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
-export function openTaskModal(id, onSaved) {
+export function openTaskModal(id, onSaved, prefill = {}) {
   const t = id ? T.tasks.find(x => String(x.id) === String(id)) : null;
   const f = {
     title: t?.title || '', priority: t?.priority || '', mode: t && K.isRangeTask(t) ? 'deadline' : 'exact',
-    due: t?.due_date || '', time: t?.due_time ? t.due_time.slice(0, 5) : '', start: t?.start_date || '',
+    due: t?.due_date || prefill.due || '', time: t?.due_time ? t.due_time.slice(0, 5) : '', start: t?.start_date || '',
     remind: !!t?.remind_day_before, recur: '', days: [], endDate: t?.end_date || '', category: t?.category || '',
     est: t?.estimated_minutes || ''
   };

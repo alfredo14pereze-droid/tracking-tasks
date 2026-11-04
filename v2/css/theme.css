@@ -501,3 +501,50 @@ input[type="time"].field{height:48px}
 .note-text-in{border:none;outline:none;background:none;font:inherit;font-size:16px;line-height:1.5;resize:none;padding:0;color:var(--text);overflow:hidden;width:100%}
 .note.editing{box-shadow:0 0 0 2px var(--accent)}
 textarea{font-family:inherit;font-size:16px}
+
+/* ── Calendario ────────────────────────────────────── */
+.cal-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.cal-nav{display:flex;align-items:center;gap:8px}
+.cal-nav h2{flex:1 1 auto;text-align:center;font-size:18px;font-weight:600}
+.cal-layout{display:flex;flex-direction:column;gap:16px}
+.cal-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+@media (min-width:900px){.cal-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;align-items:start}}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal-dow div{text-align:center;font-size:11px;font-weight:600;color:var(--text-2);text-transform:uppercase;padding-bottom:2px}
+.cal-cell{min-height:56px;border:none;border-radius:12px;background:var(--card);padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font:inherit;color:inherit;min-width:0;overflow:hidden}
+.cal-cell.other{opacity:.45}
+.cal-cell.sat{box-shadow:inset 0 0 0 2px var(--alert-bg)}
+.cal-cell.sel{box-shadow:inset 0 0 0 2px var(--accent)}
+.cal-num{font-size:13px;font-weight:600}
+.cal-cell.today .cal-num{background:var(--accent);color:#fff;border-radius:999px;min-width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.cal-warn{color:var(--over);font-weight:800}
+.cal-pills{display:none;flex-direction:column;gap:2px;width:100%;min-width:0}
+.cal-pill{font-size:11px;line-height:1.3;padding:2px 6px;border-radius:6px;background:var(--line);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.cal-pill.critical{background:var(--alert-bg);color:var(--alert)}
+.cal-pill.high{background:var(--accent-soft);color:var(--accent)}
+.cal-pill.done,.cal-pill.missed{text-decoration:line-through;opacity:.7}
+.cal-more{font-size:11px;color:var(--text-2)}
+.cal-dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
+.cdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ring);flex-shrink:0}
+.cdot.critical{background:var(--over)}
+.cdot.high{background:var(--accent)}
+.cdot.medium{background:#C9A227}
+.cdot.low{background:#7FA892}
+.cdot.done{background:var(--text-2)}
+.cdot.missed{background:var(--line-2);box-shadow:inset 0 0 0 1px var(--text-2)}
+@media (min-width:900px){.cal-cell{min-height:104px;align-items:stretch}.cal-num{align-self:flex-start;padding-left:4px}.cal-pills{display:flex}.cal-dots{display:none}}
+.cal-item{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;border:none;border-top:1px solid var(--line);background:none;text-align:left;font:inherit;color:inherit;cursor:pointer;padding:6px 0}
+.cal-item-t{flex:1 1 auto;min-width:0;font-size:15px;overflow-wrap:anywhere}
+.cal-item em{font-style:normal;font-size:12px;color:var(--text-2);flex-shrink:0}
+.cal-item.compact{border-top:none;min-height:36px;padding:2px 0}
+.cal-item.compact .cal-item-t{font-size:14px}
+.cal-wrow{display:flex;gap:12px;padding:8px 0;border-top:1px solid var(--line);min-width:0}
+.cal-wrow:first-child{border-top:none}
+.cal-wrow.sat .cal-wlabel b{color:var(--over)}
+.cal-wlabel{width:44px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;border:none;background:none;font:inherit;color:var(--text-2);cursor:pointer;padding:4px 0;min-height:44px;border-radius:12px}
+.cal-wlabel span{font-size:11px;text-transform:uppercase}
+.cal-wlabel b{font-size:18px;color:var(--text)}
+.cal-wlabel.today{background:var(--accent-soft)}
+.cal-wtasks{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.cal-legend{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.cal-legend span{display:inline-flex;align-items:center;gap:5px}

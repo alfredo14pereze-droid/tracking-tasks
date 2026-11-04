@@ -1,17 +1,18 @@
 // Shell de v2: sesión, router por hash y navegación (inferior en móvil, lateral en escritorio).
-import { sb, AuthError } from './db.js?v=202611040935';
-import { escapeHTML, showToast } from './util.js?v=202611040935';
-import * as inicio from './views/inicio.js?v=202611040935';
-import * as pendiente from './views/pendiente.js?v=202611040935';
-import * as finanzas from './views/finanzas.js?v=202611040935';
-import * as salud from './views/salud.js?v=202611040935';
-import * as entreno from './views/entreno.js?v=202611040935';
-import * as rutinas from './views/rutinas.js?v=202611040935';
-import * as objetivosView from './views/objetivos.js?v=202611040935';
-import * as recordatoriosView from './views/recordatorios.js?v=202611040935';
-import * as notasView from './views/notas.js?v=202611040935';
-import * as tareasView from './views/tareas.js?v=202611040935';
-import { checkRecurring } from './tareas.js?v=202611040935';
+import { sb, AuthError } from './db.js?v=202611040937';
+import { escapeHTML, showToast } from './util.js?v=202611040937';
+import * as inicio from './views/inicio.js?v=202611040937';
+import * as pendiente from './views/pendiente.js?v=202611040937';
+import * as finanzas from './views/finanzas.js?v=202611040937';
+import * as salud from './views/salud.js?v=202611040937';
+import * as entreno from './views/entreno.js?v=202611040937';
+import * as rutinas from './views/rutinas.js?v=202611040937';
+import * as objetivosView from './views/objetivos.js?v=202611040937';
+import * as recordatoriosView from './views/recordatorios.js?v=202611040937';
+import * as calendarioView from './views/calendario.js?v=202611040937';
+import * as notasView from './views/notas.js?v=202611040937';
+import * as tareasView from './views/tareas.js?v=202611040937';
+import { checkRecurring } from './tareas.js?v=202611040937';
 
 const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'recordatorios', 'notas', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.
@@ -94,9 +95,9 @@ async function renderRoute() {
       if (e instanceof AuthError) return showLogin();
       main.innerHTML = `<div class="page"><div class="error-box">No se pudo cargar Salud.<br><small>${escapeHTML(e.message)}</small></div></div>`;
     }
-  } else if (['objetivos', 'recordatorios', 'notas'].includes(route)) {
+  } else if (['objetivos', 'recordatorios', 'notas', 'calendario'].includes(route)) {
     skeleton();
-    const view = { objetivos: objetivosView, recordatorios: recordatoriosView, notas: notasView }[route];
+    const view = { objetivos: objetivosView, recordatorios: recordatoriosView, notas: notasView, calendario: calendarioView }[route];
     try { await view.show(main, () => seq === renderSeq); }
     catch (e) {
       if (seq !== renderSeq) return;
