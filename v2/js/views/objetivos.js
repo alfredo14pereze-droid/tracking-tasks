@@ -1,9 +1,9 @@
 // Objetivos (semana/mes/año) y Hábitos (meta por semana, historial). Mismas reglas que la versión clásica:
 // vencido = no completado y ya pasó su periodo (por created_at); archivado = completado y ya pasó su periodo;
 // "pasar al periodo actual" reescribe created_at.
-import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611041323';
-import { escapeHTML, weekKey, todayIdx, showToast, icon, openModal, closeModal } from '../util.js?v=202611041323';
-import { toggleHabitDay, habitCount } from '../habitos.js?v=202611041323';
+import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611041328';
+import { escapeHTML, weekKey, todayIdx, showToast, icon, openModal, closeModal } from '../util.js?v=202611041328';
+import { toggleHabitDay, habitCount } from '../habitos.js?v=202611041328';
 
 const PERIODS = { week: ['Esta semana', 'Lo que quieres avanzar en los próximos 7 días'], month: ['Este mes', 'Metas para las próximas semanas'], year: ['Este año', 'Los objetivos grandes, a largo plazo'] };
 const DAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];

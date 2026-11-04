@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611041323';
-import { localDate } from './util.js?v=202611041323';
+import { safeGet } from './db.js?v=202611041328';
+import { localDate } from './util.js?v=202611041328';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions] = await Promise.all([
@@ -387,5 +387,19 @@ export function incomeSchedule(f, src) {
     const done = !before && left > 0; if (done) left--;
     return { date: d, before, done, late: !before && !done && d < now };
   });
+}
+// Desglose del patrimonio: qué suma, qué resta y qué NO cuenta (dinero que cuidas o de otros).
+export function netWorthParts(f) {
+  const funds = f.positions.filter(p => !p.archived).reduce((x, p) => x + (positionValue(f, p) || 0), 0);
+  let cuentas = 0, tarjetas = 0; const fuera = [];
+  for (const a of bankAccounts(f)) {
+    if (accPositions(f, a.id).length) continue;
+    const b = accBalance(f, a.id), pct = ownedPct(a), mine = Math.round(b * pct / 100);
+    if (a.kind === 'credit') tarjetas += mine; else cuentas += mine;
+    if (pct < 100 && b) fuera.push({ name: pct === 0 ? a.name : `${a.name} (parte que no es tuya)`, v: b - mine });
+  }
+  let teDeben = 0, debes = 0;
+  for (const l of activeAccounts(f).filter(isLoan)) { const o = loanOwed(f, l); if (o > 0) { if (l.kind === 'lent') teDeben += o; else debes += o; } }
+  return { cuentas, funds, teDeben, tarjetas, debes, fuera };
 }
 

@@ -1,8 +1,8 @@
 // GENERADO por build_finclasica.py desde clasica/index.html (sección FINANZAS). No editar a mano:
 // cambia la clásica o el script y vuelve a generar. Es la misma lógica de la clásica (saldos, tarjetas,
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
-import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611041323';
-import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611041323';
+import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611041328';
+import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611041328';
 
 // ── Adaptador ──
 let currentSection = 'finance', finView = 'home', currentView = 'today';
@@ -103,10 +103,11 @@ function expectedIncomes(){
 }
 function savingsGoal(){ return activeCats('savings').reduce((s,c)=>{ const b=currentBudget(c.id); return s + (b ? Number(b.amount_cents)||0 : 0); }, 0); }
 function savingsClass(pct){ return pct>=100 ? 'ok' : pct>=80 ? 'warn' : 'over'; }
+function ownedPct(a){ return a && a.owned_pct!==undefined && a.owned_pct!==null ? Number(a.owned_pct) : 100; } // (v2)
 function monthTotals(offset=0){
   let inc=0, exp=0;
   for(const t of fin.tx){
-    if(!txInMonth(t,offset)) continue;
+    if(!txInMonth(t,offset) || ownedPct(fin.accounts.find(a=>a.id===t.account_id))<100) continue;
     if(t.type==='income') inc += Number(t.amount_cents)||0;
     else if(t.type==='expense') exp += Number(t.amount_cents)||0;
   }
@@ -1088,8 +1089,9 @@ function finPatrimonioHTML(){
   const rows = [];
   bankAccounts().forEach(a=>{
     if(accPositions(a.id).length) return; // sus fondos se listan aparte
-    const v = accBalance(a.id);
-    if(v!==0 || a.kind!=='investment') rows.push({name:a.name, sub:ACC_KIND[a.kind]||a.kind, v});
+    const pct = ownedPct(a); if(pct===0) return; // (v2) dinero que cuidas: no es tuyo
+    const v = Math.round(accBalance(a.id)*pct/100);
+    if(v!==0 || a.kind!=='investment') rows.push({name:a.name, sub:(ACC_KIND[a.kind]||a.kind)+(pct<100?` · tu ${pct}%`:''), v});
   });
   propF.forEach(p=>rows.push({name:p.fund_name, sub:`Fondo propio · aportado ${fmtMoney(p.cost_basis_cents)}`, v:fv(p)}));
   activeAccounts().filter(isLoan).forEach(l=>{ const o=loanStats(l).owed; if(o>0) rows.push({name:l.name, sub:l.kind==='lent'?'Te debe':'Le debes', v:l.kind==='lent'?o:-o}); });

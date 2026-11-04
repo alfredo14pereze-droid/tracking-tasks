@@ -25,6 +25,28 @@ for d in drop:
 assert "home:'Hoy'," in code
 code = code.replace("home:'Hoy',", "home:'Este mes',")
 
+# --- cuentas que no son (todo) tuyas: accounts.owned_pct (B-Project 50, Carro 0) ---
+def sub(old, new):
+    global code
+    assert code.count(old) == 1, old
+    code = code.replace(old, new)
+sub("""    if(accPositions(a.id).length) return; // sus fondos se listan aparte
+    const v = accBalance(a.id);
+    if(v!==0 || a.kind!=='investment') rows.push({name:a.name, sub:ACC_KIND[a.kind]||a.kind, v});""",
+"""    if(accPositions(a.id).length) return; // sus fondos se listan aparte
+    const pct = ownedPct(a); if(pct===0) return; // (v2) dinero que cuidas: no es tuyo
+    const v = Math.round(accBalance(a.id)*pct/100);
+    if(v!==0 || a.kind!=='investment') rows.push({name:a.name, sub:(ACC_KIND[a.kind]||a.kind)+(pct<100?` · tu ${pct}%`:''), v});""")
+sub("""function monthTotals(offset=0){
+  let inc=0, exp=0;
+  for(const t of fin.tx){
+    if(!txInMonth(t,offset)) continue;""",
+"""function ownedPct(a){ return a && a.owned_pct!==undefined && a.owned_pct!==null ? Number(a.owned_pct) : 100; } // (v2)
+function monthTotals(offset=0){
+  let inc=0, exp=0;
+  for(const t of fin.tx){
+    if(!txInMonth(t,offset) || ownedPct(fin.accounts.find(a=>a.id===t.account_id))<100) continue;""")
+
 # --- markup de los modales (igual que la clásica) ---
 def block(id_):
     i = next(k for k, l in enumerate(lines) if f'id="{id_}"' in l and 'modal-overlay' in l)

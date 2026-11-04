@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041323';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041323';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041323';
-import { FIN_TABS } from '../finclasica.js?v=202611041323';
-import { openStatement } from './estado.js?v=202611041323';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041323';
-import * as F from '../fin.js?v=202611041323';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041328';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041328';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041328';
+import { FIN_TABS } from '../finclasica.js?v=202611041328';
+import { openStatement } from './estado.js?v=202611041328';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611041328';
+import * as F from '../fin.js?v=202611041328';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -90,7 +90,11 @@ function incomesCard(f) {
       return `<div class="tx">
         <span class="tx-ic in" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg></span>
         <div class="tx-main"><div class="tx-title">${escapeHTML(src.name)} · ${F.fmtMoney0(src.amount_cents)}</div>
-          <div class="task-meta">${escapeHTML(when)} · ${done ? `✓ recibido ${escapeHTML(st.period.label)} (${F.fmtMoney0(st.received)})` : `pendiente ${escapeHTML(st.period.label)}`}</div>
+          <div class="task-meta">${(() => {
+            const sch = F.incomeSchedule(f, src), next = sch && sch.find(x => !x.done && !x.before);
+            if (src.frequency === 'semanal') return next ? `Siguiente: ${escapeHTML(F.WEEKDAYS[next.date.getDay()])} ${escapeHTML(fmtDay(next.date))}${next.late ? ' · ya debió llegar' : ''}` : `✓ ${escapeHTML(F.monthName(0))} completo`;
+            return done ? `✓ recibido ${escapeHTML(st.period.label)} (${F.fmtMoney0(st.received)})` : `${escapeHTML(when)} · aún no llega ${escapeHTML(st.period.label)}`;
+          })()}</div>
           ${(() => { const sch = F.incomeSchedule(f, src); return sch ? `<div class="pay-days">${sch.map(x => `<span class="pay-day${x.done ? ' done' : x.late ? ' late' : x.before ? ' before' : ''}" title="${x.done ? 'Registrado' : x.late ? 'Ya debió llegar' : x.before ? 'Ya estaba en tu saldo' : 'Por llegar'}">${escapeHTML(fmtDay(x.date))}${x.done ? ' ✓' : ''}</span>`).join('')}</div>` : ''; })()}</div>
         <button type="button" class="${done ? 'btn-ghost' : 'btn-primary'} sm" data-inc="${escapeHTML(src.id)}">${done ? 'Otro pago' : 'Ya lo recibí'}</button>
       </div>`;
@@ -256,6 +260,10 @@ function paint() {
             <div><span>Ahorrado ${escapeHTML(r.label)}</span><strong>${F.fmtSigned(saved)}</strong></div>
             <div><span>Invertido</span><strong>${F.fmtMoney0(nw.invested)}</strong></div>
           </div>
+          ${(() => { const p = F.netWorthParts(f); return `<div class="hero-parts">
+            <span>Tus cuentas ${F.fmtMoney0(p.cuentas)}</span><span>Inversiones ${F.fmtMoney0(p.funds)}</span>${p.teDeben ? `<span>Te deben ${F.fmtMoney0(p.teDeben)}</span>` : ''}${p.tarjetas ? `<span>Tarjetas ${F.fmtSigned(p.tarjetas)}</span>` : ''}${p.debes ? `<span>Debes ${F.fmtSigned(-p.debes)}</span>` : ''}
+            ${p.fuera.length ? `<span class="hero-out">No cuenta (no es tuyo): ${p.fuera.map(x => `${escapeHTML(x.name)} ${F.fmtMoney0(x.v)}`).join(' · ')}</span>` : ''}
+          </div>`; })()}
         </section>
 
         ${review.length ? `<section class="card" aria-labelledby="revT" style="gap:4px">
