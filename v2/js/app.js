@@ -1,19 +1,20 @@
 // Shell de v2: sesión, router por hash y navegación (inferior en móvil, lateral en escritorio).
-import { sb, AuthError } from './db.js?v=202611040938';
-import { escapeHTML, showToast } from './util.js?v=202611040938';
-import * as inicio from './views/inicio.js?v=202611040938';
-import * as pendiente from './views/pendiente.js?v=202611040938';
-import * as finanzas from './views/finanzas.js?v=202611040938';
-import * as salud from './views/salud.js?v=202611040938';
-import * as entreno from './views/entreno.js?v=202611040938';
-import * as rutinas from './views/rutinas.js?v=202611040938';
-import * as objetivosView from './views/objetivos.js?v=202611040938';
-import * as recordatoriosView from './views/recordatorios.js?v=202611040938';
-import * as calendarioView from './views/calendario.js?v=202611040938';
-import * as estadisticasView from './views/estadisticas.js?v=202611040938';
-import * as notasView from './views/notas.js?v=202611040938';
-import * as tareasView from './views/tareas.js?v=202611040938';
-import { checkRecurring } from './tareas.js?v=202611040938';
+import { sb, AuthError } from './db.js?v=202611040943';
+import { escapeHTML, showToast } from './util.js?v=202611040943';
+import * as inicio from './views/inicio.js?v=202611040943';
+import * as pendiente from './views/pendiente.js?v=202611040943';
+import * as finClasica from './finclasica.js?v=202611040943';
+import * as finanzas from './views/finanzas.js?v=202611040943';
+import * as salud from './views/salud.js?v=202611040943';
+import * as entreno from './views/entreno.js?v=202611040943';
+import * as rutinas from './views/rutinas.js?v=202611040943';
+import * as objetivosView from './views/objetivos.js?v=202611040943';
+import * as recordatoriosView from './views/recordatorios.js?v=202611040943';
+import * as calendarioView from './views/calendario.js?v=202611040943';
+import * as estadisticasView from './views/estadisticas.js?v=202611040943';
+import * as notasView from './views/notas.js?v=202611040943';
+import * as tareasView from './views/tareas.js?v=202611040943';
+import { checkRecurring } from './tareas.js?v=202611040943';
 
 const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'recordatorios', 'notas', 'estadisticas', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.
@@ -52,6 +53,7 @@ async function renderRoute() {
   const route = currentRoute();
   const seq = ++renderSeq;
   markNav(route);
+  if (!(route === 'finanzas' && parseHash().param)) finClasica.unmount(); // esconde el + de finanzas avanzada
   window.scrollTo(0, 0);
   if (route === 'inicio') {
     skeleton();
@@ -66,6 +68,17 @@ async function renderRoute() {
       if (seq !== renderSeq) return;
       if (e instanceof AuthError) return showLogin();
       main.innerHTML = `<div class="page"><div class="error-box">No se pudo conectar con Supabase.<br><small>${escapeHTML(e.message)}</small></div></div>`;
+    }
+  } else if (route === 'finanzas' && parseHash().param && finClasica.FIN_TABS[parseHash().param]) {
+    // Finanzas avanzada (misma lógica que la clásica): movimientos, cuentas, patrimonio, recurrentes…
+    main.innerHTML = `<div class="page">
+      <header class="head" style="align-items:center"><h1 class="hello" id="viewTitle" style="margin:0">Finanzas</h1><a class="btn-ghost sm" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--text)" href="#finanzas">← Resumen</a></header>
+      <div class="fc" id="fcHost"></div></div>`;
+    try { await finClasica.mount(document.getElementById('fcHost'), parseHash().param, () => seq === renderSeq); }
+    catch (e) {
+      if (seq !== renderSeq) return;
+      if (e instanceof AuthError) return showLogin();
+      main.innerHTML = `<div class="page"><div class="error-box">No se pudieron cargar las finanzas.<br><small>${escapeHTML(e.message)}</small></div></div>`;
     }
   } else if (route === 'finanzas') {
     skeleton();

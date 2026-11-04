@@ -1,8 +1,9 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611040938';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040938';
-import * as F from '../fin.js?v=202611040938';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611040943';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611040943';
+import { FIN_TABS } from '../finclasica.js?v=202611040943';
+import * as F from '../fin.js?v=202611040943';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -169,6 +170,11 @@ function paint() {
       <button type="button" class="btn-dark" data-add>${icon('plus', 2.4)}Gasto</button>
     </header>
 
+    <nav class="views" aria-label="Secciones de finanzas">
+      <a class="vchip" aria-current="page" href="#finanzas" style="background:var(--dark);border-color:var(--dark);color:#fff;display:inline-flex;align-items:center;text-decoration:none">Resumen</a>
+      ${Object.entries(FIN_TABS).map(([k, v]) => `<a class="vchip" href="#finanzas/${k}" style="display:inline-flex;align-items:center;text-decoration:none">${escapeHTML(v)}</a>`).join('')}
+    </nav>
+
     ${f.errors.length ? `<div class="error-box">No se pudo cargar: ${escapeHTML(f.errors.join(', '))}.</div>` : ''}
 
     <div class="seg" role="group" aria-label="Periodo">
@@ -204,8 +210,8 @@ function paint() {
 
       <div class="fin-col">
         <section class="card" aria-labelledby="budT" style="gap:14px">
-          <div class="card-head"><h2 id="budT">Presupuesto por categoría</h2><a href="../clasica/">Editar</a></div>
-          ${budgets.length ? budgets.map(budgetRow).join('') : '<div class="small">Aún no hay presupuestos. Se configuran en la versión clásica.</div>'}
+          <div class="card-head"><h2 id="budT">Presupuesto por categoría</h2><a href="#finanzas/budget">Editar</a></div>
+          ${budgets.length ? budgets.map(budgetRow).join('') : '<div class="small">Aún no hay presupuestos. <a href="#finanzas/budget">Configúralos aquí</a>.</div>'}
         </section>
 
         <section class="card" aria-labelledby="movT" style="gap:4px">
@@ -242,7 +248,7 @@ function bind() {
 function openExpense() {
   const f = state.f;
   const accs = F.bankAccounts(f).filter(a => a.kind !== 'investment');
-  if (!accs.length) return showToast('Primero crea una cuenta en la versión clásica', 'error');
+  if (!accs.length) return (location.hash = '#finanzas/accounts', showToast('Primero crea una cuenta', 'error'));
   const opt = (list) => list.map(x => `<option value="${escapeHTML(x.id)}">${escapeHTML(x.name)}</option>`).join('');
   openModal('Nuevo gasto', `
     <label class="flabel" for="gAmt">Monto</label>
