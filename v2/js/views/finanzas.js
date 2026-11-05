@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611041452';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611041452';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611041452';
-import { FIN_TABS } from '../finclasica.js?v=202611041452';
-import { openStatement } from './estado.js?v=202611041452';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611041452';
-import * as F from '../fin.js?v=202611041452';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611051619';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611051619';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051619';
+import { FIN_TABS } from '../finclasica.js?v=202611051619';
+import { openStatement } from './estado.js?v=202611051619';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611051619';
+import * as F from '../fin.js?v=202611051619';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -89,14 +89,15 @@ function incomesCard(f) {
         : src.frequency === 'semanal' ? 'cada semana' : src.frequency === 'quincenal' ? 'cada quincena' : src.frequency === 'irregular' ? 'cuando llegue' : 'cada mes';
       return `<div class="tx">
         <span class="tx-ic in" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M15 17H7V9"/></svg></span>
-        <div class="tx-main"><div class="tx-title">${escapeHTML(src.name)} · ${F.fmtMoney0(src.amount_cents)}</div>
+        <div class="tx-main"><div class="tx-title">${escapeHTML(src.name)}${Number(src.amount_cents) > 0 ? ` · ${F.fmtMoney0(src.amount_cents)}` : ''}</div>
           <div class="task-meta">${(() => {
             const sch = F.incomeSchedule(f, src), next = sch && sch.find(x => !x.done && !x.before);
             if (src.frequency === 'semanal') return next ? `Siguiente: ${escapeHTML(F.WEEKDAYS[next.date.getDay()])} ${escapeHTML(fmtDay(next.date))}${next.late ? ' · ya debió llegar' : ''}` : `✓ ${escapeHTML(F.monthName(0))} completo`;
+            if (src.frequency === 'irregular') return done ? `Monto variable · ${F.fmtMoney0(st.received)} ${escapeHTML(st.period.label)}` : 'Monto variable · registra cada pago cuando llegue';
             return done ? `✓ recibido ${escapeHTML(st.period.label)} (${F.fmtMoney0(st.received)})` : `${escapeHTML(when)} · aún no llega ${escapeHTML(st.period.label)}`;
           })()}</div>
           ${(() => { const sch = F.incomeSchedule(f, src); return sch ? `<div class="pay-days">${sch.map(x => `<span class="pay-day${x.done ? ' done' : x.late ? ' late' : x.before ? ' before' : ''}" title="${x.done ? 'Registrado' : x.late ? 'Ya debió llegar' : x.before ? 'Ya estaba en tu saldo' : 'Por llegar'}">${escapeHTML(fmtDay(x.date))}${x.done ? ' ✓' : ''}</span>`).join('')}</div>` : ''; })()}</div>
-        <button type="button" class="${done ? 'btn-ghost' : 'btn-primary'} sm" data-inc="${escapeHTML(src.id)}">${done ? 'Otro pago' : 'Ya lo recibí'}</button>
+        <button type="button" class="${done && src.frequency !== 'irregular' ? 'btn-ghost' : 'btn-primary'} sm" data-inc="${escapeHTML(src.id)}">${src.frequency === 'irregular' ? 'Registrar pago' : done ? 'Otro pago' : 'Ya lo recibí'}</button>
       </div>`;
     }).join('') : '<p class="small" style="margin:0">Agrega tus ingresos (Salper, mensualidad…) y aquí tendrás un botón para registrarlos cuando lleguen.</p>'}
   </section>`;
@@ -842,9 +843,10 @@ function openIncome(srcId) {
   const accs = F.bankAccounts(f).filter(a => ['debit', 'savings', 'cash'].includes(a.kind));
   const pre = [lastIncAcc(src.id), src.account_id].find(id => id && accs.some(a => a.id === id));
   openModal(`Recibí ${src.name}`, `
-    ${st.last ? `<p class="small" style="margin:0;color:var(--alert)">Ojo: ya registraste ${escapeHTML(F.fmtMoney(st.received))} de ${escapeHTML(src.name)} ${escapeHTML(st.period.label)} (el ${escapeHTML(fmtDay(new Date(st.last.occurred_on + 'T12:00:00')))}). Regístralo solo si es otro pago.</p>` : ''}
+    ${st.last && src.frequency !== 'irregular' ? `<p class="small" style="margin:0;color:var(--alert)">Ojo: ya registraste ${escapeHTML(F.fmtMoney(st.received))} de ${escapeHTML(src.name)} ${escapeHTML(st.period.label)} (el ${escapeHTML(fmtDay(new Date(st.last.occurred_on + 'T12:00:00')))}). Regístralo solo si es otro pago.</p>` : ''}
     <label class="flabel" for="riAmt">Monto</label>
-    <input class="field" id="riAmt" inputmode="decimal" autocomplete="off" value="${centsInput(src.amount_cents)}">
+    <input class="field" id="riAmt" inputmode="decimal" autocomplete="off" value="${Number(src.amount_cents) > 0 ? centsInput(src.amount_cents) : ''}" placeholder="¿Cuánto te pagaron?">
+    ${src.frequency === 'irregular' ? `<label class="flabel" for="riNote">¿De quién o de qué? (opcional)</label><input class="field" id="riNote" maxlength="80" autocomplete="off" placeholder="Ej. Cliente · proyecto">` : ''}
     <label class="flabel" for="riAcc">¿A dónde llegó?</label>
     <select class="field" id="riAcc">${accs.map(a => `<option value="${escapeHTML(a.id)}"${a.id === pre ? ' selected' : ''}>${escapeHTML(a.name)}</option>`).join('')}</select>
     <label class="flabel" for="riDate">Fecha</label>
@@ -863,7 +865,7 @@ function openIncome(srcId) {
         const c = await ensureIncomeCategory(f, src.name);
         await dbPatch('income_sources', { category_id: c.id }, `?id=eq.${src.id}`); src.category_id = c.id;
       }
-      const [row] = await dbPost('transactions', { type: 'income', amount_cents: amount, account_id: acc, to_account_id: null, category_id: src.category_id, occurred_on: date, note: src.name });
+      const [row] = await dbPost('transactions', { type: 'income', amount_cents: amount, account_id: acc, to_account_id: null, category_id: src.category_id, occurred_on: date, note: (document.getElementById('riNote')?.value.trim() ? `${src.name} · ${document.getElementById('riNote').value.trim()}` : src.name).slice(0, 120) });
       f.tx.unshift(row); sortTx();
       try { localStorage.setItem('v2IncAcc:' + src.id, acc); } catch { /* sin storage */ }
       closeModal(); showToast(`${src.name} registrado en ${F.accName(f, acc)}`); paint();
