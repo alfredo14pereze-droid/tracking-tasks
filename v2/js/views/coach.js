@@ -1,9 +1,9 @@
 // "Sugerencia de Claude" en Salud › Ejercicio: analiza el historial y sugiere ajustes o una rutina nueva.
 // Solo corre al tocar el botón; la última sugerencia se guarda en este navegador.
-import { dbPost, dbPatch } from '../db.js?v=202611051743';
-import { escapeHTML, localDate, showToast } from '../util.js?v=202611051743';
-import { ask, withBusy, aiLabel, cache } from '../ia.js?v=202611051743';
-import * as S from '../salud.js?v=202611051743';
+import { dbPost, dbPatch } from '../db.js?v=202611051749';
+import { escapeHTML, localDate, showToast } from '../util.js?v=202611051749';
+import { ask, withBusy, aiLabel, cache } from '../ia.js?v=202611051749';
+import * as S from '../salud.js?v=202611051749';
 
 const KIND = { subir: 'Subir', mantener: 'Mantener', descarga: 'Descarga', cambiar_ejercicio: 'Cambiar ejercicio', volumen: 'Volumen', nota: 'Nota' };
 

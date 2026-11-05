@@ -7,16 +7,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>TaskTracker v2</title>
+<link rel="manifest" href="../manifest.json">
 <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png?v=3">
 <link rel="icon" href="../icons/icon-192.png?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/finclasica.css?v=202611051743">
-<link rel="stylesheet" href="css/theme.css?v=202611051743">
+<link rel="stylesheet" href="css/finclasica.css?v=202611051749">
+<link rel="stylesheet" href="css/theme.css?v=202611051749">
 <!-- v2 no registra service worker por ahora (plan v2) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script type="module" src="js/app.js?v=202611051743"></script>
+<script type="module" src="js/app.js?v=202611051749"></script>
 </head>
 <body>
 
@@ -54,6 +55,7 @@
       <a class="side-link" href="#recordatorios" data-route="recordatorios"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>Recordatorios</a>
       <a class="side-link" href="#notas" data-route="notas"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Notas</a>
       <a class="side-link" href="#estadisticas" data-route="estadisticas"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Estadísticas</a>
+      <a class="side-link" href="#notificaciones" data-route="notificaciones"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Notificaciones</a>
     <div class="side-foot">
       <button class="side-link" type="button" data-logout><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H4"/></svg>Cerrar sesión</button>
     </div>

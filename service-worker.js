@@ -54,3 +54,30 @@ self.addEventListener('fetch', event => {
       )
   );
 });
+
+// ── Notificaciones push (v2) ──────────────────────────
+// La Edge Function "notificaciones" manda { title, body, url, tag }.
+self.addEventListener('push', event => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch { d = { body: event.data && event.data.text() }; }
+  event.waitUntil(self.registration.showNotification(d.title || 'TaskTracker', {
+    body: d.body || '',
+    tag: d.tag || undefined,
+    icon: './icons/icon-192.png?v=3',
+    badge: './icons/icon-192.png?v=3',
+    data: { url: d.url || './v2/' }
+  }));
+});
+
+// Al tocar la notificación: abre (o enfoca) la app en la sección del aviso.
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || './v2/';
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      if (c.url.includes('/tracking-tasks/')) { await c.focus(); if ('navigate' in c) return c.navigate(url); return; }
+    }
+    return self.clients.openWindow(url);
+  })());
+});

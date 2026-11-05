@@ -1,23 +1,24 @@
 try { document.documentElement.classList.toggle('privacy', localStorage.getItem('v2Privacy') === '1'); } catch { /* sin storage */ }
 // Shell de v2: sesión, router por hash y navegación (inferior en móvil, lateral en escritorio).
-import { sb, AuthError } from './db.js?v=202611051743';
-import { escapeHTML, showToast } from './util.js?v=202611051743';
-import * as inicio from './views/inicio.js?v=202611051743';
-import * as pendiente from './views/pendiente.js?v=202611051743';
-import * as finClasica from './finclasica.js?v=202611051743';
-import * as finanzas from './views/finanzas.js?v=202611051743';
-import * as salud from './views/salud.js?v=202611051743';
-import * as entreno from './views/entreno.js?v=202611051743';
-import * as rutinas from './views/rutinas.js?v=202611051743';
-import * as objetivosView from './views/objetivos.js?v=202611051743';
-import * as recordatoriosView from './views/recordatorios.js?v=202611051743';
-import * as calendarioView from './views/calendario.js?v=202611051743';
-import * as estadisticasView from './views/estadisticas.js?v=202611051743';
-import * as notasView from './views/notas.js?v=202611051743';
-import * as tareasView from './views/tareas.js?v=202611051743';
-import { checkRecurring } from './tareas.js?v=202611051743';
+import { sb, AuthError } from './db.js?v=202611051749';
+import { escapeHTML, showToast } from './util.js?v=202611051749';
+import * as inicio from './views/inicio.js?v=202611051749';
+import * as pendiente from './views/pendiente.js?v=202611051749';
+import * as finClasica from './finclasica.js?v=202611051749';
+import * as finanzas from './views/finanzas.js?v=202611051749';
+import * as salud from './views/salud.js?v=202611051749';
+import * as entreno from './views/entreno.js?v=202611051749';
+import * as rutinas from './views/rutinas.js?v=202611051749';
+import * as objetivosView from './views/objetivos.js?v=202611051749';
+import * as recordatoriosView from './views/recordatorios.js?v=202611051749';
+import * as calendarioView from './views/calendario.js?v=202611051749';
+import * as estadisticasView from './views/estadisticas.js?v=202611051749';
+import * as notifView from './views/notificaciones.js?v=202611051749';
+import * as notasView from './views/notas.js?v=202611051749';
+import * as tareasView from './views/tareas.js?v=202611051749';
+import { checkRecurring } from './tareas.js?v=202611051749';
 
-const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'recordatorios', 'notas', 'estadisticas', 'mas'];
+const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'recordatorios', 'notas', 'estadisticas', 'notificaciones', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.
 const SALUD = ['salud', 'entreno', 'rutinas', 'rutina'];
 const $ = id => document.getElementById(id);
@@ -35,7 +36,7 @@ const currentRoute = () => parseHash().route;
 function markNav(route) {
   // En móvil, las secciones que viven en "Más" marcan la pestaña Más.
   const base = SALUD.includes(route) ? 'salud' : route;
-  const tabRoute = ['calendario', 'objetivos', 'recordatorios', 'notas', 'estadisticas'].includes(base) ? 'mas' : base;
+  const tabRoute = ['calendario', 'objetivos', 'recordatorios', 'notas', 'estadisticas', 'notificaciones'].includes(base) ? 'mas' : base;
   document.querySelectorAll('[data-route]').forEach(a => {
     const on = a.closest('.tabbar') ? a.dataset.route === tabRoute : a.dataset.route === base;
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
@@ -110,9 +111,9 @@ async function renderRoute() {
       if (e instanceof AuthError) return showLogin();
       main.innerHTML = `<div class="page"><div class="error-box">No se pudo cargar Salud.<br><small>${escapeHTML(e.message)}</small></div></div>`;
     }
-  } else if (['objetivos', 'recordatorios', 'notas', 'calendario', 'estadisticas'].includes(route)) {
+  } else if (['objetivos', 'recordatorios', 'notas', 'calendario', 'estadisticas', 'notificaciones'].includes(route)) {
     skeleton();
-    const view = { objetivos: objetivosView, recordatorios: recordatoriosView, notas: notasView, calendario: calendarioView, estadisticas: estadisticasView }[route];
+    const view = { objetivos: objetivosView, recordatorios: recordatoriosView, notas: notasView, calendario: calendarioView, estadisticas: estadisticasView, notificaciones: notifView }[route];
     try { await view.show(main, () => seq === renderSeq); }
     catch (e) {
       if (seq !== renderSeq) return;
@@ -213,3 +214,6 @@ sb.auth.getSession().then(({ data: { session } }) => {
   if (linkError && !session) loginMsg('El enlace venció o ya se usó. Pide uno nuevo.', true);
   if (session) startApp(); else showLogin();
 }).catch(() => { showLogin(); showToast('No se pudo leer la sesión', 'error'); });
+
+// Service worker de la raíz (scope /tracking-tasks/): caché básico y notificaciones push.
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('../service-worker.js', { scope: '../' }).catch(() => { /* sin SW */ });

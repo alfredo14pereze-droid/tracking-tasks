@@ -125,3 +125,13 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
   (`parseSpokenExpense`, sin IA: monto, comercio, cuenta y categoría por comercio anterior o palabras).
 - **Modo privado:** ojo junto a "+ Gasto"; `F.fmtMoney*` y el `fmtMoney` clásico regresan "$ •••••" (localStorage `v2Privacy`).
 
+### Notificaciones push (5-nov-2026) · `sql/2026-11-05-notificaciones.sql`
+- Tablas `push_subscriptions` (un dispositivo por endpoint), `push_prefs` (qué avisos y hora del resumen), `push_log`
+  (lo enviado, `unique(user_id,key)` para no repetir). pg_cron llama cada 5 min a la Edge Function `notificaciones`
+  con `x-cron-secret` (el SQL del repo trae un marcador; el valor real NO se guarda en el repo).
+- Edge Function `notificaciones` (Verify JWT apagado): `mode:"cron"` revisa recordatorios a su hora, tareas con hora
+  (10 min antes), pago de tarjeta 3 y 1 día antes (9:00, mismo cálculo que `cardStatus`) y resumen de la mañana;
+  `mode:"test"` con sesión manda una prueba. Secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, CRON_SECRET.
+- App: `service-worker.js` de la raíz (ahora lo registra v2, scope `/tracking-tasks/`) muestra el push y abre la sección.
+  Pantalla Más › Notificaciones (`js/views/notificaciones.js`, llave pública VAPID). En iPhone solo desde la app instalada.
+
