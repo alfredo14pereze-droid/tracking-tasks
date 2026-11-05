@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611051626';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611051626';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051626';
-import { FIN_TABS } from '../finclasica.js?v=202611051626';
-import { openStatement } from './estado.js?v=202611051626';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611051626';
-import * as F from '../fin.js?v=202611051626';
+import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611051631';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611051631';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051631';
+import { FIN_TABS } from '../finclasica.js?v=202611051631';
+import { openStatement } from './estado.js?v=202611051631';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611051631';
+import * as F from '../fin.js?v=202611051631';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -66,6 +66,7 @@ function accountCard(f, a) {
     ${credit && F.cardStatus(f, a) ? cardBody(f, a) : `<div class="acc-val${v < 0 ? ' neg' : ''}">${F.fmtSigned(v)}</div>`}
     ${F.ownedPct(a) < 100 ? `<div class="small" style="margin-top:-6px">${F.ownedPct(a) === 0 ? 'No es tuyo: lo cuidas' : `Tuyo ${F.ownedPct(a)}% · ${F.fmtMoney0(Math.round(v * F.ownedPct(a) / 100))}`}</div>` : ''}
     ${credit && F.cardStatus(f, a) ? '' : `<div class="small">${escapeHTML(accountSub(f, a))}</div>`}
+    ${accIncomeBtn(f, a)}
     ${credit ? `<button type="button" class="btn-ghost sm" style="align-self:flex-start" data-card-month="${escapeHTML(a.id)}">Pago del mes</button>` : F.accPositions(f, a.id).length ? '' : `<button type="button" class="btn-link" style="align-self:flex-start" data-acc-edit="${escapeHTML(a.id)}">Editar</button>`}
   </div>`;
 }
@@ -79,8 +80,32 @@ function cardBody(f, a) {
     <div class="small">Deuda total ${F.fmtMoney0(s.debt)}${s.spent ? ` · ${F.fmtMoney0(s.spent)} desde el corte (se paga hasta el ${escapeHTML(fmtDay(F.dueDateAfter(s.nextCut, s.card.pay_day)))})` : ''}</div>`;
 }
 
+const ownIncome = (f, src) => F.ownedPct(f.accounts.find(a => a.id === src.account_id)) === 100;
+// Depósito fijo de una cuenta que no es tuya (p. ej. el pago mensual del carro): un toque lo registra.
+function accIncomeBtn(f, a) {
+  if (F.ownedPct(a) === 100) return '';
+  const src = f.incomes.find(x => x.account_id === a.id && Number(x.amount_cents) > 0);
+  if (!src) return '';
+  const st = F.incomeStatus(f, src), done = st.received > 0;
+  return `<div class="small"${done ? ' style="color:var(--positive);font-weight:600"' : ''}>${done ? `✓ ${escapeHTML(src.name)} de ${escapeHTML(F.monthName(0))} registrado` : `${escapeHTML(src.name)}: aún no llega en ${escapeHTML(F.monthName(0))}`}</div>
+    <button type="button" class="${done ? 'btn-ghost' : 'btn-primary'} sm" style="align-self:flex-start" data-acc-inc="${escapeHTML(src.id)}">${done ? 'Otro pago' : `Llegó el pago · ${F.fmtMoney(src.amount_cents)}`}</button>`;
+}
+async function quickAccIncome(srcId) {
+  const f = state.f, src = f.incomes.find(x => x.id === srcId);
+  if (!src) return;
+  if (F.incomeStatus(f, src).received > 0 && !confirm(`Ya registraste ${src.name} este mes. ¿Registrar otro?`)) return;
+  const body = { type: 'income', amount_cents: Number(src.amount_cents), account_id: src.account_id, to_account_id: null, category_id: src.category_id || null, occurred_on: localDate(), note: src.name };
+  try {
+    const [row] = await dbPost('transactions', body);
+    f.tx.unshift(row); sortTx(); paint();
+    showToast(`${src.name} registrado en ${F.accName(f, src.account_id)}`, 'info', { label: 'Deshacer', onClick: async () => {
+      try { await dbDelete('transactions', `?id=eq.${row.id}`); f.tx = f.tx.filter(t => t !== row); paint(); } catch { showToast('No se pudo deshacer', 'error'); }
+    } });
+  } catch { showToast('No se pudo registrar', 'error'); }
+}
+
 function incomesCard(f) {
-  const list = f.incomes;
+  const list = f.incomes.filter(src => ownIncome(f, src));
   return `<section class="card" aria-labelledby="incT" style="gap:4px">
     <div class="card-head" style="padding-bottom:8px"><h2 id="incT">Ingresos</h2><button type="button" class="btn-link" data-sources>${list.length ? 'Editar' : 'Configurar'}</button></div>
     ${list.length ? list.map(src => {
@@ -469,6 +494,7 @@ function bind() {
   rootEl.querySelector('[data-fund-values]')?.addEventListener('click', openFundValues);
   rootEl.querySelector('[data-fund-ai]')?.addEventListener('click', explainFunds);
   rootEl.querySelector('[data-sources]')?.addEventListener('click', openSources);
+  rootEl.querySelectorAll('[data-acc-inc]').forEach(b => b.onclick = () => quickAccIncome(b.dataset.accInc));
   rootEl.querySelector('[data-newcard]')?.addEventListener('click', openNewCard);
   rootEl.querySelector('[data-newacc]')?.addEventListener('click', () => openAccount());
   rootEl.querySelectorAll('[data-acc-edit]').forEach(b => b.onclick = () => openAccount(b.dataset.accEdit));
@@ -893,7 +919,7 @@ function sourceRow(x, i) {
 }
 function openSources() {
   const f = state.f;
-  const rows = f.incomes.map(x => ({ ...x }));
+  const rows = f.incomes.filter(x => ownIncome(f, x)).map(x => ({ ...x }));
   const has = re => rows.some(x => re.test(x.name));
   if (!has(/salper/i)) rows.push({ name: 'Salper', amount_cents: 450000, frequency: 'semanal', pay_weekday: 5 });
   if (!has(/mensual|papá|papa/i)) rows.push({ name: 'Mensualidad', amount_cents: 600000, frequency: 'mensual', pay_weekday: null });

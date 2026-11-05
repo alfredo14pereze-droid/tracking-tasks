@@ -72,6 +72,10 @@ sub("""          <div class="fin-tx-sub">${rem>0 ? (x.received>0 ? `Recibido ${f
 """          <div class="fin-tx-sub">${!x.expected && !x.received ? 'Monto variable · regístralo cuando llegue' : rem>0 ? (x.received>0 ? `Recibido ${fmtMoney(x.received)} · faltan ${fmtMoney(rem)}` : `Esperado ${fmtMoney(x.expected)}`) : `✓ Recibido ${fmtMoney(x.received)}`}</div></div>
         <button type="button" class="btn ${rem>0 || !x.expected ? 'btn-primary' : 'btn-ghost'} fin-small-btn" data-income-receive="${escapeAttr(x.cat.id)}">${rem>0 ? 'Ya lo recibí' : !x.expected ? 'Registrar pago' : 'Otro pago'}</button>""")
 
+sub("""function expectedIncomes(){
+  const srcs = fin.incomes.filter(x=>x.active);""", """function expectedIncomes(){
+  const srcs = fin.incomes.filter(x=>x.active && ownedPct(fin.accounts.find(a=>a.id===x.account_id))===100); // (v2) el pago del carro no es ingreso tuyo""")
+
 # --- markup de los modales (igual que la clásica) ---
 def block(id_):
     i = next(k for k, l in enumerate(lines) if f'id="{id_}"' in l and 'modal-overlay' in l)

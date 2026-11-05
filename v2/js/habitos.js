@@ -1,7 +1,7 @@
 // Hábitos: marcar un día de la semana (compartido entre Inicio y Objetivos y hábitos).
 // Igual que toggleHabitDay de la versión clásica: habit_weeks.days (0=lunes…6=domingo) + count.
-import { dbPost, dbPatch } from './db.js?v=202611051626';
-import { weekKey, showToast } from './util.js?v=202611051626';
+import { dbPost, dbPatch } from './db.js?v=202611051631';
+import { weekKey, showToast } from './util.js?v=202611051631';
 
 export const habitCount = w => !w ? 0 : Array.isArray(w.days) ? w.days.length : (w.count || 0);
 
