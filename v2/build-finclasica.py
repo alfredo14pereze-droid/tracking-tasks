@@ -47,6 +47,31 @@ function monthTotals(offset=0){
   for(const t of fin.tx){
     if(!txInMonth(t,offset) || ownedPct(fin.accounts.find(a=>a.id===t.account_id))<100) continue;""")
 
+# --- tarjetas: pago para no generar intereses (corte), no la deuda total; usa cardStatus de fin.js ---
+sub("""    const debt = cardDebt(a.id); const d = nextDateForDay(c.pay_day);
+    if(debt>0 && d && daysUntil(d)<=days) out.push({name:`Pago ${a.name}`, amount:debt, date:d, sub:'Deuda actual'});""",
+"""    const st = v2CardStatus(fin, a); const debt = st ? st.toPay : cardDebt(a.id); const d = st ? st.due : nextDateForDay(c.pay_day);
+    if(debt>0 && d && daysUntil(d)<=days) out.push({name:`Pago ${a.name}`, amount:debt, date:d, sub:'Pago para no generar intereses'});""")
+sub("""    const debt = cardDebt(a.id); if(!debt) return;
+    const pay = nextDateForDay(c.pay_day), n = daysUntil(pay);
+    if(n<5) out.push({id:`card-${a.id}-${localDate(pay)}`, level:'over', text:`Pago de ${a.name} ${inDaysTxt(n)} (${fmtDay(pay)}): debes ${fmtMoney(debt)}`});""",
+"""    const st = v2CardStatus(fin, a); const debt = st ? st.toPay : cardDebt(a.id); if(!debt) return;
+    const pay = st ? st.due : nextDateForDay(c.pay_day), n = daysUntil(pay);
+    if(n<5) out.push({id:`card-${a.id}-${localDate(pay)}`, level:'over', text:`Pago de ${a.name} ${inDaysTxt(n)} (${fmtDay(pay)}): paga ${fmtMoney(debt)} para no generar intereses`});""")
+# --- ahorro: pagar una tarjeta desde tu ahorro no es "desahorrar" (el gasto ya contó al comprar) ---
+sub("""    if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
+    const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);""",
+"""    if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
+    if(fin.accounts.some(a=>(a.id===t.to_account_id || a.id===t.account_id) && (a.kind==='credit' || isLoan(a)))) continue; // (v2)
+    const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);""")
+# --- ingresos: los que no tienen día fijo se esperan completos; siempre hay botón para registrar ---
+sub("""    if(st && st>first && src.frequency!=='semanal') return 0; // sin día conocido y empezaste este mes: ya estaba en tus saldos
+""", "")
+sub("""          <div class="fin-tx-sub">${rem>0 ? (x.received>0 ? `Recibido ${fmtMoney(x.received)} · faltan ${fmtMoney(rem)}` : `Esperado ${fmtMoney(x.expected)}`) : `✓ Recibido ${fmtMoney(x.received)}`}</div></div>
+        ${rem>0 ? `<button type="button" class="btn btn-primary fin-small-btn" data-income-receive="${escapeAttr(x.cat.id)}">Ya lo recibí</button>` : '<span class="fin-tx-amt income">✓</span>'}""",
+"""          <div class="fin-tx-sub">${!x.expected && !x.received ? 'Monto variable · regístralo cuando llegue' : rem>0 ? (x.received>0 ? `Recibido ${fmtMoney(x.received)} · faltan ${fmtMoney(rem)}` : `Esperado ${fmtMoney(x.expected)}`) : `✓ Recibido ${fmtMoney(x.received)}`}</div></div>
+        <button type="button" class="btn ${rem>0 || !x.expected ? 'btn-primary' : 'btn-ghost'} fin-small-btn" data-income-receive="${escapeAttr(x.cat.id)}">${rem>0 ? 'Ya lo recibí' : !x.expected ? 'Registrar pago' : 'Otro pago'}</button>""")
+
 # --- markup de los modales (igual que la clásica) ---
 def block(id_):
     i = next(k for k, l in enumerate(lines) if f'id="{id_}"' in l and 'modal-overlay' in l)
@@ -64,6 +89,7 @@ prelude = r'''// GENERADO por build_finclasica.py desde clasica/index.html (secc
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
 import { dbGet, dbPost, dbPatch, dbDelete } from './db.js';
 import { escapeHTML, localDate, showToast as toast } from './util.js';
+import { cardStatus as v2CardStatus } from './fin.js';
 
 // ── Adaptador ──
 let currentSection = 'finance', finView = 'home', currentView = 'today';

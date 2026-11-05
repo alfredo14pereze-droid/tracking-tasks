@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611051619';
-import { localDate } from './util.js?v=202611051619';
+import { safeGet } from './db.js?v=202611051626';
+import { localDate } from './util.js?v=202611051626';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions, contribs] = await Promise.all([
@@ -313,8 +313,6 @@ function expectedThisMonth(f, src) {
   const from = countFrom(f), end = new Date(from.getFullYear(), from.getMonth() + 1, 1);
   const n = paydaysFrom(src, from, end);
   if (n !== null) return n;
-  const st = startDate(f), first = new Date(from.getFullYear(), from.getMonth(), 1);
-  if (st && st > first && src.frequency !== 'semanal') return 0; // ya estaba en tus saldos
   const a = Number(src.amount_cents) || 0;
   return src.frequency === 'semanal' ? a * 4 : src.frequency === 'quincenal' ? a * 2 : a;
 }

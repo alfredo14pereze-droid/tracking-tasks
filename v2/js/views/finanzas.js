@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611051619';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611051619';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051619';
-import { FIN_TABS } from '../finclasica.js?v=202611051619';
-import { openStatement } from './estado.js?v=202611051619';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611051619';
-import * as F from '../fin.js?v=202611051619';
+import { dbPost, dbPatch, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611051626';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611051626';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051626';
+import { FIN_TABS } from '../finclasica.js?v=202611051626';
+import { openStatement } from './estado.js?v=202611051626';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611051626';
+import * as F from '../fin.js?v=202611051626';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };

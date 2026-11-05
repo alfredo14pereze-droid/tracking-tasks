@@ -1,8 +1,9 @@
 // GENERADO por build_finclasica.py desde clasica/index.html (sección FINANZAS). No editar a mano:
 // cambia la clásica o el script y vuelve a generar. Es la misma lógica de la clásica (saldos, tarjetas,
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
-import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611051619';
-import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611051619';
+import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611051626';
+import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611051626';
+import { cardStatus as v2CardStatus } from './fin.js?v=202611051626';
 
 // ── Adaptador ──
 let currentSection = 'finance', finView = 'home', currentView = 'today';
@@ -89,6 +90,7 @@ function savedInMonth(offset=0){
   let s = 0;
   for(const t of fin.tx){
     if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
+    if(fin.accounts.some(a=>(a.id===t.to_account_id || a.id===t.account_id) && (a.kind==='credit' || isLoan(a)))) continue; // (v2)
     const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);
     if(to && !from) s += Number(t.amount_cents)||0;
     else if(from && !to) s -= Number(t.amount_cents)||0;
@@ -211,8 +213,8 @@ function finHomeHTML(){
       const rem = x.expected - x.received;
       return `<div class="fin-tx" style="cursor:default">
         <div class="fin-tx-main"><div class="fin-tx-title">${escapeHTML(x.cat.name)}</div>
-          <div class="fin-tx-sub">${rem>0 ? (x.received>0 ? `Recibido ${fmtMoney(x.received)} · faltan ${fmtMoney(rem)}` : `Esperado ${fmtMoney(x.expected)}`) : `✓ Recibido ${fmtMoney(x.received)}`}</div></div>
-        ${rem>0 ? `<button type="button" class="btn btn-primary fin-small-btn" data-income-receive="${escapeAttr(x.cat.id)}">Ya lo recibí</button>` : '<span class="fin-tx-amt income">✓</span>'}
+          <div class="fin-tx-sub">${!x.expected && !x.received ? 'Monto variable · regístralo cuando llegue' : rem>0 ? (x.received>0 ? `Recibido ${fmtMoney(x.received)} · faltan ${fmtMoney(rem)}` : `Esperado ${fmtMoney(x.expected)}`) : `✓ Recibido ${fmtMoney(x.received)}`}</div></div>
+        <button type="button" class="btn ${rem>0 || !x.expected ? 'btn-primary' : 'btn-ghost'} fin-small-btn" data-income-receive="${escapeAttr(x.cat.id)}">${rem>0 ? 'Ya lo recibí' : !x.expected ? 'Registrar pago' : 'Otro pago'}</button>
       </div>`;
     }).join('')}</div>` : '';
   return `${alertsHTML()}<div class="fin-cards${three?' three':''}">
@@ -1069,7 +1071,6 @@ function sourceMonthly(src, thisMonth){
     const n = paydaysFrom(src, from, end);
     if(n!==null) return n;
     const st = finStartDate(), first = new Date(from.getFullYear(), from.getMonth(), 1);
-    if(st && st>first && src.frequency!=='semanal') return 0; // sin día conocido y empezaste este mes: ya estaba en tus saldos
   }
   if(src.frequency==='semanal') return a*4;
   if(src.frequency==='quincenal') return a*2;
@@ -1686,8 +1687,8 @@ function upcomingPayments(days){
   });
   fin.cards.forEach(c=>{
     const a = fin.accounts.find(x=>x.id===c.account_id); if(!a || a.archived) return;
-    const debt = cardDebt(a.id); const d = nextDateForDay(c.pay_day);
-    if(debt>0 && d && daysUntil(d)<=days) out.push({name:`Pago ${a.name}`, amount:debt, date:d, sub:'Deuda actual'});
+    const st = v2CardStatus(fin, a); const debt = st ? st.toPay : cardDebt(a.id); const d = st ? st.due : nextDateForDay(c.pay_day);
+    if(debt>0 && d && daysUntil(d)<=days) out.push({name:`Pago ${a.name}`, amount:debt, date:d, sub:'Pago para no generar intereses'});
   });
   return out.sort((a,b)=>a.date-b.date);
 }
@@ -1726,9 +1727,9 @@ function finAlerts(){
   });
   fin.cards.forEach(c=>{
     const a = fin.accounts.find(x=>x.id===c.account_id); if(!a || a.archived) return;
-    const debt = cardDebt(a.id); if(!debt) return;
-    const pay = nextDateForDay(c.pay_day), n = daysUntil(pay);
-    if(n<5) out.push({id:`card-${a.id}-${localDate(pay)}`, level:'over', text:`Pago de ${a.name} ${inDaysTxt(n)} (${fmtDay(pay)}): debes ${fmtMoney(debt)}`});
+    const st = v2CardStatus(fin, a); const debt = st ? st.toPay : cardDebt(a.id); if(!debt) return;
+    const pay = st ? st.due : nextDateForDay(c.pay_day), n = daysUntil(pay);
+    if(n<5) out.push({id:`card-${a.id}-${localDate(pay)}`, level:'over', text:`Pago de ${a.name} ${inDaysTxt(n)} (${fmtDay(pay)}): paga ${fmtMoney(debt)} para no generar intereses`});
   });
   fin.incomes.filter(s=>s.active && s.counts_for_budget && s.category_id).forEach(s=>{
     const due = expectedSoFar(s), rec = receivedInMonth(s.category_id);
