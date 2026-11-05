@@ -1,9 +1,9 @@
 // Comidas (dieta): macros del día vs. metas, registro, ideas con receta, semana y peso/medidas.
 // Vive como pestaña dentro de Salud; recibe los datos de loadSalud() (d.meals, d.dietGoals, d.body, d.whoop).
-import { dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611051631';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051631';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611051631';
-import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611051631';
+import { dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611051743';
+import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051743';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611051743';
+import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611051743';
 
 export const DIET_GOALS = {
   kcal: { label: 'Calorías', unit: 'kcal', def: 2200 },
@@ -178,15 +178,14 @@ async function saveMeal(d, body, repaint) {
 function openMeal(d, repaint, pre = {}) {
   const num = v => Number(String(v ?? '').replace(',', '.'));
   const rec = recents(d);
-  const canDictate = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   openModal('Agregar comida', `
     <section class="ai-box" aria-labelledby="aiLbl">
       <label class="flabel" id="aiLbl" for="aiText" style="margin-top:0">Escribe o dicta lo que comiste</label>
       <div class="ai-row">
         <textarea class="field" id="aiText" rows="2" maxlength="1000" placeholder="Ej. sándwich de jamón y queso con un café con leche"></textarea>
-        ${canDictate ? `<button type="button" class="icon-btn ai-mic" id="aiMic" aria-label="Dictar" aria-pressed="false">${icon('mic')}</button>` : ''}
+        <button type="button" class="icon-btn ai-mic" id="aiMic" aria-label="Dictar" aria-pressed="false">${icon('mic')}</button>
       </div>
-      ${canDictate ? '' : '<p class="small" style="margin:0">Para dictar, usa el micrófono del teclado.</p>'}
+      ${browserDictation() ? '<p class="small" style="margin:0">Toca el micrófono, di qué comiste y lo calculo solo.</p>' : '<p class="small" style="margin:0">Toca el micrófono y usa el 🎤 del teclado; luego toca Estimar.</p>'}
       <button type="button" class="btn-dark" id="aiGo" style="width:100%">${icon('spark')}Estimar calorías y macros</button>
       <div id="aiOut" aria-live="polite"></div>
     </section>
@@ -278,27 +277,16 @@ function bindEstimate() {
       <div class="ai-total"><strong>${r0(r.total.kcal)} kcal</strong><span>P ${fmt1(r.total.protein_g)} g · C ${fmt1(r.total.carbs_g)} g · G ${fmt1(r.total.fat_g)} g</span></div>
       ${r.items.map(x => `<div class="ai-item"><span>${escapeHTML(x.name)}<small>${escapeHTML(x.portion)}</small></span><span>${r0(x.kcal)} kcal</span></div>`).join('')}
       ${r.assumptions.length ? `<ul class="ai-assump">${r.assumptions.map(a => `<li>${escapeHTML(a)}</li>`).join('')}</ul>` : ''}
-      <p class="small" style="margin:0">Es un estimado: ajusta abajo si quieres y toca Guardar.</p></div>`;
+      <p class="small" style="margin:0">Es un estimado: ajusta abajo si quieres.</p>
+      <button type="button" class="btn-primary" id="aiSave" style="width:100%">Guardar esta comida</button></div>`;
+    $('aiSave').onclick = () => $('mSave').click();
   }
 
   $('aiGo').onclick = () => run();
-  $('aiText').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run(); });
+  $('aiText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); } });
 
-  // Dictado con el reconocimiento de voz del navegador (Safari/Chrome), en español de México.
-  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const mic = $('aiMic');
-  if (Rec && mic) {
-    let rec = null;
-    mic.onclick = () => {
-      if (rec) { rec.stop(); return; }
-      rec = new Rec(); rec.lang = 'es-MX'; rec.interimResults = true; rec.continuous = false;
-      const base = $('aiText').value.trim();
-      rec.onresult = e => { const t = [...e.results].map(x => x[0].transcript).join(' '); $('aiText').value = (base ? base + ' ' : '') + t; };
-      rec.onerror = e => { if (e.error !== 'aborted' && e.error !== 'no-speech') showToast('No pude usar el micrófono: ' + e.error, 'error'); };
-      rec.onend = () => { rec = null; mic.setAttribute('aria-pressed', 'false'); mic.classList.remove('on'); };
-      try { rec.start(); mic.setAttribute('aria-pressed', 'true'); mic.classList.add('on'); } catch { rec = null; }
-    };
-  }
+  // Dictado: al terminar de hablar, estima solo.
+  bindDictation($('aiMic'), $('aiText'), () => run());
 }
 
 async function deleteMeal(d, id, repaint) {

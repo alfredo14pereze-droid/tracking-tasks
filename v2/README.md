@@ -113,3 +113,15 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
   leer una captura (asistente `fondos_leer`). "Explicar cómo van" (asistente `fondos`) es solo informativo: el prompt
   prohíbe recomendar comprar/vender/cambiar o sugerir productos.
 
+### Gym, voz y privacidad (5-nov-2026)
+- **Entreno:** Enter pasa de kg → reps; Enter en reps marca la serie y salta a la siguiente (inputs `type=number` para que el
+  teclado del iPhone traiga Enter). "La vez pasada · fecha: 60×10 · 60×9…" arriba de las series (`suggestion().prevAt`).
+- **Tipo de entreno** en Salud: Pierna/glúteo · Push · Pull · Full · Solo cardio (`S.routineOfTag`: la rutina de ese tipo que hace
+  más tiempo no haces). "Solo cardio" sin rutina de cardio registra un entreno terminado `Cardio · <tipo>` con sus minutos.
+- **Calorías** por entreno (`S.workoutKcal`): Whoop si un entreno de Whoop se empalma; si no, MET 5 × peso × horas.
+- **Ilustraciones** (`js/ilustraciones.js`): dibujos de línea por tipo de movimiento, elegidos por nombre o músculo.
+- **Dictado** (`bindDictation` en util.js): en iPhone con la app instalada usa el 🎤 del teclado (el del navegador no sirve
+  ahí); en Safari/Chrome usa el del navegador y al terminar estima solo. "+ Gasto" entiende "gasté 150 en Oxxo con la BBVA"
+  (`parseSpokenExpense`, sin IA: monto, comercio, cuenta y categoría por comercio anterior o palabras).
+- **Modo privado:** ojo junto a "+ Gasto"; `F.fmtMoney*` y el `fmtMoney` clásico regresan "$ •••••" (localStorage `v2Privacy`).
+

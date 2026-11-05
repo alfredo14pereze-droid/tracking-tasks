@@ -1,9 +1,9 @@
 // Estado de cuenta con IA: subes el PDF, Claude extrae los movimientos y marca cuáles ya tenías;
 // tú eliges cuáles registrar. Usa las mismas tablas (transactions) que el resto de Finanzas.
-import { dbPost } from '../db.js?v=202611051631';
-import { escapeHTML, localDate, showToast, openModal, closeModal } from '../util.js?v=202611051631';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611051631';
-import * as F from '../fin.js?v=202611051631';
+import { dbPost } from '../db.js?v=202611051743';
+import { escapeHTML, localDate, showToast, openModal, closeModal } from '../util.js?v=202611051743';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611051743';
+import * as F from '../fin.js?v=202611051743';
 
 const TYPE = { expense: 'Gasto', income: 'Ingreso', payment: 'Pago a tarjeta', transfer_out: 'Transferencia enviada', transfer_in: 'Transferencia recibida', fee: 'Comisión' };
 const MATCH = { nuevo: 'Nuevo', ya_registrado: 'Ya lo tenías', posible_duplicado: '¿Duplicado?' };

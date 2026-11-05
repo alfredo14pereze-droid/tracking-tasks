@@ -1,6 +1,6 @@
 // Salud: carga de datos de ejercicio + Whoop y la lógica (progresión, rutina sugerida, metas).
-import { safeGet, dbPost, callFunction } from './db.js?v=202611051631';
-import { localDate, weekKey } from './util.js?v=202611051631';
+import { safeGet, dbPost, callFunction } from './db.js?v=202611051743';
+import { localDate, weekKey } from './util.js?v=202611051743';
 
 const daysAgoIso = n => new Date(Date.now() - n * 86400e3).toISOString();
 const daysAgoStr = n => { const d = new Date(); d.setDate(d.getDate() - n); return localDate(d); };
@@ -50,6 +50,22 @@ export function nextRoutine(d) {
   return d.routines[(i + 1) % d.routines.length];
 }
 
+// Rutina de un tipo (push/pull/pierna/full/cardio): la que hace más tiempo no haces.
+export function routineOfTag(d, tag) {
+  const list = d.routines.filter(r => r.tag === tag);
+  if (!list.length) return null;
+  const lastAt = r => { const w = finished(d).find(x => x.routine_id === r.id); return w ? new Date(w.started_at).getTime() : 0; };
+  return list.sort((a, b) => lastAt(a) - lastAt(b))[0];
+}
+// Calorías de un entreno: las de Whoop si hay un entreno de Whoop que se empalma; si no, estimado (MET 5 × kg × horas).
+export function workoutKcal(d, w) {
+  const a = new Date(w.started_at).getTime(), b = new Date(w.finished_at || Date.now()).getTime();
+  const hit = (d.whoop?.workouts || []).filter(x => x.kilojoule && new Date(x.started_at).getTime() < b && new Date(x.ended_at || x.started_at).getTime() > a);
+  if (hit.length) return { kcal: Math.round(hit.reduce((s, x) => s + Number(x.kilojoule), 0) / 4.184), whoop: true };
+  const kg = Number(d.body.find(x => x.weight_kg)?.weight_kg) || 75;  // body viene ordenado del más reciente
+  return { kcal: Math.round(5 * kg * Math.max(0, b - a) / 3600000), whoop: false };
+}
+
 // Minutos estimados: series × (45 s de trabajo + descanso).
 export const routineMinutes = (d, r) => Math.round(routineItems(d, r.id).reduce((s, i) => s + i.sets * (45 + i.rest_sec), 0) / 60);
 
@@ -82,16 +98,16 @@ function succeeded(sess, item) {
 export function suggestion(d, exerciseId, item, excludeWorkoutId) {
   const ss = sessionsFor(d, exerciseId, excludeWorkoutId);
   if (!ss.length) return { weight: null, reps: item.reps_max, label: 'nuevo', kind: 'new', prev: [] };
-  const last = ss[0], w = topWeight(last.sets), prev = last.sets;
+  const last = ss[0], w = topWeight(last.sets), prev = last.sets, prevAt = last.workout.started_at;
   if (succeeded(last, item)) {
     return w > 0
-      ? { weight: w + 2.5, reps: item.reps_min, label: '+2.5 kg', kind: 'up', prev }
-      : { weight: 0, reps: item.reps_max + 1, label: '+1 rep', kind: 'up', prev };
+      ? { weight: w + 2.5, reps: item.reps_min, label: '+2.5 kg', kind: 'up', prev, prevAt }
+      : { weight: 0, reps: item.reps_max + 1, label: '+1 rep', kind: 'up', prev, prevAt };
   }
   if (ss[1] && !succeeded(ss[1], item) && topWeight(ss[1].sets) === w && w > 0) {
-    return { weight: round25(w * 0.9), reps: item.reps_max, label: '−10% descarga', kind: 'down', prev };
+    return { weight: round25(w * 0.9), reps: item.reps_max, label: '−10% descarga', kind: 'down', prev, prevAt };
   }
-  return { weight: w, reps: item.reps_max, label: 'igual', kind: 'same', prev };
+  return { weight: w, reps: item.reps_max, label: 'igual', kind: 'same', prev, prevAt };
 }
 
 // 1RM estimado (Epley) por semana para un ejercicio, últimas n semanas.

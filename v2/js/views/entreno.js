@@ -1,8 +1,9 @@
 // Entreno en curso: una tarjeta por ejercicio con sus series, "anterior", opciones y timer de descanso.
 // Cada serie se guarda al marcarla (optimista + rollback). Lo no marcado vive en un borrador local.
-import { dbPost, dbPatch, dbDelete } from '../db.js?v=202611051631';
-import { escapeHTML, showToast, icon, openModal, closeModal } from '../util.js?v=202611051631';
-import * as S from '../salud.js?v=202611051631';
+import { dbPost, dbPatch, dbDelete } from '../db.js?v=202611051743';
+import { escapeHTML, showToast, icon, openModal, closeModal } from '../util.js?v=202611051743';
+import * as S from '../salud.js?v=202611051743';
+import { exerciseArt } from '../ilustraciones.js?v=202611051743';
 
 let st = null;     // { d, w, slots, current, restEnd, restTotal }
 let root = null;
@@ -111,8 +112,8 @@ function setRow(slot, x, j) {
   return `<div class="set-row${x.done ? ' done' : ''}" data-set="${j}">
     <div class="set-n">${j + 1}</div>
     <div class="set-prev">${escapeHTML(prevTxt)}</div>
-    <input class="set-in" inputmode="decimal" aria-label="Peso serie ${j + 1}" data-f="w" value="${escapeHTML(String(x.w ?? ''))}" placeholder="kg">
-    <input class="set-in" inputmode="numeric" aria-label="Repeticiones serie ${j + 1}" data-f="r" value="${escapeHTML(String(x.r ?? ''))}" placeholder="${escapeHTML(String(ph))}">
+    <input class="set-in" type="number" step="any" min="0" enterkeyhint="next" aria-label="Peso serie ${j + 1}" data-f="w" value="${escapeHTML(String(x.w ?? ''))}" placeholder="kg">
+    <input class="set-in" type="number" step="1" min="0" enterkeyhint="${j === slot.sets.length - 1 ? 'done' : 'next'}" aria-label="Repeticiones serie ${j + 1}" data-f="r" value="${escapeHTML(String(x.r ?? ''))}" placeholder="${escapeHTML(String(ph))}">
     <button type="button" class="set-ok${x.done ? ' on' : ''}" data-ok aria-label="${x.done ? 'Desmarcar' : 'Marcar'} serie ${j + 1}" aria-pressed="${x.done}">${x.done ? icon('check', 3) : ''}</button>
   </div>`;
 }
@@ -149,12 +150,15 @@ function paint() {
     <div class="fin-grid"><div class="fin-col">
     ${slot ? `<section class="card" style="gap:14px" aria-labelledby="exT">
       <div class="card-head" style="align-items:flex-start;gap:12px">
-        <div style="min-width:0;display:flex;flex-direction:column;gap:4px">
+        ${(() => { const e = st.d.exercises.find(x => x.id === slot.exerciseId); return exerciseArt(e?.name, e?.muscle, 64); })()}
+        <div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1">
           <h2 id="exT" style="font-size:22px;letter-spacing:-.02em;overflow-wrap:anywhere">${escapeHTML(S.exName(st.d, slot.exerciseId))}</h2>
           <div class="small" style="font-size:13px">Meta: ${slot.sets.length} × ${repsTxt(it)}${sug?.weight ? ' · ' + fmtKg(sug.weight) : ''} · descanso ${mmss(it.rest_sec)}</div>
         </div>
         ${sug && sug.kind !== 'new' ? `<span class="chip ${sug.kind === 'up' ? 'chip-soft' : sug.kind === 'down' ? 'chip-alert' : 'chip-plain'}">${escapeHTML(sug.label)}${sug.kind === 'up' && sug.weight ? ' vs última' : ''}</span>` : ''}
       </div>
+      ${sug?.prev?.length ? `<div class="last-time"><span>La vez pasada · ${escapeHTML(new Date(sug.prevAt).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''))}</span>
+        <b>${sug.prev.map(p => `${Number(p.weight_kg) || 0}×${p.reps ?? '—'}`).join(' · ')}</b></div>` : '<div class="last-time"><span>Primera vez con este ejercicio</span></div>'}
       ${optionsRow(slot)}
       <div class="set-row set-head" aria-hidden="true"><div>Serie</div><div>Anterior</div><div>kg</div><div>Reps</div><div></div></div>
       ${slot.sets.map((x, j) => setRow(slot, x, j)).join('')}
@@ -195,6 +199,10 @@ function paint() {
     </div></div>
   </div>`;
   bind();
+  if (st.focus) { // después de marcar una serie con Enter, sigue en la próxima
+    const el = root.querySelector(`.set-row[data-set="${st.focus.j}"] [data-f="${st.focus.f}"]`);
+    if (el && !el.closest('.set-row').classList.contains('done')) el.focus({ preventScroll: false });
+  }
 }
 
 // ── Eventos ──────────────────────────────────────────
@@ -221,6 +229,15 @@ function bind() {
     row.querySelectorAll('.set-in').forEach(inp => {
       inp.addEventListener('input', () => { st.slots[st.current].sets[j][inp.dataset.f] = inp.value; saveDraft(); });
       inp.addEventListener('change', () => { const x = st.slots[st.current].sets[j]; if (x.done) updateSet(st.current, j); });
+      inp.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const x = st.slots[st.current].sets[j];
+        if (inp.dataset.f === 'w') return row.querySelector('[data-f="r"]').focus();
+        // Reps: marca la serie (si no estaba) y salta al peso de la siguiente.
+        st.focus = j + 1 < st.slots[st.current].sets.length ? { j: j + 1, f: 'w' } : null;
+        if (!x.done) toggleSet(st.current, j); else { const nx = root.querySelector(`.set-row[data-set="${j + 1}"] [data-f="w"]`); if (nx) nx.focus(); else inp.blur(); }
+      });
     });
     row.querySelector('[data-ok]').onclick = () => toggleSet(st.current, j);
   });
@@ -240,7 +257,7 @@ async function toggleSet(si, j) {
   }
   if (x.r === '' || x.r == null) x.r = String(s.sug?.reps ?? s.item.reps_max); // sin escribir = las reps meta
   const w = num(x.w), r = num(x.r);
-  if (w === null || w < 0 || r === null || r < 0) return showToast('Revisa el peso y las reps', 'error');
+  if (w === null || w < 0 || r === null || r < 0) { st.focus = null; return showToast('Revisa el peso y las reps', 'error'); }
   x.done = true;
   st.restEnd = Date.now() + (s.item.rest_sec || 90) * 1000;
   saveDraft(); paint();
@@ -254,12 +271,13 @@ async function toggleSet(si, j) {
     // Serie final del ejercicio: pasa solo al siguiente pendiente.
     if (slotDone(s) && si === st.current) {
       const nxt = st.slots.findIndex((z, k) => k > si && !slotDone(z));
-      if (nxt >= 0) { st.current = nxt; saveDraft(); }
+      if (nxt >= 0) { st.current = nxt; st.focus = { j: 0, f: 'w' }; saveDraft(); }
     }
     paint();
   } catch {
     x.done = false; st.restEnd = null; paint(); showToast('No se pudo guardar la serie', 'error');
   }
+  st.focus = null;
 }
 
 async function updateSet(si, j) {
@@ -332,7 +350,8 @@ function finish() {
     try {
       await dbPatch('ex_workouts', { finished_at: at }, `?id=eq.${st.w.id}`);
       clearDraft(st.w.id); stopTick();
-      showToast(`¡Bien! ${st.w.name} terminado · ${elapsed()}`);
+      const k = S.workoutKcal(st.d, { ...st.w, finished_at: at });
+      showToast(`¡Bien! ${st.w.name} terminado · ${elapsed()} · ~${k.kcal} kcal${k.whoop ? ' (Whoop)' : ''}`);
       location.hash = '#salud';
     } catch { showToast('No se pudo terminar el entreno', 'error'); }
   };

@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611051631';
-import { localDate } from './util.js?v=202611051631';
+import { safeGet } from './db.js?v=202611051743';
+import { localDate } from './util.js?v=202611051743';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions, contribs] = await Promise.all([
@@ -38,10 +38,14 @@ export async function loadFinance() {
 // ── Formato ──────────────────────────────────────────
 const moneyFmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const moneyFmt0 = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
-export const fmtMoney = c => moneyFmt.format((Number(c) || 0) / 100);
+// Modo privado: tapa las cantidades (se guarda por dispositivo).
+export const isPrivate = () => { try { return localStorage.getItem('v2Privacy') === '1'; } catch { return false; } };
+export function setPrivate(on) { try { localStorage.setItem('v2Privacy', on ? '1' : '0'); } catch { /* sin storage */ } document.documentElement.classList.toggle('privacy', on); }
+const HIDDEN = '$ •••••';
+export const fmtMoney = c => isPrivate() ? HIDDEN : moneyFmt.format((Number(c) || 0) / 100);
 // Sin centavos para cifras grandes de tarjetas (como el mockup).
-export const fmtMoney0 = c => moneyFmt0.format(Math.round((Number(c) || 0) / 100));
-export const fmtSigned = c => (c < 0 ? '−' : '') + fmtMoney0(Math.abs(c));
+export const fmtMoney0 = c => isPrivate() ? HIDDEN : moneyFmt0.format(Math.round((Number(c) || 0) / 100));
+export const fmtSigned = c => isPrivate() ? HIDDEN : (c < 0 ? '−' : '') + fmtMoney0(Math.abs(c));
 
 // "1,234.5" → 123450; null si no es válido. Sin flotantes (igual que v1).
 export function parseCents(s) {

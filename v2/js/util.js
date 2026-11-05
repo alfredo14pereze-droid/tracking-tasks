@@ -56,6 +56,8 @@ export function showToast(msg, type = 'info', action) {
 
 // Íconos de trazo (los del mockup).
 export const ICONS = {
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   inicio: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
   tareas: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
   calendario: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
@@ -103,3 +105,39 @@ export function closeModal() {
   const d = document.getElementById('modal');
   if (d.open) d.close();
 }
+
+// ── Dictado ───────────────────────────────────────────
+// En iPhone con la app instalada (pantalla de inicio) el reconocimiento de voz del navegador casi no funciona:
+// ahí se usa el micrófono del teclado. En Safari/Chrome normal se usa el del navegador (es-MX).
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+export const browserDictation = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition) && !(isIOS && standalone());
+// mic = botón; field = textarea/input; onEnd(texto) se llama al terminar de hablar (solo con el del navegador).
+export function bindDictation(mic, field, onEnd) {
+  if (!mic || !field) return;
+  let rec = null;
+  mic.onclick = () => {
+    if (!browserDictation()) {
+      field.focus();
+      showToast('Toca el 🎤 del teclado para dictar', 'info');
+      return;
+    }
+    if (rec) { rec.stop(); return; }
+    const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    rec = new Rec(); rec.lang = 'es-MX'; rec.interimResults = true; rec.continuous = false;
+    const base = field.value.trim();
+    let heard = '';
+    rec.onresult = e => { heard = [...e.results].map(x => x[0].transcript).join(' '); field.value = (base ? base + ' ' : '') + heard; field.dispatchEvent(new Event('input')); };
+    rec.onerror = e => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') showToast('Permite el micrófono, o usa el 🎤 del teclado', 'error');
+      else if (e.error !== 'aborted' && e.error !== 'no-speech') showToast('No te escuché bien; usa el 🎤 del teclado', 'error');
+    };
+    rec.onend = () => {
+      rec = null; mic.setAttribute('aria-pressed', 'false'); mic.classList.remove('on');
+      if (heard.trim()) onEnd?.(field.value.trim());
+      else { field.focus(); showToast('No te escuché. Prueba con el 🎤 del teclado', 'info'); }
+    };
+    try { rec.start(); mic.setAttribute('aria-pressed', 'true'); mic.classList.add('on'); } catch { rec = null; field.focus(); }
+  };
+}
+

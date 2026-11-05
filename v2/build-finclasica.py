@@ -76,6 +76,9 @@ sub("""function expectedIncomes(){
   const srcs = fin.incomes.filter(x=>x.active);""", """function expectedIncomes(){
   const srcs = fin.incomes.filter(x=>x.active && ownedPct(fin.accounts.find(a=>a.id===x.account_id))===100); // (v2) el pago del carro no es ingreso tuyo""")
 
+sub("""function fmtMoney(c){ return moneyFmt.format((Number(c)||0)/100); }""",
+"""function fmtMoney(c){ if(document.documentElement.classList.contains('privacy')) return '$ •••••'; return moneyFmt.format((Number(c)||0)/100); } // (v2) modo privado""")
+
 # --- markup de los modales (igual que la clásica) ---
 def block(id_):
     i = next(k for k, l in enumerate(lines) if f'id="{id_}"' in l and 'modal-overlay' in l)

@@ -1,9 +1,9 @@
 // GENERADO por build_finclasica.py desde clasica/index.html (sección FINANZAS). No editar a mano:
 // cambia la clásica o el script y vuelve a generar. Es la misma lógica de la clásica (saldos, tarjetas,
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
-import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611051631';
-import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611051631';
-import { cardStatus as v2CardStatus } from './fin.js?v=202611051631';
+import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611051743';
+import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611051743';
+import { cardStatus as v2CardStatus } from './fin.js?v=202611051743';
 
 // ── Adaptador ──
 let currentSection = 'finance', finView = 'home', currentView = 'today';
@@ -56,7 +56,7 @@ const ACC_KIND = {debit:'Débito', credit:'Crédito', savings:'Ahorro', investme
 const TX_TYPES = {expense:'Gasto', income:'Ingreso', transfer:'Transferencia'};
 const moneyFmt = new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'});
 
-function fmtMoney(c){ return moneyFmt.format((Number(c)||0)/100); }
+function fmtMoney(c){ if(document.documentElement.classList.contains('privacy')) return '$ •••••'; return moneyFmt.format((Number(c)||0)/100); } // (v2) modo privado
 // "1,234.5" → 123450. Devuelve null si no es un monto válido. Sin flotantes.
 function parseCents(s){
   s = String(s||'').replace(/[\s$,]/g,'');

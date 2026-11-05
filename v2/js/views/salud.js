@@ -1,9 +1,10 @@
 // Salud: Ejercicio (rutina de hoy, semana, progreso), Actividad (metas + Whoop) y Sueño.
-import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611051631';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051631';
-import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611051631';
-import { coachHTML, bindCoach } from './coach.js?v=202611051631';
-import * as S from '../salud.js?v=202611051631';
+import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611051743';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051743';
+import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611051743';
+import { coachHTML, bindCoach } from './coach.js?v=202611051743';
+import * as S from '../salud.js?v=202611051743';
+import { exerciseArt } from '../ilustraciones.js?v=202611051743';
 
 const TABS = { ejercicio: 'Ejercicio', comidas: 'Comidas', actividad: 'Actividad', sueno: 'Sueño' };
 const DAY = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -45,6 +46,7 @@ function setupCard(title, body, button) {
   return `<section class="soon"><h1 style="font-size:22px">${escapeHTML(title)}</h1><p>${body}</p>${button || ''}</section>`;
 }
 
+const TYPE_PICK = [['pierna', 'Pierna / glúteo'], ['push', 'Push'], ['pull', 'Pull'], ['full', 'Full body'], ['cardio', 'Solo cardio']];
 function heroCard(d) {
   const active = S.activeWorkout(d);
   const today = S.whoopToday(d);
@@ -68,6 +70,8 @@ function heroCard(d) {
       <div class="hero-sub">${n} ejercicio${n === 1 ? '' : 's'} · ~${S.routineMinutes(d, r)} min</div>
     </div>
     ${rec != null ? `<div class="hero-note">${escapeHTML(S.recoveryAdvice(rec))}</div>` : ''}
+    <div class="type-pick" role="group" aria-label="¿Qué entrenas hoy?">${TYPE_PICK.filter(([t]) => t === 'cardio' || d.routines.some(x => x.tag === t)).map(([t, lbl]) =>
+      `<button type="button" data-type="${t}" aria-pressed="${r.tag === t && t !== 'cardio'}">${lbl}</button>`).join('')}</div>
     <button type="button" class="btn-light" data-start="${escapeHTML(r.id)}">${icon('play')}Empezar entreno</button>
   </section>`;
 }
@@ -95,7 +99,7 @@ function routineCard(d) {
     const sug = ex ? S.suggestion(d, ex, it) : null;
     const reps = it.reps_min === it.reps_max ? it.reps_max : `${it.reps_min}–${it.reps_max}`;
     return `<div class="task">
-      <div class="num">${String(i + 1).padStart(2, '0')}</div>
+      ${(() => { const e = d.exercises.find(x => x.id === ex); return exerciseArt(e?.name, e?.muscle, 40); })()}
       <div class="task-main"><div class="task-title" style="font-weight:500">${escapeHTML(ex ? S.exName(d, ex) : 'Sin ejercicio')}</div>
         <div class="task-meta">${it.sets} × ${reps}${sug?.weight ? ' · ' + fmtKg(sug.weight) : ''}${opts.length > 1 ? ` · ${opts.length - 1} opción${opts.length > 2 ? 'es' : ''} más` : ''}</div></div>
       ${sug && sug.kind !== 'new' ? chip(sug.label, sug.kind) : ''}
@@ -149,7 +153,8 @@ function historyCard(d) {
       const n = d.sets.filter(s => s.workout_id === w.id && s.done).length;
       const mins = Math.round((new Date(w.finished_at) - new Date(w.started_at)) / 60000);
       const day = new Date(w.started_at).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
-      return `<div class="task"><div class="task-main"><div class="task-title">${escapeHTML(w.name)}</div><div class="task-meta">${escapeHTML(day)} · ${minsLabel(mins)} · ${n} series</div></div>
+      const k = S.workoutKcal(d, w);
+      return `<div class="task"><div class="task-main"><div class="task-title">${escapeHTML(w.name)}</div><div class="task-meta">${escapeHTML(day)} · ${minsLabel(mins)}${n ? ` · ${n} series` : ''} · ~${k.kcal} kcal${k.whoop ? ' (Whoop)' : ''}</div></div>
         <button type="button" class="icon-btn sm" data-wdel="${escapeHTML(w.id)}" aria-label="Borrar entreno ${escapeHTML(w.name)} del ${escapeHTML(day)}">${icon('trash')}</button></div>`;
     }).join('')}
   </section>`;
@@ -274,6 +279,7 @@ function bind() {
   on('[data-tab]', e => { st.tab = e.currentTarget.dataset.tab; saveTab(st.tab); paint(); });
   on('[data-seed]', seed);
   on('[data-start]', e => startWorkout(e.currentTarget.dataset.start));
+  on('[data-type]', e => pickType(e.currentTarget.dataset.type));
   on('[data-change]', chooseRoutine);
   on('[data-weight]', () => openMeasures(st.d, paint));
   if (st.tab === 'comidas' && st.d.ready !== undefined) bindComidas(root, st.d, paint);
@@ -319,6 +325,40 @@ async function startWorkout(routineId) {
     st.d.workouts.unshift(w);
     location.hash = '#entreno';
   } catch { showToast('No se pudo empezar el entreno', 'error'); }
+}
+
+// Tipo de entreno: escoge la rutina de ese tipo que hace más tiempo no haces. "Solo cardio" sin rutina de cardio = registrar cardio.
+function pickType(tag) {
+  const r = S.routineOfTag(st.d, tag);
+  if (r && tag !== 'cardio') { st.routineId = r.id; paint(); return; }
+  if (r && tag === 'cardio' && S.routineItems(st.d, r.id).length) { st.routineId = r.id; paint(); return; }
+  openCardio();
+}
+const CARDIO = ['Caminadora', 'Bici', 'Elíptica', 'Correr', 'Escaladora', 'Remo', 'Caminar', 'Otro'];
+function openCardio() {
+  openModal('Solo cardio', `
+    <span class="flabel" style="margin-top:0">¿Qué hiciste?</span>
+    <div class="opts" role="group" aria-label="Tipo de cardio">${CARDIO.map((c, i) => `<button type="button" class="opt" data-cardio="${escapeHTML(c)}" aria-pressed="${i === 0}">${escapeHTML(c)}</button>`).join('')}</div>
+    <label class="flabel" for="cMin">Minutos</label>
+    <input class="field" id="cMin" type="number" min="1" max="600" step="1" enterkeyhint="done" placeholder="30">
+    <p class="small" style="margin:6px 0 0">Se registra como entreno de hoy (cuenta para tus metas de la semana). Si traes el Whoop puesto, las calorías salen de ahí.</p>`,
+    '<button type="button" class="btn-primary" id="cSave">Registrar cardio</button>');
+  let kind = CARDIO[0];
+  document.querySelectorAll('#modal [data-cardio]').forEach(b => b.onclick = () => { kind = b.dataset.cardio; document.querySelectorAll('#modal [data-cardio]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
+  const save = async () => {
+    const min = Math.round(Number(document.getElementById('cMin').value));
+    if (!(min > 0 && min <= 600)) return showToast('Escribe los minutos', 'error');
+    const end = new Date(), start = new Date(end.getTime() - min * 60000);
+    const cardio = st.d.routines.find(x => x.tag === 'cardio');
+    try {
+      const [w] = await dbPost('ex_workouts', { routine_id: cardio ? cardio.id : null, name: `Cardio · ${kind}`, started_at: start.toISOString(), finished_at: end.toISOString() });
+      st.d.workouts.unshift(w); closeModal();
+      const k = S.workoutKcal(st.d, w);
+      showToast(`Cardio registrado · ${min} min · ~${k.kcal} kcal`); paint();
+    } catch { showToast('No se pudo registrar', 'error'); }
+  };
+  document.getElementById('cSave').onclick = save;
+  document.getElementById('cMin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
 }
 
 function chooseRoutine() {

@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611051631';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611051631';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051631';
-import { FIN_TABS } from '../finclasica.js?v=202611051631';
-import { openStatement } from './estado.js?v=202611051631';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611051631';
-import * as F from '../fin.js?v=202611051631';
+import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611051743';
+import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611051743';
+import { bindDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051743';
+import { FIN_TABS } from '../finclasica.js?v=202611051743';
+import { openStatement } from './estado.js?v=202611051743';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611051743';
+import * as F from '../fin.js?v=202611051743';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -397,7 +397,10 @@ function paint() {
   rootEl.innerHTML = `<div class="page">
     <header class="head" style="align-items:center">
       <h1 class="hello" style="margin:0">Finanzas</h1>
-      <button type="button" class="btn-dark" data-add>${icon('plus', 2.4)}Gasto</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button type="button" class="icon-btn" data-privacy aria-pressed="${F.isPrivate()}" aria-label="${F.isPrivate() ? 'Mostrar cantidades' : 'Ocultar cantidades'}" title="${F.isPrivate() ? 'Mostrar cantidades' : 'Ocultar cantidades'}">${icon(F.isPrivate() ? 'eyeoff' : 'eye')}</button>
+        <button type="button" class="btn-dark" data-add>${icon('plus', 2.4)}Gasto</button>
+      </div>
     </header>
 
     <nav class="views" aria-label="Secciones de finanzas">
@@ -486,6 +489,7 @@ function bind() {
   });
   rootEl.querySelector('[data-toggle-all]').onclick = () => { state.showAll = !state.showAll; paint(); };
   rootEl.querySelector('[data-add]').onclick = openExpense;
+  rootEl.querySelector('[data-privacy]').onclick = () => { F.setPrivate(!F.isPrivate()); paint(); };
   rootEl.querySelector('[data-real]')?.addEventListener('click', openRealBalances);
   rootEl.querySelector('[data-rates]')?.addEventListener('click', openRates);
   rootEl.querySelectorAll('[data-card-month]').forEach(b => b.onclick = () => openCardMonth(b.dataset.cardMonth));
@@ -548,6 +552,14 @@ function openExpense() {
   if (!accs.length) return (location.hash = '#finanzas/accounts', showToast('Primero crea una cuenta', 'error'));
   const opt = (list) => list.map(x => `<option value="${escapeHTML(x.id)}">${escapeHTML(x.name)}</option>`).join('');
   openModal('Nuevo gasto', `
+    <section class="ai-box" aria-labelledby="gVoiceL">
+      <label class="flabel" id="gVoiceL" for="gVoice" style="margin-top:0">Dilo o escríbelo</label>
+      <div class="ai-row">
+        <textarea class="field" id="gVoice" rows="1" maxlength="200" placeholder="Ej. gasté 150 en Oxxo con la BBVA"></textarea>
+        <button type="button" class="icon-btn ai-mic" id="gMic" aria-label="Dictar gasto" aria-pressed="false">${icon('mic')}</button>
+      </div>
+      <div class="small" id="gHeard" aria-live="polite"></div>
+    </section>
     <label class="flabel" for="gAmt">Monto</label>
     <input class="field" id="gAmt" inputmode="decimal" autocomplete="off" placeholder="$0.00">
     <label class="flabel" for="gCat">Categoría</label>
@@ -560,8 +572,62 @@ function openExpense() {
     <input class="field" id="gNote" maxlength="120" autocomplete="off" placeholder="Oxxo, café…">
   `, `<button type="button" class="btn-primary" id="gSave">Guardar gasto</button>`);
   try { const last = localStorage.getItem('v2LastAcc'); if (last && accs.some(a => a.id === last)) document.getElementById('gAcc').value = last; } catch { /* sin storage */ }
+  const voice = document.getElementById('gVoice');
+  const fill = () => {
+    const g = parseSpokenExpense(f, accs, voice.value);
+    if (g.amount) document.getElementById('gAmt').value = (g.amount / 100).toFixed(2);
+    if (g.account) document.getElementById('gAcc').value = g.account.id;
+    if (g.note) document.getElementById('gNote').value = g.note;
+    if (g.category) document.getElementById('gCat').value = g.category.id;
+    document.getElementById('gHeard').textContent = voice.value.trim()
+      ? `Entendí: ${[g.amount ? F.fmtMoney(g.amount) : 'sin monto', g.note, g.account?.name, g.category?.name].filter(Boolean).join(' · ')}` : '';
+  };
+  voice.addEventListener('input', fill);
+  voice.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fill(); if (F.parseCents(document.getElementById('gAmt').value)) saveExpense(); } });
+  bindDictation(document.getElementById('gMic'), voice, () => fill());
   setTimeout(() => document.getElementById('gAmt').focus(), 50);
   document.getElementById('gSave').onclick = saveExpense;
+}
+
+// "gasté 150 en Oxxo con la BBVA" → monto, comercio, cuenta y categoría (sin IA).
+const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const CAT_WORDS = [
+  [/oxxo|7.?eleven|seven|heb|soriana|walmart|alsuper|chedraui|costco|sams|super|abarrote|tienda/, 'super y tienda'],
+  [/taco|restaur|comida|cafe|starbucks|pizza|hamburgues|sushi|cena|desayuno|almuerzo|rappi|didi food|uber eats|tortas?/, 'comida'],
+  [/uber|didi|gasolin|estacionamiento|caseta|taxi|kigo/, 'transporte'],
+  [/farmacia|doctor|medic|consulta|dentista/, 'salud'],
+  [/cine|bar|antro|concierto|boletos?|estadio|partido|fiesta|chela|cerveza/, 'ocio'],
+  [/ropa|tenis|zapato|h&m|zara|sfera|liverpool|shein/, 'ropa'],
+  [/netflix|spotify|icloud|apple|youtube|suscrip|claude|anthropic/, 'suscripciones'],
+  [/vuelo|hotel|airbnb|viaje|aerobus|volaris/, 'viajes']
+];
+function parseSpokenExpense(f, accs, text) {
+  const t = norm(text);
+  const out = {};
+  const m = t.replace(/(\d),(\d{3})/g, '$1$2').match(/(\d+(?:[.,]\d{1,2})?)\s*(mil)?/);
+  if (m) out.amount = Math.round(Number(m[1].replace(',', '.')) * (m[2] ? 1000 : 1) * 100);
+  // Cuenta: la que se mencione por nombre o banco; con "plata"/"nu" sin más, la de crédito si existe.
+  const hasWord = w => new RegExp(`(^|[^a-z0-9])${w.replace(/[^a-z0-9]/g, '')}([^a-z0-9]|$)`).test(t);
+  const named = accs.filter(a => [a.name, a.institution].filter(Boolean).some(n => hasWord(norm(n).split(/\s+/)[0])));
+  if (named.length) {
+    const want = /debito/.test(t) ? 'debit' : /ahorro/.test(t) ? 'savings' : /efectivo/.test(t) ? 'cash' : 'credit';
+    out.account = named.find(a => a.kind === want) || named.find(a => a.kind === 'credit') || named[0];
+  } else if (/efectivo/.test(t)) out.account = accs.find(a => a.kind === 'cash');
+  // Comercio: lo que va después de " en " (hasta " con " o el final).
+  const mm = String(text).match(/\ben\s+(?:el\s+|la\s+|los\s+|las\s+)?(.+?)(?:\s+con\s+.*|\s+de\s+\d.*|[.,]?\s*$)/i);
+  if (mm) out.note = mm[1].trim().replace(/^\w/, c => c.toUpperCase()).slice(0, 80);
+  // Categoría: la que usaste antes con ese comercio; si no, por palabras.
+  const cats = F.activeCats(f, 'expense');
+  if (out.note) {
+    const prev = f.tx.find(x => x.type === 'expense' && x.category_id && x.note && norm(x.note).includes(norm(out.note).split(/\s+/)[0]));
+    if (prev) out.category = cats.find(c => c.id === prev.category_id);
+  }
+  if (!out.category) {
+    const direct = cats.find(c => t.includes(norm(c.name)));
+    const word = CAT_WORDS.find(([re]) => re.test(t));
+    out.category = direct || (word && cats.find(c => norm(c.name) === word[1])) || null;
+  }
+  return out;
 }
 
 async function saveExpense() {
