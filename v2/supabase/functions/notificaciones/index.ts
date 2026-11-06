@@ -128,7 +128,7 @@ async function defaultSender() {
   return (sub, payload) => wp.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 3600, urgency: 'high' });
 }
 
-async function deliver(db, send, subs, msg) {
+async function deliver(db, send, subs, msg, errors = []) {
   let ok = 0;
   for (const s of subs) {
     try { await send(s, { title: msg.title, body: msg.body, url: msg.url, tag: msg.key }); ok++; await db.patch('push_subscriptions', `?id=eq.${s.id}`, { last_ok_at: new Date().toISOString() }); }
@@ -136,6 +136,7 @@ async function deliver(db, send, subs, msg) {
       const code = e?.statusCode || e?.status;
       if (code === 404 || code === 410) await db.del('push_subscriptions', `?id=eq.${s.id}`); // el dispositivo ya no existe
       else console.error('push', code, e?.body || e?.message);
+      errors.push({ code: code || null, detail: String(e?.body || e?.message || e).slice(0, 200) });
     }
   }
   return ok;
@@ -183,8 +184,9 @@ export async function handler(req, deps = {}) {
       if (!user) return json({ error: 'sin sesión' }, 401);
       const subs = await db.get('push_subscriptions', `?user_id=eq.${user}&select=id,user_id,endpoint,p256dh,auth`);
       if (!subs.length) return json({ error: 'Este usuario no tiene dispositivos registrados' }, 400);
-      const sent = await deliver(db, deps.send || await defaultSender(), subs, { key: 'test', title: '✅ Notificaciones listas', body: 'Así te van a llegar tus recordatorios, tareas y pagos.', url: APP });
-      return json({ ok: sent > 0, sent, devices: subs.length });
+      const errors = [];
+      const sent = await deliver(db, deps.send || await defaultSender(), subs, { key: 'test', title: '✅ Notificaciones listas', body: 'Así te van a llegar tus recordatorios, tareas y pagos.', url: APP }, errors);
+      return json({ ok: sent > 0, sent, devices: subs.length, errors, subject_ok: /^(https:\/\/|mailto:)\S+$/.test(env('VAPID_SUBJECT')), public_key_len: env('VAPID_PUBLIC_KEY').length });
     }
     return json({ error: 'modo desconocido' }, 400);
   } catch (e) {
