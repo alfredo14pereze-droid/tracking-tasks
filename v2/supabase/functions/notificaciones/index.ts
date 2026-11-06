@@ -9,7 +9,8 @@
 // (el cron no manda sesión; la función valida el secreto o la sesión ella misma).
 // Escrito como JavaScript válido (sin tipos) para poder probarlo con Node.
 
-const env = k => (typeof Deno !== 'undefined' ? Deno.env.get(k) : globalThis.process?.env?.[k]) || '';
+// .trim(): un salto de línea pegado por error en un secret no debe romper nada.
+const env = k => ((typeof Deno !== 'undefined' ? Deno.env.get(k) : globalThis.process?.env?.[k]) || '').trim();
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
