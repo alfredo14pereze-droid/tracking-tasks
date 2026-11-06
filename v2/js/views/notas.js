@@ -1,8 +1,8 @@
 // Notas (tabla notes: title opcional, content). Mosaico de 2 columnas (1 en móvil) con edición en el lugar,
 // como en la clásica: cada nota recuerda su columna para no brincar al editar; ⌘/Ctrl+Enter guarda, Esc cancela.
-import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611051824';
-import { escapeHTML, showToast, icon } from '../util.js?v=202611051824';
-import { uploadPhotos, removePhotos, fillPhotos, thumbsHTML, photoButton } from '../fotos.js?v=202611051824';
+import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611051834';
+import { escapeHTML, showToast, icon } from '../util.js?v=202611051834';
+import { uploadPhotos, removePhotos, fillPhotos, thumbsHTML, photoButton } from '../fotos.js?v=202611051834';
 
 let notes = [], editing = null, search = '';
 let pending = [];          // fotos elegidas para la nota nueva (File)

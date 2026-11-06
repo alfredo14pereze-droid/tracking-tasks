@@ -1,8 +1,8 @@
 // Fotos para Notas y Recordatorios: se guardan en el bucket privado "adjuntos" de Supabase,
 // dentro de la carpeta del usuario (adjuntos/<user id>/…). Se achican antes de subir (máx. 1600 px, JPEG)
 // para ahorrar espacio y datos. Para verlas se piden URLs firmadas que duran 1 hora.
-import { sb, AuthError } from './db.js?v=202611051824';
-import { escapeHTML, openModal, icon } from './util.js?v=202611051824';
+import { sb, AuthError } from './db.js?v=202611051834';
+import { escapeHTML, openModal, icon } from './util.js?v=202611051834';
 
 const BUCKET = 'adjuntos';
 const MAX = 1600;

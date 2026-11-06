@@ -660,3 +660,5 @@ textarea{font-family:inherit;font-size:16px}
 .thumb-x svg{width:14px;height:14px}
 .photo-btn{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 .photo-btn svg{width:18px;height:18px}
+/* Calorías app vs Whoop */
+.kcal-cmp b{font-weight:600;color:var(--alert)} .kcal-cmp b.ok{color:var(--positive)}

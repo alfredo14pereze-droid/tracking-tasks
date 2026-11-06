@@ -1,6 +1,6 @@
 // Salud: carga de datos de ejercicio + Whoop y la lógica (progresión, rutina sugerida, metas).
-import { safeGet, dbPost, callFunction } from './db.js?v=202611051824';
-import { localDate, weekKey } from './util.js?v=202611051824';
+import { safeGet, dbPost, callFunction } from './db.js?v=202611051834';
+import { localDate, weekKey } from './util.js?v=202611051834';
 
 const daysAgoIso = n => new Date(Date.now() - n * 86400e3).toISOString();
 const daysAgoStr = n => { const d = new Date(); d.setDate(d.getDate() - n); return localDate(d); };
@@ -57,13 +57,49 @@ export function routineOfTag(d, tag) {
   const lastAt = r => { const w = finished(d).find(x => x.routine_id === r.id); return w ? new Date(w.started_at).getTime() : 0; };
   return list.sort((a, b) => lastAt(a) - lastAt(b))[0];
 }
-// Calorías de un entreno: las de Whoop si hay un entreno de Whoop que se empalma; si no, estimado (MET 5 × kg × horas).
-export function workoutKcal(d, w) {
+// ── Calorías ────────────────────────────────────────
+// Estimado propio de la app (no depende de Whoop): kcal/min = MET × 3.5 × kg / 200.
+//   Fuerza: tiempo trabajando (≈3 s por repetición) con MET según el ejercicio + el resto del entreno a MET 2.5
+//   (descansos, cambiar de máquina). Cardio: MET del tipo de cardio por los minutos.
+// Whoop aparte, para comparar (kJ ÷ 4.184).
+const CARDIO_MET = [[/correr|trote|run/i, 9.8], [/bici|spinning|cycl/i, 7.5], [/escaladora|stair/i, 8.5], [/remo/i, 7], [/el[ií]ptica/i, 5.5], [/caminadora|cinta/i, 4.8], [/caminar|walk/i, 3.5]];
+const liftMet = (name = '', muscle = '') =>
+  /sentadilla|squat|peso muerto|deadlift|prensa|zancada|lunge|hip ?thrust|b[uú]lgara|hack|rumano/i.test(name) ? 6.5
+  : muscle === 'pierna' ? 5.5 : muscle === 'cardio' ? 7 : /dominad|remo|jal[oó]n|press banca|militar/i.test(name) ? 5 : 4.2;
+const kcalPerMin = (met, kg) => met * 3.5 * kg / 200;
+export const bodyKg = d => Number(d.body.find(x => x.weight_kg)?.weight_kg) || 75; // body viene del más reciente
+export function appKcal(d, w) {
+  const kg = bodyKg(d);
+  const mins = Math.max(0, (new Date(w.finished_at || Date.now()) - new Date(w.started_at)) / 60000);
+  const cardio = String(w.name || '').match(/^cardio\s*·\s*(.+)$/i);
+  if (cardio) { const met = (CARDIO_MET.find(([re]) => re.test(cardio[1])) || [0, 6])[1]; return Math.round(kcalPerMin(met, kg) * mins); }
+  const sets = d.sets.filter(x => x.workout_id === w.id && x.done);
+  if (!sets.length) return Math.round(kcalPerMin(4, kg) * mins);
+  let work = 0, workKcal = 0;
+  for (const x of sets) {
+    const e = d.exercises.find(z => z.id === x.exercise_id);
+    const m = Math.max(0.4, (Number(x.reps) || 10) * 3 / 60); // minutos bajo carga
+    work += m; workKcal += kcalPerMin(liftMet(e?.name, e?.muscle), kg) * m;
+  }
+  const rest = Math.max(0, mins - work);
+  return Math.round(workKcal + kcalPerMin(2.5, kg) * rest);
+}
+export function whoopKcal(d, w) {
   const a = new Date(w.started_at).getTime(), b = new Date(w.finished_at || Date.now()).getTime();
   const hit = (d.whoop?.workouts || []).filter(x => x.kilojoule && new Date(x.started_at).getTime() < b && new Date(x.ended_at || x.started_at).getTime() > a);
-  if (hit.length) return { kcal: Math.round(hit.reduce((s, x) => s + Number(x.kilojoule), 0) / 4.184), whoop: true };
-  const kg = Number(d.body.find(x => x.weight_kg)?.weight_kg) || 75;  // body viene ordenado del más reciente
-  return { kcal: Math.round(5 * kg * Math.max(0, b - a) / 3600000), whoop: false };
+  return hit.length ? Math.round(hit.reduce((s, x) => s + Number(x.kilojoule), 0) / 4.184) : null;
+}
+// { app, whoop, diffPct } — diffPct = cuánto se aleja la app de Whoop (+ = la app calcula más).
+export function workoutKcal(d, w) {
+  const app = appKcal(d, w), whoop = whoopKcal(d, w);
+  return { app, whoop, diffPct: whoop ? Math.round((app - whoop) / whoop * 100) : null, kcal: app };
+}
+// Comparación de los últimos entrenos que tienen Whoop.
+export function kcalComparison(d, n = 10) {
+  const rows = finished(d).slice(0, 40).map(w => ({ w, ...workoutKcal(d, w) })).filter(x => x.whoop).slice(0, n);
+  if (!rows.length) return null;
+  const app = rows.reduce((s, x) => s + x.app, 0), wh = rows.reduce((s, x) => s + x.whoop, 0);
+  return { rows, app, whoop: wh, diffPct: Math.round((app - wh) / wh * 100) };
 }
 
 // Minutos estimados: series × (45 s de trabajo + descanso).

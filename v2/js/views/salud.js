@@ -1,10 +1,10 @@
 // Salud: Ejercicio (rutina de hoy, semana, progreso), Actividad (metas + Whoop) y Sueño.
-import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611051824';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051824';
-import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611051824';
-import { coachHTML, bindCoach } from './coach.js?v=202611051824';
-import * as S from '../salud.js?v=202611051824';
-import { exerciseArt } from '../ilustraciones.js?v=202611051824';
+import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611051834';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051834';
+import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611051834';
+import { coachHTML, bindCoach } from './coach.js?v=202611051834';
+import * as S from '../salud.js?v=202611051834';
+import { exerciseArt } from '../ilustraciones.js?v=202611051834';
 
 const TABS = { ejercicio: 'Ejercicio', comidas: 'Comidas', actividad: 'Actividad', sueno: 'Sueño' };
 const DAY = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -144,6 +144,21 @@ function progressCard(d) {
   </section>`;
 }
 
+function kcalCard(d) {
+  const c = S.kcalComparison(d);
+  if (!c) return '';
+  const verdict = Math.abs(c.diffPct) <= 10 ? 'La app y Whoop casi coinciden.' : c.diffPct > 0 ? `La app calcula ${c.diffPct}% más que Whoop.` : `La app calcula ${-c.diffPct}% menos que Whoop.`;
+  return `<section class="card" aria-labelledby="kcT" style="gap:8px">
+    <div class="card-head"><h2 id="kcT">Calorías: app vs Whoop</h2><span class="small">últimos ${c.rows.length} entreno${c.rows.length === 1 ? '' : 's'}</span></div>
+    <div class="stats3" style="border-top:none;padding-top:0">
+      <div><span>App</span><strong>${c.app.toLocaleString('es-MX')}</strong></div>
+      <div><span>Whoop</span><strong>${c.whoop.toLocaleString('es-MX')}</strong></div>
+      <div><span>Diferencia</span><strong>${c.diffPct > 0 ? '+' : ''}${c.diffPct}%</strong></div>
+    </div>
+    <p class="small" style="margin:0">${escapeHTML(verdict)} La app estima con tus series, repeticiones, descansos, el tipo de ejercicio y tu peso (${S.bodyKg(d)} kg); Whoop usa tu ritmo cardiaco, por eso suele ser más preciso.</p>
+  </section>`;
+}
+
 function historyCard(d) {
   const ws = S.finished(d).slice(0, 5);
   if (!ws.length) return '';
@@ -154,7 +169,8 @@ function historyCard(d) {
       const mins = Math.round((new Date(w.finished_at) - new Date(w.started_at)) / 60000);
       const day = new Date(w.started_at).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
       const k = S.workoutKcal(d, w);
-      return `<div class="task"><div class="task-main"><div class="task-title">${escapeHTML(w.name)}</div><div class="task-meta">${escapeHTML(day)} · ${minsLabel(mins)}${n ? ` · ${n} series` : ''} · ~${k.kcal} kcal${k.whoop ? ' (Whoop)' : ''}</div></div>
+      return `<div class="task"><div class="task-main"><div class="task-title">${escapeHTML(w.name)}</div><div class="task-meta">${escapeHTML(day)} · ${minsLabel(mins)}${n ? ` · ${n} series` : ''}</div>
+        <div class="task-meta kcal-cmp">🔥 App ~${k.app} kcal${k.whoop ? ` · Whoop ${k.whoop} kcal <b class="${Math.abs(k.diffPct) <= 15 ? 'ok' : ''}">${k.diffPct > 0 ? '+' : ''}${k.diffPct}%</b>` : ' · sin dato de Whoop'}</div></div>
         <button type="button" class="icon-btn sm" data-wdel="${escapeHTML(w.id)}" aria-label="Borrar entreno ${escapeHTML(w.name)} del ${escapeHTML(day)}">${icon('trash')}</button></div>`;
     }).join('')}
   </section>`;
@@ -254,7 +270,7 @@ function paint() {
     body = setupCard('Falta un paso', 'Para usar Ejercicio corre <code>v2/sql/2026-11-03-ejercicio-whoop.sql</code> en el SQL Editor de Supabase y vuelve a abrir esta pantalla.');
   } else if (st.tab === 'ejercicio') {
     body = d.routines.length
-      ? `<div class="fin-grid"><div class="fin-col">${heroCard(d)}${weekCard(d)}${historyCard(d)}</div><div class="fin-col">${routineCard(d)}${progressCard(d)}${coachHTML(d)}</div></div>`
+      ? `<div class="fin-grid"><div class="fin-col">${heroCard(d)}${weekCard(d)}${historyCard(d)}${kcalCard(d)}</div><div class="fin-col">${routineCard(d)}${progressCard(d)}${coachHTML(d)}</div></div>`
       : setupCard('Tus rutinas', 'Crea las rutinas base (Push, Pull, Pierna y Full) con varias opciones de ejercicio en cada lugar. Después las puedes cambiar como quieras.',
         `<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn-dark" data-seed>Crear rutinas base</button><a class="btn-ghost sm" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--text)" href="#rutinas">Hacer la mía</a></div>`);
   } else if (st.tab === 'comidas') {
@@ -354,7 +370,7 @@ function openCardio() {
       const [w] = await dbPost('ex_workouts', { routine_id: cardio ? cardio.id : null, name: `Cardio · ${kind}`, started_at: start.toISOString(), finished_at: end.toISOString() });
       st.d.workouts.unshift(w); closeModal();
       const k = S.workoutKcal(st.d, w);
-      showToast(`Cardio registrado · ${min} min · ~${k.kcal} kcal`); paint();
+      showToast(`Cardio registrado · ${min} min · ~${k.app} kcal (app)`); paint();
     } catch { showToast('No se pudo registrar', 'error'); }
   };
   document.getElementById('cSave').onclick = save;
