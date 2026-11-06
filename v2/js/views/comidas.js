@@ -1,9 +1,9 @@
 // Comidas (dieta): macros del día vs. metas, registro, ideas con receta, semana y peso/medidas.
 // Vive como pestaña dentro de Salud; recibe los datos de loadSalud() (d.meals, d.dietGoals, d.body, d.whoop).
-import { dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611051749';
-import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051749';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611051749';
-import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611051749';
+import { dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611051824';
+import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051824';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611051824';
+import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611051824';
 
 export const DIET_GOALS = {
   kcal: { label: 'Calorías', unit: 'kcal', def: 2200 },

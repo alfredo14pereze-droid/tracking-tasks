@@ -135,3 +135,9 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
 - App: `service-worker.js` de la raíz (ahora lo registra v2, scope `/tracking-tasks/`) muestra el push y abre la sección.
   Pantalla Más › Notificaciones (`js/views/notificaciones.js`, llave pública VAPID). En iPhone solo desde la app instalada.
 
+### Fotos en Notas y Recordatorios (5-nov-2026) · `sql/2026-11-05-fotos.sql`
+- Bucket privado `adjuntos` en Supabase Storage; políticas: cada quien solo su carpeta `adjuntos/<user id>/`.
+- `notes.images` y `reminders.images` (text[] de rutas). `js/fotos.js`: achica a 1600 px JPEG, sube con supabase-js,
+  muestra con URLs firmadas (1 h) y abre en grande al tocar. Notas pueden ser solo foto. Buscador siempre visible
+  (sin acentos ni mayúsculas).
+

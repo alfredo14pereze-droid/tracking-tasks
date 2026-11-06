@@ -1,9 +1,11 @@
 // Recordatorios (tabla reminders: title, remind_date, remind_time, status active|done). Igual que la clásica:
 // pendientes primero por fecha/hora; los pasados sin hacer se marcan en rojo. Solo dentro de la app (sin push).
-import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611051749';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051749';
+import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611051824';
+import { uploadPhotos, removePhotos, fillPhotos, thumbsHTML, photoButton } from '../fotos.js?v=202611051824';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051824';
 
 let list = [];
+let pending = []; // fotos para el recordatorio nuevo
 let root = null;
 
 export async function show(el, isCurrent = () => true) {
@@ -26,7 +28,7 @@ function row(r) {
   const done = r.status === 'done';
   return `<div class="tcard${done ? ' done' : ''}" data-rem="${escapeHTML(r.id)}">
     <button type="button" class="check ${done ? 'done' : ''}" data-rcheck aria-label="${done ? 'Reabrir' : 'Hecho'}: ${escapeHTML(r.title)}">${done ? icon('check', 3) : ''}</button>
-    <button type="button" class="tcard-main" data-redit><span class="task-title">${escapeHTML(r.title)}</span>${whenText(r)}</button>
+    <button type="button" class="tcard-main" data-redit><span class="task-title">${escapeHTML(r.title)}</span>${whenText(r)}${thumbsHTML(r.images, { small: true })}</button>
     <button type="button" class="icon-btn sm" data-rdel aria-label="Eliminar ${escapeHTML(r.title)}">${icon('trash')}</button>
   </div>`;
 }
@@ -40,14 +42,20 @@ function paint() {
       <form class="radd" data-radd>
         <div class="radd-title"><label class="sr-only" for="rTitle">Nuevo recordatorio</label><input class="field" id="rTitle" placeholder="Nuevo recordatorio…" maxlength="200" autocomplete="off"></div>
         <div class="row2" style="flex:1 1 260px"><div><label class="sr-only" for="rDate">Fecha</label><input class="field" id="rDate" type="date"></div><div><label class="sr-only" for="rTime">Hora</label><input class="field" id="rTime" type="time"></div></div>
-        <button type="submit" class="btn-primary" style="padding:0 18px">Agregar</button>
+        <span style="display:flex;gap:8px;align-items:center">${photoButton('rPhoto')}<button type="submit" class="btn-primary" style="padding:0 18px">Agregar</button></span>
       </form>
+      ${pending.length ? `<div class="thumbs">${pending.map((f, i) => `<span class="thumb"><span class="thumb-img"><img src="${escapeHTML(f._url)}" alt=""></span><button type="button" class="thumb-x" data-pend-x="${i}" aria-label="Quitar foto">${icon('x')}</button></span>`).join('')}</div>` : ''}
       <div class="small">Te los muestro aquí con su fecha; no llegan como notificación.</div>
     </section>
     <div class="tgroup">${open.map(row).join('') || '<div class="card"><div class="small">No tienes recordatorios pendientes.</div></div>'}</div>
     ${done.length ? `<details class="tgroup past"><summary class="tgroup-h">Hechos <span>${done.length}</span></summary>${done.map(row).join('')}</details>` : ''}
   </div>`;
   root.querySelector('[data-radd]').onsubmit = e => { e.preventDefault(); add(); };
+  const draft = () => ({ t: root.querySelector('#rTitle').value, d: root.querySelector('#rDate').value, h: root.querySelector('#rTime').value });
+  const restore = x => { root.querySelector('#rTitle').value = x.t; root.querySelector('#rDate').value = x.d; root.querySelector('#rTime').value = x.h; };
+  root.querySelector('#rPhoto').onchange = e => { const x = draft(); for (const f of e.target.files) { f._url = URL.createObjectURL(f); pending.push(f); } paint(); restore(x); };
+  root.querySelectorAll('[data-pend-x]').forEach(b => b.onclick = () => { const x = draft(); pending.splice(Number(b.dataset.pendX), 1); paint(); restore(x); });
+  fillPhotos(root);
   root.querySelectorAll('[data-rem]').forEach(el => {
     const r = list.find(x => String(x.id) === el.dataset.rem);
     el.querySelector('[data-rcheck]').onclick = () => patch(r, { status: r.status === 'done' ? 'active' : 'done' });
@@ -61,6 +69,11 @@ async function add() {
   const title = root.querySelector('#rTitle').value.trim();
   if (!title) return showToast('Escribe el recordatorio', 'error');
   const body = { title, remind_date: root.querySelector('#rDate').value || null, remind_time: root.querySelector('#rTime').value || null, status: 'active' };
+  if (pending.length) {
+    try { body.images = await uploadPhotos(pending); }
+    catch (e) { return showToast(/Falta correr/.test(e.message) ? e.message : 'No se pudieron subir las fotos', 'error'); }
+    pending.forEach(f => URL.revokeObjectURL(f._url)); pending = [];
+  }
   const temp = { ...body, id: 'temp-' + Date.now() };
   list.unshift(temp); paint();
   try { const [r] = await dbPost('reminders', body); Object.assign(temp, r); showToast('Recordatorio agregado'); }
@@ -73,16 +86,36 @@ async function patch(r, body) {
   catch { Object.assign(r, prev); again(); showToast('No se pudo actualizar', 'error'); }
 }
 function edit(r) {
+  let keep = [...(r.images || [])], addF = [];
+  const photosHTML = () => `${thumbsHTML(keep, { removable: true })}${addF.length ? `<div class="small">${addF.length} foto${addF.length === 1 ? '' : 's'} nueva${addF.length === 1 ? '' : 's'} por subir</div>` : ''}<div style="display:flex">${photoButton('erPhoto')}</div>`;
+  const bindPhotos = () => {
+    const box = document.getElementById('erPhotos'); if (!box) return;
+    box.innerHTML = photosHTML(); fillPhotos(box);
+    box.querySelector('#erPhoto').onchange = e => { addF.push(...e.target.files); bindPhotos(); };
+    box.querySelectorAll('[data-photo-remove]').forEach(b => b.onclick = ev => { ev.stopPropagation(); keep = keep.filter(p => p !== b.dataset.photoRemove); bindPhotos(); });
+  };
   openModal('Editar recordatorio', `
     <label class="flabel" for="erTitle" style="margin-top:0">Recordatorio</label><input class="field" id="erTitle" maxlength="200" value="${escapeHTML(r.title)}">
     <div class="row2"><div><label class="flabel" for="erDate">Fecha</label><input class="field" id="erDate" type="date" value="${r.remind_date || ''}"></div>
-      <div><label class="flabel" for="erTime">Hora</label><input class="field" id="erTime" type="time" value="${r.remind_time ? r.remind_time.slice(0, 5) : ''}"></div></div>`,
+      <div><label class="flabel" for="erTime">Hora</label><input class="field" id="erTime" type="time" value="${r.remind_time ? r.remind_time.slice(0, 5) : ''}"></div></div>
+    <span class="flabel">Fotos</span><div id="erPhotos" style="display:flex;flex-direction:column;gap:8px"></div>`,
     '<button type="button" class="btn-primary" id="erSave">Guardar</button>');
-  document.getElementById('erSave').onclick = () => {
+  bindPhotos();
+  document.getElementById('erSave').onclick = async e => {
     const title = document.getElementById('erTitle').value.trim();
     if (!title) return showToast('El título es requerido', 'error');
+    const body = { title, remind_date: document.getElementById('erDate').value || null, remind_time: document.getElementById('erTime').value || null };
+    if (addF.length || keep.length !== (r.images || []).length) {
+      let added = [];
+      if (addF.length) {
+        const b = e.currentTarget; b.disabled = true; b.textContent = 'Subiendo…';
+        try { added = await uploadPhotos(addF); } catch (err) { b.disabled = false; b.textContent = 'Guardar'; return showToast(/Falta correr/.test(err.message) ? err.message : 'No se pudieron subir las fotos', 'error'); }
+      }
+      body.images = [...keep, ...added];
+      removePhotos((r.images || []).filter(p => !body.images.includes(p))).catch(() => {});
+    }
     closeModal();
-    patch(r, { title, remind_date: document.getElementById('erDate').value || null, remind_time: document.getElementById('erTime').value || null });
+    patch(r, body);
   };
 }
 async function del(r) {
