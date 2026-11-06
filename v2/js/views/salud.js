@@ -1,10 +1,10 @@
 // Salud: Ejercicio (rutina de hoy, semana, progreso), Actividad (metas + Whoop) y Sueño.
-import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611051834';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051834';
-import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611051834';
-import { coachHTML, bindCoach } from './coach.js?v=202611051834';
-import * as S from '../salud.js?v=202611051834';
-import { exerciseArt } from '../ilustraciones.js?v=202611051834';
+import { dbPost, dbUpsert, dbDelete, callFunction } from '../db.js?v=202611051951';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611051951';
+import { comidasHTML, bindComidas, openMeasures } from './comidas.js?v=202611051951';
+import { coachHTML, bindCoach } from './coach.js?v=202611051951';
+import * as S from '../salud.js?v=202611051951';
+import { exerciseArt } from '../ilustraciones.js?v=202611051951';
 
 const TABS = { ejercicio: 'Ejercicio', comidas: 'Comidas', actividad: 'Actividad', sueno: 'Sueño' };
 const DAY = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -101,7 +101,7 @@ function routineCard(d) {
     return `<div class="task">
       ${(() => { const e = d.exercises.find(x => x.id === ex); return exerciseArt(e?.name, e?.muscle, 40); })()}
       <div class="task-main"><div class="task-title" style="font-weight:500">${escapeHTML(ex ? S.exName(d, ex) : 'Sin ejercicio')}</div>
-        <div class="task-meta">${it.sets} × ${reps}${sug?.weight ? ' · ' + fmtKg(sug.weight) : ''}${opts.length > 1 ? ` · ${opts.length - 1} opción${opts.length > 2 ? 'es' : ''} más` : ''}</div></div>
+        <div class="task-meta">${it.sets} × ${reps}${sug?.weight ? ' · ' + fmtKg(sug.weight) : ''}${opts.length > 1 ? ` · ${opts.length - 1} ${opts.length > 2 ? 'opciones' : 'opción'} más` : ''}</div></div>
       ${sug && sug.kind !== 'new' ? chip(sug.label, sug.kind) : ''}
     </div>`;
   }).join('');
