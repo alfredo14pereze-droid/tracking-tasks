@@ -1,6 +1,6 @@
 // Tareas: Hoy, Orden del día, Mañana, Próximas, Sin completar, Todas, Pasadas y categorías.
-import { escapeHTML, localDate, todayStr, daysUntil, showToast, icon, openModal, closeModal } from '../util.js?v=202611051951';
-import * as K from '../tareas.js?v=202611051951';
+import { escapeHTML, localDate, todayStr, daysUntil, showToast, icon, openModal, closeModal } from '../util.js?v=202611061115';
+import * as K from '../tareas.js?v=202611061115';
 
 const { T } = K;
 const VIEWS = { today: 'Hoy', order: 'Orden del día', tomorrow: 'Mañana', upcoming: 'Próximas', missed: 'Sin completar', all: 'Todas', past: 'Pasadas' };
@@ -310,12 +310,14 @@ export function openTaskModal(id, onSaved, prefill = {}) {
   const f = {
     title: t?.title || '', priority: t?.priority || '', mode: t && K.isRangeTask(t) ? 'deadline' : 'exact',
     due: t?.due_date || prefill.due || '', time: t?.due_time ? t.due_time.slice(0, 5) : '', start: t?.start_date || '',
-    remind: !!t?.remind_day_before, recur: '', days: [], endDate: t?.end_date || '', category: t?.category || '',
+    remind: !!t?.remind_day_before, recur: '', days: [], monthDay: '', endDate: t?.end_date || '', category: t?.category || '',
     est: t?.estimated_minutes || ''
   };
   if (t?.recurrence) {
     const legacy = K.legacyRecurrenceToDays(t.recurrence, t.due_date);
     if (t.recurrence.startsWith('custom:')) { f.recur = 'custom'; f.days = t.recurrence.slice(7).split(',').filter(x => x !== '').map(Number); }
+    else if (K.monthDayOf(t.recurrence)) { f.recur = 'monthday'; f.monthDay = K.monthDayOf(t.recurrence); }
+    else if (t.recurrence === 'monthly' && t.due_date) { f.recur = 'monthday'; f.monthDay = new Date(t.due_date + 'T12:00:00').getDate(); }
     else if (legacy) { f.recur = 'custom'; f.days = legacy; }
     else f.recur = t.recurrence; // 'monthly' se conserva
   }
@@ -336,10 +338,13 @@ export function openTaskModal(id, onSaved, prefill = {}) {
     ${f.mode === 'deadline' ? `<label class="flabel" for="fStart">Empiezo a trabajarla desde <span class="muted">(antes no aparece)</span></label><input class="field" id="fStart" type="date" value="${f.start || todayStr()}">` : ''}
     <label class="toggle-row"><input type="checkbox" id="fRemind"${f.remind ? ' checked' : ''}> Recordarme el día anterior</label>
     <span class="flabel">Repetir</span>
-    <div class="seg" role="group" aria-label="Repetir" style="grid-template-columns:repeat(2,minmax(0,1fr));max-width:none">
+    <div class="seg" role="group" aria-label="Repetir" style="grid-template-columns:repeat(3,minmax(0,1fr));max-width:none">
       <button type="button" data-recur="" aria-pressed="${!f.recur}">No repetir</button>
       <button type="button" data-recur="custom" aria-pressed="${f.recur === 'custom' || f.recur === 'monthly'}">${f.recur === 'monthly' ? 'Mensual' : 'Ciertos días'}</button>
+      <button type="button" data-recur="monthday" aria-pressed="${f.recur === 'monthday'}">Cada mes</button>
     </div>
+    ${f.recur === 'monthday' ? `<div class="row2" style="align-items:end"><div><label class="flabel" for="fMDay">Día del mes</label><input class="field" id="fMDay" type="number" min="1" max="31" step="1" enterkeyhint="done" value="${escapeHTML(String(f.monthDay))}" placeholder="10"></div>
+      <p class="small" style="margin:0 0 10px">${f.monthDay ? `Se repite el día ${escapeHTML(String(f.monthDay))} de cada mes${Number(f.monthDay) > 28 ? ' (en meses más cortos, el último día)' : ''}.` : 'Ej. 10 = el 10 de cada mes.'}</p></div>` : ''}
     ${f.recur === 'custom' ? `<div class="days7" role="group" aria-label="Días">${DAY_BTNS.map(([d, l]) => `<button type="button" data-day="${d}" aria-pressed="${f.days.includes(d)}" aria-label="${['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][d]}">${l}</button>`).join('')}</div>` : ''}
     ${f.recur ? `<label class="flabel" for="fEnd">Se repite hasta <span class="muted">(opcional)</span></label><input class="field" id="fEnd" type="date" value="${f.endDate}">` : ''}
     <div class="row2">
@@ -351,6 +356,7 @@ export function openTaskModal(id, onSaved, prefill = {}) {
     f.title = v('fTitle').value; f.due = v('fDue').value; f.time = v('fTime').value;
     if (v('fStart')) f.start = v('fStart').value;
     f.remind = v('fRemind').checked; if (v('fEnd')) f.endDate = v('fEnd').value;
+    if (v('fMDay')) f.monthDay = v('fMDay').value;
     f.category = v('fCat').value; f.est = v('fEst').value;
   };
   const rebind = () => {
@@ -358,7 +364,14 @@ export function openTaskModal(id, onSaved, prefill = {}) {
     m.querySelector('.modal-body').innerHTML = body();
     m.querySelectorAll('[data-prio]').forEach(b => b.onclick = () => { read(); f.priority = b.dataset.prio; rebind(); });
     m.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { read(); f.mode = b.dataset.mode; if (f.mode === 'exact') f.start = ''; rebind(); });
-    m.querySelectorAll('[data-recur]').forEach(b => b.onclick = () => { read(); f.recur = b.dataset.recur === 'custom' && f.recur === 'monthly' ? 'monthly' : b.dataset.recur; if (!f.recur) f.days = []; rebind(); });
+    m.querySelectorAll('[data-recur]').forEach(b => b.onclick = () => {
+      read();
+      f.recur = b.dataset.recur === 'custom' && f.recur === 'monthly' ? 'monthly' : b.dataset.recur;
+      if (!f.recur) f.days = [];
+      if (f.recur === 'monthday' && !f.monthDay) f.monthDay = f.due ? new Date(f.due + 'T12:00:00').getDate() : new Date().getDate();
+      rebind();
+    });
+    m.querySelector('#fMDay')?.addEventListener('change', () => { read(); rebind(); });
     m.querySelectorAll('[data-day]').forEach(b => b.onclick = () => { read(); const d = Number(b.dataset.day); f.days = f.days.includes(d) ? f.days.filter(x => x !== d) : [...f.days, d]; rebind(); });
   };
   openModal(t ? 'Editar tarea' : 'Nueva tarea', body(), `<button type="button" class="btn-primary" id="fSave">${t ? 'Guardar cambios' : 'Crear tarea'}</button>`);
@@ -372,6 +385,7 @@ export function openTaskModal(id, onSaved, prefill = {}) {
       !title ? 'El título es requerido' :
       !f.priority ? 'Elige una prioridad' :
       f.recur === 'custom' && !f.days.length ? 'Elige al menos un día para repetir' :
+      f.recur === 'monthday' && !(Number(f.monthDay) >= 1 && Number(f.monthDay) <= 31 && Number.isInteger(Number(f.monthDay))) ? 'El día del mes va del 1 al 31' :
       f.mode === 'deadline' && !f.due ? 'Pon la fecha límite' :
       f.mode === 'deadline' && !start ? 'Pon desde cuándo empiezas a trabajarla' :
       f.remind && !f.due ? 'Para recordarte el día anterior, la tarea necesita fecha' :

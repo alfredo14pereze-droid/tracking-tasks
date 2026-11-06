@@ -2,8 +2,8 @@
 // (checkRecurring / spawnNextRecurring / shouldRecurOnDate), missed, pasar/duplicar a mañana,
 // "avancé hoy" y Orden del día. Mismas tablas y columnas; nada de esquema nuevo.
 // Diferencia con v1: las acciones son optimistas (se ven al instante) con rollback + toast.
-import { dbGet, dbPost, dbPatch, dbDelete, safeGet } from './db.js?v=202611051951';
-import { localDate, todayStr, daysUntil, showToast } from './util.js?v=202611051951';
+import { dbGet, dbPost, dbPatch, dbDelete, safeGet } from './db.js?v=202611061115';
+import { localDate, todayStr, daysUntil, showToast } from './util.js?v=202611061115';
 
 export const T = { tasks: [], subtasks: [], quick: [], loaded: false, recurringChecked: false };
 
@@ -109,6 +109,7 @@ export function recurrenceLabel(r) {
   if (r === 'weekly') return 'Semanal';
   if (r === 'weekdays') return 'Lunes–Viernes';
   if (r === 'monthly') return 'Mensual';
+  if (r.startsWith('monthday:')) return `Cada mes, día ${r.slice(9)}`;
   if (r.startsWith('custom:')) return r.slice(7).split(',').filter(x => x !== '').map(n => DAY_NAMES[+n]).join(', ');
   return r;
 }
@@ -118,8 +119,20 @@ export function legacyRecurrenceToDays(recurrence, dueDate) {
   if (recurrence === 'weekly' && dueDate) return [new Date(dueDate + 'T12:00:00').getDay()];
   return null;
 }
+// 'monthday:N' = cada mes el día N; en meses más cortos, el último día del mes.
+export const monthDayOf = r => (r && r.startsWith('monthday:') ? Math.min(31, Math.max(1, parseInt(r.slice(9), 10) || 1)) : null);
+const lastDay = d => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+export function nextMonthDay(n, from = new Date()) { // hoy o la siguiente fecha con ese día
+  const d = new Date(from); d.setHours(12, 0, 0, 0);
+  const here = Math.min(n, lastDay(d));
+  if (d.getDate() <= here) { d.setDate(here); return d; }
+  const nx = new Date(d.getFullYear(), d.getMonth() + 1, 1, 12);
+  nx.setDate(Math.min(n, lastDay(nx))); return nx;
+}
 export function shouldRecurOnDate(t, d) {
   const day = d.getDay();
+  const md = monthDayOf(t.recurrence);
+  if (md) return d.getDate() === Math.min(md, lastDay(d));
   if (t.recurrence === 'daily') return true;
   if (t.recurrence === 'weekdays') return day >= 1 && day <= 5;
   if (t.recurrence === 'weekly' && t.due_date) return new Date(t.due_date + 'T12:00:00').getDay() === day;
@@ -162,6 +175,7 @@ async function spawnNextRecurring(t) {
     if (t.recurrence === 'weekdays') while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
   } else if (t.recurrence === 'weekly') next.setDate(next.getDate() + 7);
   else if (t.recurrence === 'monthly') next.setMonth(next.getMonth() + 1);
+  else if (monthDayOf(t.recurrence)) { const nx = new Date(next); nx.setDate(nx.getDate() + 1); next.setTime(nextMonthDay(monthDayOf(t.recurrence), nx).getTime()); }
   else if (t.recurrence && t.recurrence.startsWith('custom:')) {
     next.setDate(next.getDate() + 1);
     let guard = 0;
@@ -243,7 +257,10 @@ export async function saveDayOrder(ids, rerender) {
 
 // Crear / editar (mismo cuerpo que saveTask de v1).
 export async function saveTask(editingId, f) {
-  const recurrence = f.recur === 'custom' ? 'custom:' + [...f.days].sort((a, b) => a - b).join(',') : (f.recur || null); // 'monthly' viejo se conserva
+  const recurrence = f.recur === 'custom' ? 'custom:' + [...f.days].sort((a, b) => a - b).join(',')
+    : f.recur === 'monthday' ? `monthday:${f.monthDay}` : (f.recur || null); // 'monthly' viejo se conserva
+  // Mensual sin fecha: la primera vez es el próximo día N (hoy si hoy es N).
+  if (f.recur === 'monthday' && !f.due) f = { ...f, due: localDate(nextMonthDay(Number(f.monthDay))) };
   const body = {
     title: f.title, priority: f.priority, due_date: f.due || null, due_time: f.time || null,
     end_date: recurrence ? (f.endDate || null) : null, category: f.category || null,
