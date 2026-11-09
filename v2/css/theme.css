@@ -662,3 +662,11 @@ textarea{font-family:inherit;font-size:16px}
 .photo-btn svg{width:18px;height:18px}
 /* Calorías app vs Whoop */
 .kcal-cmp b{font-weight:600;color:var(--alert)} .kcal-cmp b.ok{color:var(--positive)}
+/* Comidas: días pasados */
+.bars > .bar-day{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;background:none;border:none;padding:0;cursor:pointer;font:inherit}
+.day-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.day-nav .icon-btn{font-size:24px;line-height:1}
+.day-nav .icon-btn[disabled]{opacity:.3}
+.day-nav-label{position:relative;display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:999px;background:var(--card);font-weight:600;font-size:15px;cursor:pointer}
+.day-nav-label input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.meal-edit{background:none;border:none;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}

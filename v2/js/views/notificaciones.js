@@ -1,8 +1,8 @@
 // Notificaciones push: activar en este dispositivo, escoger qué avisos y mandar una prueba.
 // En iPhone solo funciona con la app instalada en la pantalla de inicio (iOS 16.4+).
 // La llave pública VAPID va aquí (es pública por diseño); la privada vive en los secrets de Supabase.
-import { dbGet, dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611061115';
-import { escapeHTML, showToast, icon } from '../util.js?v=202611061115';
+import { dbGet, dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611091124';
+import { escapeHTML, showToast, icon } from '../util.js?v=202611091124';
 
 const VAPID_PUBLIC = 'BGBq0xMkvm588dD4XU1ZtF64jrL0KYyK0RyoB3jwS91slP-bkMA3v8Sb7CDIalEeKjU_YeXIRNnP_cumRwkaaJ8';
 const OPTS = [

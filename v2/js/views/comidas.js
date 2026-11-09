@@ -1,9 +1,9 @@
 // Comidas (dieta): macros del día vs. metas, registro, ideas con receta, semana y peso/medidas.
 // Vive como pestaña dentro de Salud; recibe los datos de loadSalud() (d.meals, d.dietGoals, d.body, d.whoop).
-import { dbPost, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611061115';
-import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611061115';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611061115';
-import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611061115';
+import { dbPost, dbPatch, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611091124';
+import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611091124';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611091124';
+import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611091124';
 
 export const DIET_GOALS = {
   kcal: { label: 'Calorías', unit: 'kcal', def: 2200 },
@@ -19,6 +19,18 @@ const fmt1 = n => (Math.round((Number(n) || 0) * 10) / 10).toString();
 const dayLabel = ds => new Date(ds + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short' }).replace('.', '').slice(0, 2);
 const lastNDays = n => Array.from({ length: n }, (_, i) => { const x = new Date(); x.setDate(x.getDate() - (n - 1 - i)); return localDate(x); });
 
+// Día que estás viendo (null = hoy). Puedes ir a días pasados para registrar lo que no alcanzaste.
+let viewDay = null;
+const curDay = () => viewDay || localDate();
+const addDays = (ds, n) => { const x = new Date(ds + 'T12:00:00'); x.setDate(x.getDate() + n); return localDate(x); };
+function dayName(ds) {
+  const t = localDate();
+  if (ds === t) return 'Hoy';
+  if (ds === addDays(t, -1)) return 'Ayer';
+  const s = new Date(ds + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' }).replace('.', '');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 // ── Piezas ───────────────────────────────────────────
 function macroBar(label, v, target, unit) {
   const pct = target ? Math.min(100, Math.round(v / target * 100)) : 0;
@@ -26,8 +38,18 @@ function macroBar(label, v, target, unit) {
     <div class="bar"><div style="width:${pct}%"></div></div></div>`;
 }
 
+function dayNav() {
+  const ds = curDay(), isToday = ds === localDate();
+  return `<div class="day-nav" role="group" aria-label="Día">
+    <button type="button" class="icon-btn" data-dnav="-1" aria-label="Día anterior">‹</button>
+    <label class="day-nav-label"><span>${escapeHTML(dayName(ds))}</span><input type="date" data-dpick value="${ds}" max="${localDate()}" aria-label="Elegir día"></label>
+    <button type="button" class="icon-btn" data-dnav="1" aria-label="Día siguiente"${isToday ? ' disabled' : ''}>›</button>
+    ${isToday ? '' : '<button type="button" class="btn-link" data-dtoday>Ir a hoy</button>'}
+  </div>`;
+}
+
 function todayCard(d) {
-  const today = localDate();
+  const today = curDay();
   const meals = d.meals.filter(m => m.eaten_on === today);
   const kcal = sum(meals, 'kcal'), goal = dgoal(d, 'kcal');
   const left = goal - kcal;
@@ -35,12 +57,12 @@ function todayCard(d) {
   const burned = w?.kilojoule ? Math.round(Number(w.kilojoule) / 4.184) : null; // Whoop da kJ
   const pct = goal ? Math.min(100, Math.round(kcal / goal * 100)) : 0;
   return `<section class="hero" aria-label="Lo que llevas hoy">
-    <div class="card-head"><span class="label">Hoy</span><button type="button" class="hero-pill hero-btn" data-dgoals>Editar metas</button></div>
+    <div class="card-head"><span class="label">${escapeHTML(dayName(today))}</span><button type="button" class="hero-pill hero-btn" data-dgoals>Editar metas</button></div>
     <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
       <div class="hero-num" style="font-size:44px">${r0(kcal)}<span>/${r0(goal)}</span></div><div class="hero-sub">kcal</div>
     </div>
     <div class="bar" role="progressbar" aria-label="Calorías de hoy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div style="width:${pct}%"></div></div>
-    <div class="hero-sub">${left >= 0 ? `Te quedan ${r0(left)} kcal` : `Te pasaste por ${r0(-left)} kcal`}${burned ? ` · quemaste ~${burned.toLocaleString('es-MX')} kcal (Whoop)` : ''}</div>
+    <div class="hero-sub">${left >= 0 ? `${today === localDate() ? 'Te quedan' : 'Quedaron'} ${r0(left)} kcal` : `Te pasaste por ${r0(-left)} kcal`}${burned ? ` · quemaste ~${burned.toLocaleString('es-MX')} kcal (Whoop)` : ''}</div>
     <div class="mbars">
       ${macroBar('Proteína', sum(meals, 'protein_g'), dgoal(d, 'protein_g'), 'g')}
       ${macroBar('Carbs', sum(meals, 'carbs_g'), dgoal(d, 'carbs_g'), 'g')}
@@ -50,17 +72,17 @@ function todayCard(d) {
 }
 
 function mealsCard(d) {
-  const today = localDate();
+  const today = curDay();
   const meals = d.meals.filter(m => m.eaten_on === today);
   return `<section class="card" style="gap:4px" aria-labelledby="mealsT">
-    <div class="card-head" style="padding-bottom:8px"><h2 id="mealsT">Comidas de hoy</h2><button type="button" class="btn-link" data-addmeal="">+ Agregar</button></div>
+    <div class="card-head" style="padding-bottom:8px"><h2 id="mealsT">Comidas · ${escapeHTML(dayName(today).toLowerCase())}</h2><button type="button" class="btn-link" data-addmeal="">+ Agregar</button></div>
     ${Object.entries(SLOTS).map(([slot, label]) => {
       const list = meals.filter(m => m.slot === slot);
       return `<div class="mslot">
         <div class="mslot-h"><span>${label}</span>${list.length ? `<span class="small">${r0(sum(list, 'kcal'))} kcal · ${r0(sum(list, 'protein_g'))} g prot.</span>` : `<button type="button" class="btn-link" style="min-height:36px" data-addmeal="${slot}">+ ${label.toLowerCase()}</button>`}</div>
         ${list.map(m => `<div class="task" style="padding:8px 0">
-          <div class="task-main"><span class="task-title" style="font-size:14px">${escapeHTML(m.name)}</span>
-            <span class="task-meta">${r0(m.kcal)} kcal · P ${fmt1(m.protein_g)} · C ${fmt1(m.carbs_g)} · G ${fmt1(m.fat_g)}</span></div>
+          <button type="button" class="task-main meal-edit" data-editmeal="${escapeHTML(m.id)}" aria-label="Editar ${escapeHTML(m.name)}"><span class="task-title" style="font-size:14px">${escapeHTML(m.name)}</span>
+            <span class="task-meta">${r0(m.kcal)} kcal · P ${fmt1(m.protein_g)} · C ${fmt1(m.carbs_g)} · G ${fmt1(m.fat_g)}</span></button>
           <button type="button" class="icon-btn sm" data-delmeal="${escapeHTML(m.id)}" aria-label="Borrar ${escapeHTML(m.name)}">${icon('trash')}</button>
         </div>`).join('')}
       </div>`;
@@ -95,14 +117,14 @@ function weekCard(d) {
   const avgK = sum(logged, 'kcal') / logged.length, avgP = sum(logged, 'prot') / logged.length;
   const max = Math.max(goal * 1.2, ...per.map(x => x.kcal), 1);
   return `<section class="card" style="gap:14px" aria-labelledby="dweekT">
-    <div class="card-head"><h2 id="dweekT">Últimos 7 días</h2><span class="muted" style="font-size:13px">${logged.length} día${logged.length === 1 ? '' : 's'} registrado${logged.length === 1 ? '' : 's'}</span></div>
+    <div class="card-head"><h2 id="dweekT">Últimos 7 días <span class="small" style="font-weight:400">· toca un día para verlo</span></h2><span class="muted" style="font-size:13px">${logged.length} día${logged.length === 1 ? '' : 's'} registrado${logged.length === 1 ? '' : 's'}</span></div>
     <div class="stats3" style="border-top:none;padding-top:0">
       <div><span>Promedio</span><strong>${r0(avgK)} kcal</strong><small class="muted">meta ${r0(goal)}</small></div>
       <div><span>Proteína</span><strong>${r0(avgP)} g</strong><small class="muted">meta ${r0(pgoal)}</small></div>
       <div><span>En meta</span><strong>${logged.filter(x => Math.abs(x.kcal - goal) <= goal * 0.1).length} días</strong><small class="muted">±10 %</small></div>
     </div>
     <div class="bars" style="height:100px" role="img" aria-label="${escapeHTML(per.map(x => `${x.day}: ${r0(x.kcal)} kcal`).join(', '))}">
-      ${per.map(x => `<div class="${x.day === localDate() ? 'cur' : ''}"><i style="height:${Math.round(x.kcal / max * 80) + 4}px;${x.kcal > goal * 1.1 ? 'background:var(--over)' : ''}"></i><span>${escapeHTML(dayLabel(x.day))}</span></div>`).join('')}
+      ${per.map(x => `<button type="button" class="bar-day${x.day === curDay() ? ' cur' : ''}" data-gotoday="${x.day}" aria-label="Ver ${escapeHTML(dayName(x.day))}"><i style="height:${Math.round(x.kcal / max * 80) + 4}px;${x.kcal > goal * 1.1 ? 'background:var(--over)' : ''}"></i><span>${escapeHTML(dayLabel(x.day))}</span></button>`).join('')}
     </div>
   </section>`;
 }
@@ -142,13 +164,19 @@ export function comidasHTML(d) {
   if (!d.dietReady) {
     return `<section class="soon"><h1 style="font-size:22px">Falta un paso</h1><p>Para usar Comidas corre <code>v2/sql/2026-11-04-comidas.sql</code> en el SQL Editor de Supabase y vuelve a abrir esta pantalla.</p></section>`;
   }
-  return `<div class="fin-grid"><div class="fin-col">${todayCard(d)}${mealsCard(d)}${weekCard(d)}</div><div class="fin-col">${ideasCard(d)}${bodyCard(d)}</div></div>`;
+  return `${dayNav()}<div class="fin-grid"><div class="fin-col">${todayCard(d)}${mealsCard(d)}${weekCard(d)}</div><div class="fin-col">${ideasCard(d)}${bodyCard(d)}</div></div>`;
 }
 
 // ── Acciones ─────────────────────────────────────────
 export function bindComidas(root, d, repaint) {
   const on = (sel, fn) => root.querySelectorAll(sel).forEach(b => b.addEventListener('click', fn));
-  on('[data-addmeal]', e => openMeal(d, repaint, { slot: e.currentTarget.dataset.addmeal || slotNow() }));
+  on('[data-addmeal]', e => openMeal(d, repaint, { slot: e.currentTarget.dataset.addmeal || slotNow(), day: curDay() }));
+  on('[data-editmeal]', e => { const m = d.meals.find(x => String(x.id) === e.currentTarget.dataset.editmeal); if (m) openMeal(d, repaint, { id: m.id, name: m.name, slot: m.slot, day: m.eaten_on, kcal: r0(m.kcal), protein: fmt1(m.protein_g), carbs: fmt1(m.carbs_g), fat: fmt1(m.fat_g) }); });
+  const go = ds => { viewDay = !ds || ds >= localDate() ? null : ds; repaint(); };
+  on('[data-dnav]', e => go(addDays(curDay(), Number(e.currentTarget.dataset.dnav))));
+  on('[data-dtoday]', () => go(null));
+  on('[data-gotoday]', e => go(e.currentTarget.dataset.gotoday));
+  root.querySelector('[data-dpick]')?.addEventListener('change', e => { if (e.target.value) go(e.target.value); });
   on('[data-delmeal]', e => deleteMeal(d, e.currentTarget.dataset.delmeal, repaint));
   on('[data-recipe]', e => openRecipe(d, e.currentTarget.dataset.recipe, repaint));
   on('[data-recipes]', () => openRecipeBrowser(d, repaint));
@@ -175,10 +203,17 @@ async function saveMeal(d, body, repaint) {
   catch { d.meals = d.meals.filter(m => m !== temp); repaint(); showToast('No se pudo guardar la comida', 'error'); }
 }
 
+async function updateMeal(d, id, body, repaint) {
+  const m = d.meals.find(x => String(x.id) === String(id)); if (!m) return;
+  const prev = { ...m }; Object.assign(m, body); repaint();
+  try { await dbPatch('meals', body, `?id=eq.${id}`); showToast('Comida actualizada'); }
+  catch { Object.assign(m, prev); repaint(); showToast('No se pudo actualizar', 'error'); }
+}
+
 function openMeal(d, repaint, pre = {}) {
   const num = v => Number(String(v ?? '').replace(',', '.'));
   const rec = recents(d);
-  openModal('Agregar comida', `
+  openModal(pre.id ? 'Editar comida' : (pre.day && pre.day !== localDate() ? `Agregar comida · ${dayName(pre.day).toLowerCase()}` : 'Agregar comida'), `
     <section class="ai-box" aria-labelledby="aiLbl">
       <label class="flabel" id="aiLbl" for="aiText" style="margin-top:0">Escribe o dicta lo que comiste</label>
       <div class="ai-row">
@@ -206,7 +241,7 @@ function openMeal(d, repaint, pre = {}) {
       <div><label class="flabel" for="mF">Grasa (g)</label><input class="field" id="mF" inputmode="decimal" value="${pre.fat ?? ''}" placeholder="0"></div>
     </div>
     <p class="small" style="margin:6px 0 0">Si solo sabes las calorías, deja los macros en 0. Si pones los macros y dejas calorías vacías, las calculo.</p>`,
-    '<button type="button" class="btn-primary" id="mSave">Guardar</button>');
+    `<button type="button" class="btn-primary" id="mSave">${pre.id ? 'Guardar cambios' : 'Guardar'}</button>`);
   bindEstimate();
   document.querySelectorAll('#modal [data-recent]').forEach(b => b.onclick = () => {
     const m = rec[Number(b.dataset.recent)];
@@ -220,8 +255,10 @@ function openMeal(d, repaint, pre = {}) {
     if (!name) return showToast('Escribe qué comiste', 'error');
     if (![p, c, f, kcal].every(x => Number.isFinite(x) && x >= 0) || kcal > 10000) return showToast('Revisa los números', 'error');
     closeModal();
-    saveMeal(d, { name, slot: document.getElementById('mSlot').value, eaten_on: document.getElementById('mDay').value || localDate(),
-      kcal: Math.round(kcal), protein_g: p, carbs_g: c, fat_g: f, recipe_key: pre.recipe_key || null }, repaint);
+    const meal = { name, slot: document.getElementById('mSlot').value, eaten_on: document.getElementById('mDay').value || localDate(),
+      kcal: Math.round(kcal), protein_g: p, carbs_g: c, fat_g: f };
+    if (pre.id) return updateMeal(d, pre.id, meal, repaint);
+    saveMeal(d, { ...meal, recipe_key: pre.recipe_key || null }, repaint);
   };
 }
 

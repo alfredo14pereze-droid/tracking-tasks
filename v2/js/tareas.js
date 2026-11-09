@@ -2,8 +2,8 @@
 // (checkRecurring / spawnNextRecurring / shouldRecurOnDate), missed, pasar/duplicar a mañana,
 // "avancé hoy" y Orden del día. Mismas tablas y columnas; nada de esquema nuevo.
 // Diferencia con v1: las acciones son optimistas (se ven al instante) con rollback + toast.
-import { dbGet, dbPost, dbPatch, dbDelete, safeGet } from './db.js?v=202611061115';
-import { localDate, todayStr, daysUntil, showToast } from './util.js?v=202611061115';
+import { dbGet, dbPost, dbPatch, dbDelete, safeGet } from './db.js?v=202611091124';
+import { localDate, todayStr, daysUntil, showToast } from './util.js?v=202611091124';
 
 export const T = { tasks: [], subtasks: [], quick: [], loaded: false, recurringChecked: false };
 
@@ -273,12 +273,33 @@ export async function saveTask(editingId, f) {
   if (editing) {
     const prev = { ...editing };
     Object.assign(editing, body);
-    try { await dbPatch('tasks', body, `?id=eq.${editing.id}`); return editing; }
+    try { await dbPatch('tasks', body, `?id=eq.${editing.id}`); }
     catch (e) { Object.assign(editing, prev); throw e; }
+    if (prev.is_recurring) await updateSeries(prev, editing).catch(e => console.warn('updateSeries', e));
+    return editing;
   }
   const [r] = await dbPost('tasks', body);
   T.tasks.push(r);
   return r;
+}
+
+// Una recurrente es una serie de filas (una por día) con el mismo título. Al editar una, el cambio
+// se aplica a sus copias pendientes de hoy en adelante; si no, al cambiarle el título quedaban dos
+// series y se duplicaba cada día. Copias que ya no tocan (cambió la recurrencia o se quitó) se borran.
+const SERIES_FIELDS = ['title', 'priority', 'due_time', 'category', 'estimated_minutes', 'recurrence', 'end_date', 'remind_day_before', 'is_recurring'];
+async function updateSeries(prev, now) {
+  const today = todayStr();
+  const sibs = T.tasks.filter(x => x.id !== now.id && x.is_recurring && x.title === prev.title && x.due_date && x.due_date >= today && (x.status === 'todo' || x.status === 'in_progress'));
+  if (!sibs.length) return;
+  const patch = {}; for (const k of SERIES_FIELDS) if (k in now) patch[k] = now[k] ?? null;
+  for (const x of sibs) {
+    const d = new Date(x.due_date + 'T12:00:00');
+    const gone = !now.is_recurring || !shouldRecurOnDate(now, d) || (now.end_date && x.due_date > now.end_date)
+      || x.due_date === now.due_date
+      || (now.title !== prev.title && T.tasks.some(y => y !== x && y.title === now.title && y.due_date === x.due_date));
+    if (gone) { await dbDelete('tasks', `?id=eq.${x.id}`); T.tasks = T.tasks.filter(y => y !== x); }
+    else { await dbPatch('tasks', patch, `?id=eq.${x.id}`); Object.assign(x, patch); }
+  }
 }
 
 // ── Tareas rápidas ───────────────────────────────────
