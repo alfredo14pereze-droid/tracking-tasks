@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611091124';
-import { syncYields, yieldAccounts, monthYield } from '../rendimientos.js?v=202611091124';
-import { bindDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611091124';
-import { FIN_TABS } from '../finclasica.js?v=202611091124';
-import { openStatement } from './estado.js?v=202611091124';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611091124';
-import * as F from '../fin.js?v=202611091124';
+import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611100956';
+import { syncYields, yieldAccounts, monthYield, pendingYield } from '../rendimientos.js?v=202611100956';
+import { bindDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611100956';
+import { FIN_TABS } from '../finclasica.js?v=202611100956';
+import { openStatement } from './estado.js?v=202611100956';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611100956';
+import * as F from '../fin.js?v=202611100956';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -52,6 +52,8 @@ function accountSub(f, a) {
   if (F.accPositions(f, a.id).length) return 'Fondos · valor del último corte';
   const rate = Number(a.annual_rate_pct);
   if (rate > 0) {
+    const pend = pendingYield(f, a);
+    if (pend) return `${ACC_KIND[a.kind] || a.kind} · ${rate}% anual · ${F.fmtMoney(pend.cents)} por cobrar el ${fmtDay(new Date(pend.payOn + 'T12:00:00'))}`;
     const y = f.tx.find(t => t.auto_key === `yield:${a.id}:${localDate().slice(0, 7)}`);
     return `${ACC_KIND[a.kind] || a.kind} · ${rate}% anual${y ? ` · +${F.fmtMoney(y.amount_cents)} este mes` : ''}`;
   }
@@ -847,10 +849,11 @@ function openRates() {
   const accs = F.bankAccounts(f).filter(a => ['debit', 'savings', 'cash'].includes(a.kind) && !F.accPositions(f, a.id).length);
   const ym = localDate().slice(0, 7);
   openModal('Rendimientos', `
-    <p class="small" style="margin:0">Pon la tasa anual que te da cada cuenta (la ves en la app del banco). Cada mes se registra un ingreso "Rendimiento" que se actualiza solo día a día. Si el banco te da otra cifra, cambia el monto de ese movimiento y ya no lo toco.</p>
+    <p class="small" style="margin:0">Pon la tasa anual que te da cada cuenta (la ves en la app del banco). Cada mes se registra un ingreso "Rendimiento": en Nu se actualiza día a día; en Plata se acumula y se abona completo el día 10. Si el banco te da otra cifra, cambia el monto de ese movimiento y ya no lo toco.</p>
     ${accs.map(a => `<label class="flabel" for="rt-${escapeHTML(a.id)}">${escapeHTML(a.name)} · % anual</label>
       <input class="field" id="rt-${escapeHTML(a.id)}" data-rt="${escapeHTML(a.id)}" inputmode="decimal" autocomplete="off" placeholder="Sin rendimiento" value="${Number(a.annual_rate_pct) > 0 ? Number(a.annual_rate_pct) : ''}">
-      ${Number(a.annual_rate_pct) > 0 ? `<p class="small" style="margin:4px 0 0">Este mes vas en ${F.fmtMoney(monthYield(f, a, ym))} (desde ${escapeHTML(fmtDay(new Date((a.yield_since || localDate()) + 'T12:00:00')))}).</p>` : ''}`).join('')}
+      ${pendingYield(f, a) ? `<p class="small" style="margin:4px 0 0">Llevas ${F.fmtMoney(pendingYield(f, a).cents)} acumulado; te lo abonan el ${escapeHTML(fmtDay(new Date(pendingYield(f, a).payOn + 'T12:00:00')))} (Plata paga el día 10).</p>`
+      : Number(a.annual_rate_pct) > 0 ? `<p class="small" style="margin:4px 0 0">Este mes vas en ${F.fmtMoney(monthYield(f, a, ym))} (desde ${escapeHTML(fmtDay(new Date((a.yield_since || localDate()) + 'T12:00:00')))}).</p>` : ''}`).join('')}
   `, `<button type="button" class="btn-primary" id="rtSave">Guardar tasas</button>`);
   document.getElementById('rtSave').onclick = async e => {
     const btn = e.currentTarget;

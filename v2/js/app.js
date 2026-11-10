@@ -1,22 +1,22 @@
 try { document.documentElement.classList.toggle('privacy', localStorage.getItem('v2Privacy') === '1'); } catch { /* sin storage */ }
 // Shell de v2: sesión, router por hash y navegación (inferior en móvil, lateral en escritorio).
-import { sb, AuthError } from './db.js?v=202611091124';
-import { escapeHTML, showToast } from './util.js?v=202611091124';
-import * as inicio from './views/inicio.js?v=202611091124';
-import * as pendiente from './views/pendiente.js?v=202611091124';
-import * as finClasica from './finclasica.js?v=202611091124';
-import * as finanzas from './views/finanzas.js?v=202611091124';
-import * as salud from './views/salud.js?v=202611091124';
-import * as entreno from './views/entreno.js?v=202611091124';
-import * as rutinas from './views/rutinas.js?v=202611091124';
-import * as objetivosView from './views/objetivos.js?v=202611091124';
-import * as recordatoriosView from './views/recordatorios.js?v=202611091124';
-import * as calendarioView from './views/calendario.js?v=202611091124';
-import * as estadisticasView from './views/estadisticas.js?v=202611091124';
-import * as notifView from './views/notificaciones.js?v=202611091124';
-import * as notasView from './views/notas.js?v=202611091124';
-import * as tareasView from './views/tareas.js?v=202611091124';
-import { checkRecurring } from './tareas.js?v=202611091124';
+import { sb, AuthError } from './db.js?v=202611100956';
+import { escapeHTML, showToast } from './util.js?v=202611100956';
+import * as inicio from './views/inicio.js?v=202611100956';
+import * as pendiente from './views/pendiente.js?v=202611100956';
+import * as finClasica from './finclasica.js?v=202611100956';
+import * as finanzas from './views/finanzas.js?v=202611100956';
+import * as salud from './views/salud.js?v=202611100956';
+import * as entreno from './views/entreno.js?v=202611100956';
+import * as rutinas from './views/rutinas.js?v=202611100956';
+import * as objetivosView from './views/objetivos.js?v=202611100956';
+import * as recordatoriosView from './views/recordatorios.js?v=202611100956';
+import * as calendarioView from './views/calendario.js?v=202611100956';
+import * as estadisticasView from './views/estadisticas.js?v=202611100956';
+import * as notifView from './views/notificaciones.js?v=202611100956';
+import * as notasView from './views/notas.js?v=202611100956';
+import * as tareasView from './views/tareas.js?v=202611100956';
+import { checkRecurring } from './tareas.js?v=202611100956';
 
 const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'recordatorios', 'notas', 'estadisticas', 'notificaciones', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.

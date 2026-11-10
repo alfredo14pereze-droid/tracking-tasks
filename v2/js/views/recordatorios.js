@@ -1,8 +1,8 @@
 // Recordatorios (tabla reminders: title, remind_date, remind_time, status active|done). Igual que la clásica:
 // pendientes primero por fecha/hora; los pasados sin hacer se marcan en rojo. Solo dentro de la app (sin push).
-import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611091124';
-import { uploadPhotos, removePhotos, fillPhotos, thumbsHTML, photoButton } from '../fotos.js?v=202611091124';
-import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611091124';
+import { dbPost, dbPatch, dbDelete, safeGet } from '../db.js?v=202611100956';
+import { uploadPhotos, removePhotos, fillPhotos, thumbsHTML, photoButton } from '../fotos.js?v=202611100956';
+import { escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611100956';
 
 let list = [];
 let pending = []; // fotos para el recordatorio nuevo
