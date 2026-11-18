@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611100956';
-import { syncYields, yieldAccounts, monthYield, pendingYield } from '../rendimientos.js?v=202611100956';
-import { bindDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611100956';
-import { FIN_TABS } from '../finclasica.js?v=202611100956';
-import { openStatement } from './estado.js?v=202611100956';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611100956';
-import * as F from '../fin.js?v=202611100956';
+import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611181609';
+import { syncYields, yieldAccounts, monthYield, pendingYield } from '../rendimientos.js?v=202611181609';
+import { bindDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611181609';
+import { FIN_TABS } from '../finclasica.js?v=202611181609';
+import { openStatement } from './estado.js?v=202611181609';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611181609';
+import * as F from '../fin.js?v=202611181609';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -937,9 +937,27 @@ function openIncome(srcId) {
   const st = F.incomeStatus(f, src);
   const accs = F.bankAccounts(f).filter(a => ['debit', 'savings', 'cash'].includes(a.kind));
   const pre = [lastIncAcc(src.id), src.account_id].find(id => id && accs.some(a => a.id === id));
+  // Mensualidad: puede llegar junta la de varios meses. Cada mes se guarda aparte para que cuente en su mes.
+  const multi = src.frequency === 'mensual' && 'auto_key' in (f.tx[0] || { auto_key: null });
+  const pendingMonths = n => {
+    const out = [], d = new Date(); d.setDate(1);
+    for (let guard = 0; out.length < n && guard < 36; guard++, d.setMonth(d.getMonth() + 1)) {
+      const ym = localDate(d).slice(0, 7), to = localDate(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+      const got = f.tx.some(t => t.type === 'income' && src.category_id && t.category_id === src.category_id && F.incomeIn(t, `${ym}-01`, to));
+      if (!got) out.push(ym);
+    }
+    return out;
+  };
+  const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const mesDe = ym => MES[Number(ym.slice(5, 7)) - 1];
+  const listMeses = yms => yms.map(mesDe).join(', ').replace(/, ([^,]*)$/, ' y $1');
+  let months = 1;
   openModal(`Recibí ${src.name}`, `
     ${st.last && src.frequency !== 'irregular' ? `<p class="small" style="margin:0;color:var(--alert)">Ojo: ya registraste ${escapeHTML(F.fmtMoney(st.received))} de ${escapeHTML(src.name)} ${escapeHTML(st.period.label)} (el ${escapeHTML(fmtDay(new Date(st.last.occurred_on + 'T12:00:00')))}). Regístralo solo si es otro pago.</p>` : ''}
-    <label class="flabel" for="riAmt">Monto</label>
+    ${multi ? `<span class="flabel" style="margin-top:0">¿De cuántos meses es?</span>
+      <div class="opts" role="group" aria-label="Meses">${[1, 2, 3, 4, 6].map(n => `<button type="button" class="opt" data-rimonths="${n}" aria-pressed="${n === 1}">${n === 1 ? '1 mes' : `${n} meses`}</button>`).join('')}</div>
+      <p class="small" id="riMonthsTxt" style="margin:4px 0 0"></p>` : ''}
+    <label class="flabel" for="riAmt">Monto${multi ? ' total' : ''}</label>
     <input class="field" id="riAmt" inputmode="decimal" autocomplete="off" value="${Number(src.amount_cents) > 0 ? centsInput(src.amount_cents) : ''}" placeholder="¿Cuánto te pagaron?">
     ${src.frequency === 'irregular' ? `<label class="flabel" for="riNote">¿De quién o de qué? (opcional)</label><input class="field" id="riNote" maxlength="80" autocomplete="off" placeholder="Ej. Cliente · proyecto">` : ''}
     <label class="flabel" for="riAcc">¿A dónde llegó?</label>
@@ -947,6 +965,20 @@ function openIncome(srcId) {
     <label class="flabel" for="riDate">Fecha</label>
     <input class="field" id="riDate" type="date" value="${(() => { const next = (F.incomeSchedule(f, src) || []).find(x => !x.done && !x.before); return next && localDate(next.date) <= localDate() ? localDate(next.date) : localDate(); })()}">
   `, `<button type="button" class="btn-primary" id="riSave">Registrar ingreso</button>`);
+  const showMonths = () => {
+    const t = document.getElementById('riMonthsTxt'); if (!t) return;
+    const yms = pendingMonths(months);
+    t.textContent = months === 1 ? `Cuenta como ${mesDe(yms[0])}.` : `Cuenta como ${listMeses(yms)}: se guarda un movimiento por mes, para que cada uno salga como recibido.`;
+  };
+  if (multi) {
+    showMonths();
+    document.querySelectorAll('#modal [data-rimonths]').forEach(b => b.onclick = () => {
+      months = Number(b.dataset.rimonths);
+      document.querySelectorAll('#modal [data-rimonths]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      if (Number(src.amount_cents) > 0) document.getElementById('riAmt').value = centsInput(Number(src.amount_cents) * months);
+      showMonths();
+    });
+  }
   document.getElementById('riSave').onclick = async e => {
     const btn = e.currentTarget;
     const amount = F.parseCents(document.getElementById('riAmt').value.replace(/[$,\s]/g, ''));
@@ -959,6 +991,16 @@ function openIncome(srcId) {
       if (!src.category_id) { // fuentes viejas sin categoría: se le crea una con su nombre
         const c = await ensureIncomeCategory(f, src.name);
         await dbPatch('income_sources', { category_id: c.id }, `?id=eq.${src.id}`); src.category_id = c.id;
+      }
+      if (multi) {
+        const yms = pendingMonths(months), each = Math.floor(amount / yms.length);
+        const rows = yms.map((ym, i) => ({ type: 'income', amount_cents: each + (i === 0 ? amount - each * yms.length : 0), account_id: acc, to_account_id: null, category_id: src.category_id,
+          occurred_on: date, note: `${src.name} · ${mesDe(ym)}${ym > date.slice(0, 7) ? ' (adelantado)' : ''}`.slice(0, 120), auto_key: F.incomeKey(src.id, ym) }));
+        const saved = await dbPost('transactions', rows);
+        f.tx.unshift(...saved); sortTx();
+        try { localStorage.setItem('v2IncAcc:' + src.id, acc); } catch { /* sin storage */ }
+        closeModal(); showToast(yms.length > 1 ? `${src.name} de ${listMeses(yms)} registrada` : `${src.name} registrado en ${F.accName(f, acc)}`); paint();
+        return;
       }
       const [row] = await dbPost('transactions', { type: 'income', amount_cents: amount, account_id: acc, to_account_id: null, category_id: src.category_id, occurred_on: date, note: (document.getElementById('riNote')?.value.trim() ? `${src.name} · ${document.getElementById('riNote').value.trim()}` : src.name).slice(0, 120) });
       f.tx.unshift(row); sortTx();

@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611100956';
-import { localDate } from './util.js?v=202611100956';
+import { safeGet } from './db.js?v=202611181609';
+import { localDate } from './util.js?v=202611181609';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions, contribs] = await Promise.all([
@@ -324,7 +324,7 @@ function expectedThisMonth(f, src) {
 export function expectedIncomes(f) {
   const from = localDate(countFrom(f)), to = monthStartStr(1);
   return f.incomes.filter(x => x.category_id).map(src => {
-    const received = f.tx.filter(t => t.type === 'income' && t.category_id === src.category_id && t.occurred_on >= from && t.occurred_on < to)
+    const received = f.tx.filter(t => t.type === 'income' && t.category_id === src.category_id && incomeIn(t, from, to))
       .reduce((s, t) => s + (Number(t.amount_cents) || 0), 0);
     const expected = expectedThisMonth(f, src);
     return { src, expected, received, left: Math.max(0, expected - received) };
@@ -365,9 +365,15 @@ export function incomePeriod(src) {
   }
   return { from: monthStartStr(0), to: monthStartStr(1), label: `en ${monthName(0)}` };
 }
+// Pagos de varios meses juntos (p. ej. la mensualidad de nov y dic): cada mes es su propio movimiento
+// con auto_key "income:<fuente>:<YYYY-MM>". Cuenta para ese mes aunque haya llegado antes.
+export const incomeKey = (srcId, ym) => `income:${srcId}:${ym}`;
+export const incomeMonthOf = t => /^income:/.test(t.auto_key || '') ? t.auto_key.slice(-7) : null;
+// ¿El ingreso t cuenta en el periodo [from, to)? Los de varios meses cuentan en el mes que cubren.
+export const incomeIn = (t, from, to) => { const ym = incomeMonthOf(t); return ym ? `${ym}-01` >= from.slice(0, 8) + '01' && `${ym}-01` < to : t.occurred_on >= from && t.occurred_on < to; };
 export function incomeStatus(f, src) {
   const r = incomePeriod(src);
-  const got = f.tx.filter(t => t.type === 'income' && src.category_id && t.category_id === src.category_id && t.occurred_on >= r.from && t.occurred_on < r.to);
+  const got = f.tx.filter(t => t.type === 'income' && src.category_id && t.category_id === src.category_id && incomeIn(t, r.from, r.to));
   return { period: r, received: got.reduce((x, t) => x + (Number(t.amount_cents) || 0), 0), last: got[0] || null };
 }
 // Fechas de pago de una fuente en el mes actual, cada una marcada si ya la registraste.
@@ -384,7 +390,7 @@ export function incomeSchedule(f, src) {
   if (!days.length) return null;
   const st = startDate(f);
   const from = localDate(st && st > new Date(y, m, 1) ? st : new Date(y, m, 1));
-  const got = src.category_id ? f.tx.filter(t => t.type === 'income' && t.category_id === src.category_id && t.occurred_on >= from && t.occurred_on < monthStartStr(1)).length : 0;
+  const got = src.category_id ? f.tx.filter(t => t.type === 'income' && t.category_id === src.category_id && incomeIn(t, from, monthStartStr(1))).length : 0;
   let left = got;
   return days.map(d => {
     const before = localDate(d) < from; // ya estaba en tus saldos

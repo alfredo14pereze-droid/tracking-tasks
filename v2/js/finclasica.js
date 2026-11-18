@@ -1,9 +1,9 @@
 // GENERADO por build_finclasica.py desde clasica/index.html (sección FINANZAS). No editar a mano:
 // cambia la clásica o el script y vuelve a generar. Es la misma lógica de la clásica (saldos, tarjetas,
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
-import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611100956';
-import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611100956';
-import { cardStatus as v2CardStatus } from './fin.js?v=202611100956';
+import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611181609';
+import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611181609';
+import { cardStatus as v2CardStatus } from './fin.js?v=202611181609';
 
 // ── Adaptador ──
 let currentSection = 'finance', finView = 'home', currentView = 'today';
@@ -97,7 +97,7 @@ function savedInMonth(offset=0){
   }
   return s;
 }
-function receivedInMonth(catId, offset=0){ return fin.tx.filter(t=>t.type==='income' && t.category_id===catId && txInMonth(t,offset)).reduce((s,t)=>s+(Number(t.amount_cents)||0),0); }
+function receivedInMonth(catId, offset=0){ return fin.tx.filter(t=>t.type==='income' && t.category_id===catId && (/^income:/.test(t.auto_key||'') ? t.auto_key.slice(-7)===monthStartStr(offset).slice(0,7) : txInMonth(t,offset))).reduce((s,t)=>s+(Number(t.amount_cents)||0),0); } // (v2) mensualidad de varios meses: cuenta en el mes que cubre
 function expectedIncomes(){
   const srcs = fin.incomes.filter(x=>x.active && ownedPct(fin.accounts.find(a=>a.id===x.account_id))===100); // (v2) el pago del carro no es ingreso tuyo
   if(srcs.length) return srcs.filter(x=>x.category_id).map(x=>({cat:{id:x.category_id, name:x.name}, source:x, expected:sourceMonthly(x,true), received:receivedInMonth(x.category_id)}));

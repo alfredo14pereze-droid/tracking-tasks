@@ -670,3 +670,4 @@ textarea{font-family:inherit;font-size:16px}
 .day-nav-label{position:relative;display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:999px;background:var(--card);font-weight:600;font-size:15px;cursor:pointer}
 .day-nav-label input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
 .meal-edit{background:none;border:none;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.meal-favs{margin:2px 0 6px}.meal-favs .opt{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;line-height:34px}

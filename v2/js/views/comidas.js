@@ -1,9 +1,9 @@
 // Comidas (dieta): macros del día vs. metas, registro, ideas con receta, semana y peso/medidas.
 // Vive como pestaña dentro de Salud; recibe los datos de loadSalud() (d.meals, d.dietGoals, d.body, d.whoop).
-import { dbPost, dbPatch, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611100956';
-import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611100956';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611100956';
-import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611100956';
+import { dbPost, dbPatch, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611181609';
+import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611181609';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611181609';
+import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611181609';
 
 export const DIET_GOALS = {
   kcal: { label: 'Calorías', unit: 'kcal', def: 2200 },
@@ -80,6 +80,8 @@ function mealsCard(d) {
       const list = meals.filter(m => m.slot === slot);
       return `<div class="mslot">
         <div class="mslot-h"><span>${label}</span>${list.length ? `<span class="small">${r0(sum(list, 'kcal'))} kcal · ${r0(sum(list, 'protein_g'))} g prot.</span>` : `<button type="button" class="btn-link" style="min-height:36px" data-addmeal="${slot}">+ ${label.toLowerCase()}</button>`}</div>
+        ${(() => { const had = new Set(list.map(m => normName(m.name))); const fav = frequents(d, slot).filter(m => !had.has(normName(m.name))).slice(0, 4);
+          return fav.length ? `<div class="opts meal-favs" role="group" aria-label="${escapeHTML(label)} frecuentes">${fav.map(m => `<button type="button" class="opt" data-quickmeal="${escapeHTML(slot)}" data-qid="${escapeHTML(m.id)}" title="${r0(m.kcal)} kcal · P ${fmt1(m.protein_g)} g">+ ${escapeHTML(m.name)}</button>`).join('')}</div>` : ''; })()}
         ${list.map(m => `<div class="task" style="padding:8px 0">
           <button type="button" class="task-main meal-edit" data-editmeal="${escapeHTML(m.id)}" aria-label="Editar ${escapeHTML(m.name)}"><span class="task-title" style="font-size:14px">${escapeHTML(m.name)}</span>
             <span class="task-meta">${r0(m.kcal)} kcal · P ${fmt1(m.protein_g)} · C ${fmt1(m.carbs_g)} · G ${fmt1(m.fat_g)}</span></button>
@@ -178,6 +180,11 @@ export function bindComidas(root, d, repaint) {
   on('[data-gotoday]', e => go(e.currentTarget.dataset.gotoday));
   root.querySelector('[data-dpick]')?.addEventListener('change', e => { if (e.target.value) go(e.target.value); });
   on('[data-delmeal]', e => deleteMeal(d, e.currentTarget.dataset.delmeal, repaint));
+  on('[data-quickmeal]', e => {
+    const b = e.currentTarget, m = d.meals.find(x => String(x.id) === b.dataset.qid); if (!m) return;
+    b.disabled = true;
+    saveMeal(d, mealCopy(m, b.dataset.quickmeal, curDay()), repaint, true);
+  });
   on('[data-recipe]', e => openRecipe(d, e.currentTarget.dataset.recipe, repaint));
   on('[data-recipes]', () => openRecipeBrowser(d, repaint));
   on('[data-ai-ideas]', () => openAiIdeas(d, repaint));
@@ -187,19 +194,33 @@ export function bindComidas(root, d, repaint) {
 
 function slotNow() { const h = new Date().getHours(); return h < 11 ? 'desayuno' : h < 17 ? 'comida' : 'cena'; }
 
-// Recientes: nombres distintos que ya registraste (para agregar con un toque).
-function recents(d) {
-  const seen = new Set(), out = [];
-  for (const m of [...d.meals].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))) {
-    const k = m.name.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(m); if (out.length >= 8) break;
+// Frecuentes de cada tiempo (desayuno, comida, cena…): lo que más has registrado en ese tiempo
+// en los últimos 60 días, cada uno con sus macros de la última vez. Se arma solo con tu historial.
+const normName = n => String(n || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+export function frequents(d, slot, n = 6) {
+  const by = new Map();
+  for (const m of d.meals) {
+    if (m.slot !== slot || String(m.id).startsWith('tmp-')) continue;
+    const k = normName(m.name);
+    const x = by.get(k);
+    if (!x) by.set(k, { meal: m, count: 1, last: `${m.eaten_on} ${m.created_at || ''}` });
+    else {
+      x.count++;
+      const when = `${m.eaten_on} ${m.created_at || ''}`;
+      if (when > x.last) { x.last = when; x.meal = m; }
+    }
   }
-  return out;
+  return [...by.values()].sort((a, b) => b.count - a.count || b.last.localeCompare(a.last)).slice(0, n).map(x => x.meal);
 }
+const mealCopy = (m, slot, day) => ({ name: m.name, slot, eaten_on: day, kcal: r0(m.kcal), protein_g: Number(m.protein_g) || 0, carbs_g: Number(m.carbs_g) || 0, fat_g: Number(m.fat_g) || 0, recipe_key: m.recipe_key || null });
 
-async function saveMeal(d, body, repaint) {
+async function saveMeal(d, body, repaint, undo = false) {
   const temp = { ...body, id: 'tmp-' + Date.now(), created_at: new Date().toISOString() };
   d.meals.unshift(temp); repaint();
-  try { const [row] = await dbPost('meals', body); Object.assign(temp, row); repaint(); showToast(`${body.name} agregado`); }
+  try {
+    const [row] = await dbPost('meals', body); Object.assign(temp, row); repaint();
+    showToast(`${body.name} agregado`, 'info', undo ? { label: 'Deshacer', onClick: () => deleteMeal(d, row.id, repaint, true) } : undefined);
+  }
   catch { d.meals = d.meals.filter(m => m !== temp); repaint(); showToast('No se pudo guardar la comida', 'error'); }
 }
 
@@ -212,7 +233,7 @@ async function updateMeal(d, id, body, repaint) {
 
 function openMeal(d, repaint, pre = {}) {
   const num = v => Number(String(v ?? '').replace(',', '.'));
-  const rec = recents(d);
+  const favHTML = slot => { const fav = frequents(d, slot, 8); return fav.length ? `<span class="flabel" style="margin-top:0">Tus ${escapeHTML(SLOTS[slot].toLowerCase())}s frecuentes</span><div class="opts">${fav.map(m => `<button type="button" class="opt" data-recent="${escapeHTML(m.id)}">${escapeHTML(m.name)} · ${r0(m.kcal)}</button>`).join('')}</div>` : ''; };
   openModal(pre.id ? 'Editar comida' : (pre.day && pre.day !== localDate() ? `Agregar comida · ${dayName(pre.day).toLowerCase()}` : 'Agregar comida'), `
     <section class="ai-box" aria-labelledby="aiLbl">
       <label class="flabel" id="aiLbl" for="aiText" style="margin-top:0">Escribe o dicta lo que comiste</label>
@@ -225,7 +246,7 @@ function openMeal(d, repaint, pre = {}) {
       <div id="aiOut" aria-live="polite"></div>
     </section>
     <div class="ai-or"><span>o captúralo tú</span></div>
-    ${rec.length ? `<span class="flabel" style="margin-top:0">Recientes</span><div class="opts">${rec.map((m, i) => `<button type="button" class="opt" data-recent="${i}">${escapeHTML(m.name)} · ${r0(m.kcal)}</button>`).join('')}</div>` : ''}
+    <div id="mFavs">${pre.id ? '' : favHTML(pre.slot || slotNow())}</div>
     <label class="flabel" for="mName">¿Qué comiste?</label>
     <input class="field" id="mName" maxlength="120" autocomplete="off" placeholder="Ej. 2 tacos de pollo" value="${escapeHTML(pre.name || '')}">
     <div class="row2">
@@ -243,11 +264,14 @@ function openMeal(d, repaint, pre = {}) {
     <p class="small" style="margin:6px 0 0">Si solo sabes las calorías, deja los macros en 0. Si pones los macros y dejas calorías vacías, las calculo.</p>`,
     `<button type="button" class="btn-primary" id="mSave">${pre.id ? 'Guardar cambios' : 'Guardar'}</button>`);
   bindEstimate();
-  document.querySelectorAll('#modal [data-recent]').forEach(b => b.onclick = () => {
-    const m = rec[Number(b.dataset.recent)];
+  const bindFavs = () => document.querySelectorAll('#modal [data-recent]').forEach(b => b.onclick = () => {
+    const m = d.meals.find(x => String(x.id) === b.dataset.recent); if (!m) return;
     const set = (id, v) => { document.getElementById(id).value = v; };
     set('mName', m.name); set('mKcal', r0(m.kcal)); set('mP', fmt1(m.protein_g)); set('mC', fmt1(m.carbs_g)); set('mF', fmt1(m.fat_g));
+    document.querySelectorAll('#modal [data-recent]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   });
+  bindFavs();
+  if (!pre.id) document.getElementById('mSlot').addEventListener('change', e => { document.getElementById('mFavs').innerHTML = favHTML(e.target.value); bindFavs(); });
   document.getElementById('mSave').onclick = () => {
     const name = document.getElementById('mName').value.trim();
     const p = num(document.getElementById('mP').value || 0), c = num(document.getElementById('mC').value || 0), f = num(document.getElementById('mF').value || 0);
@@ -326,12 +350,12 @@ function bindEstimate() {
   bindDictation($('aiMic'), $('aiText'), () => run());
 }
 
-async function deleteMeal(d, id, repaint) {
+async function deleteMeal(d, id, repaint, quiet = false) {
   const m = d.meals.find(x => String(x.id) === String(id)); if (!m) return;
   const i = d.meals.indexOf(m);
   d.meals.splice(i, 1); repaint();
   if (String(m.id).startsWith('tmp-')) return;
-  try { await dbDelete('meals', `?id=eq.${m.id}`); showToast('Comida borrada', 'info', { label: 'Deshacer', onClick: () => { const { id: _x, ...rest } = m; saveMeal(d, rest, repaint); } }); }
+  try { await dbDelete('meals', `?id=eq.${m.id}`); if (quiet) return showToast('Listo, la quité'); showToast('Comida borrada', 'info', { label: 'Deshacer', onClick: () => { const { id: _x, ...rest } = m; saveMeal(d, rest, repaint); } }); }
   catch { d.meals.splice(i, 0, m); repaint(); showToast('No se pudo borrar', 'error'); }
 }
 

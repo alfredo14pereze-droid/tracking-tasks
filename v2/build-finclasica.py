@@ -72,6 +72,9 @@ sub("""          <div class="fin-tx-sub">${rem>0 ? (x.received>0 ? `Recibido ${f
 """          <div class="fin-tx-sub">${!x.expected && !x.received ? 'Monto variable · regístralo cuando llegue' : rem>0 ? (x.received>0 ? `Recibido ${fmtMoney(x.received)} · faltan ${fmtMoney(rem)}` : `Esperado ${fmtMoney(x.expected)}`) : `✓ Recibido ${fmtMoney(x.received)}`}</div></div>
         <button type="button" class="btn ${rem>0 || !x.expected ? 'btn-primary' : 'btn-ghost'} fin-small-btn" data-income-receive="${escapeAttr(x.cat.id)}">${rem>0 ? 'Ya lo recibí' : !x.expected ? 'Registrar pago' : 'Otro pago'}</button>""")
 
+sub("""function receivedInMonth(catId, offset=0){ return fin.tx.filter(t=>t.type==='income' && t.category_id===catId && txInMonth(t,offset)).reduce((s,t)=>s+(Number(t.amount_cents)||0),0); }""",
+"""function receivedInMonth(catId, offset=0){ return fin.tx.filter(t=>t.type==='income' && t.category_id===catId && (/^income:/.test(t.auto_key||'') ? t.auto_key.slice(-7)===monthStartStr(offset).slice(0,7) : txInMonth(t,offset))).reduce((s,t)=>s+(Number(t.amount_cents)||0),0); } // (v2) mensualidad de varios meses: cuenta en el mes que cubre""")
+
 sub("""function expectedIncomes(){
   const srcs = fin.incomes.filter(x=>x.active);""", """function expectedIncomes(){
   const srcs = fin.incomes.filter(x=>x.active && ownedPct(fin.accounts.find(a=>a.id===x.account_id))===100); // (v2) el pago del carro no es ingreso tuyo""")
