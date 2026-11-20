@@ -1,9 +1,9 @@
 // Comidas (dieta): macros del día vs. metas, registro, ideas con receta, semana y peso/medidas.
 // Vive como pestaña dentro de Salud; recibe los datos de loadSalud() (d.meals, d.dietGoals, d.body, d.whoop).
-import { dbPost, dbPatch, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611181609';
-import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611181609';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611181609';
-import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611181609';
+import { dbPost, dbPatch, dbDelete, dbUpsert, callFunction } from '../db.js?v=202611201045';
+import { bindDictation, browserDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611201045';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611201045';
+import { RECIPES, SLOTS, TAGS, recipe, ideasFor } from '../recetas.js?v=202611201045';
 
 export const DIET_GOALS = {
   kcal: { label: 'Calorías', unit: 'kcal', def: 2200 },
@@ -80,8 +80,6 @@ function mealsCard(d) {
       const list = meals.filter(m => m.slot === slot);
       return `<div class="mslot">
         <div class="mslot-h"><span>${label}</span>${list.length ? `<span class="small">${r0(sum(list, 'kcal'))} kcal · ${r0(sum(list, 'protein_g'))} g prot.</span>` : `<button type="button" class="btn-link" style="min-height:36px" data-addmeal="${slot}">+ ${label.toLowerCase()}</button>`}</div>
-        ${(() => { const had = new Set(list.map(m => normName(m.name))); const fav = frequents(d, slot).filter(m => !had.has(normName(m.name))).slice(0, 4);
-          return fav.length ? `<div class="opts meal-favs" role="group" aria-label="${escapeHTML(label)} frecuentes">${fav.map(m => `<button type="button" class="opt" data-quickmeal="${escapeHTML(slot)}" data-qid="${escapeHTML(m.id)}" title="${r0(m.kcal)} kcal · P ${fmt1(m.protein_g)} g">+ ${escapeHTML(m.name)}</button>`).join('')}</div>` : ''; })()}
         ${list.map(m => `<div class="task" style="padding:8px 0">
           <button type="button" class="task-main meal-edit" data-editmeal="${escapeHTML(m.id)}" aria-label="Editar ${escapeHTML(m.name)}"><span class="task-title" style="font-size:14px">${escapeHTML(m.name)}</span>
             <span class="task-meta">${r0(m.kcal)} kcal · P ${fmt1(m.protein_g)} · C ${fmt1(m.carbs_g)} · G ${fmt1(m.fat_g)}</span></button>
