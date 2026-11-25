@@ -58,12 +58,53 @@ sub("""    const debt = cardDebt(a.id); if(!debt) return;
 """    const st = v2CardStatus(fin, a); const debt = st ? st.toPay : cardDebt(a.id); if(!debt) return;
     const pay = st ? st.due : nextDateForDay(c.pay_day), n = daysUntil(pay);
     if(n<5) out.push({id:`card-${a.id}-${localDate(pay)}`, level:'over', text:`Pago de ${a.name} ${inDaysTxt(n)} (${fmtDay(pay)}): paga ${fmtMoney(debt)} para no generar intereses`});""")
-# --- ahorro: pagar una tarjeta desde tu ahorro no es "desahorrar" (el gasto ya contó al comprar) ---
-sub("""    if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
-    const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);""",
-"""    if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
-    if(fin.accounts.some(a=>(a.id===t.to_account_id || a.id===t.account_id) && (a.kind==='credit' || isLoan(a)))) continue; // (v2)
-    const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);""")
+# --- ahorro = ingresos − gastos del mes (igual que F.savingsOf de fin.js; no se guarda en ninguna tabla).
+# Las transferencias entre tus cuentas (pago de tarjeta, Plata → NU/GBM) no cuentan; lo de crédito cuenta al comprar.
+sub("""function savedInMonth(offset=0){
+  let s = 0;
+  for(const t of fin.tx){
+    if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
+    const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);
+    if(to && !from) s += Number(t.amount_cents)||0;
+    else if(from && !to) s -= Number(t.amount_cents)||0;
+  }
+  return s;
+}""", """function savedInMonth(offset=0){ const {inc, exp} = monthTotals(offset); return inc - exp; } // (v2) ahorro = ingresos − gastos""")
+sub("""    <div class="fin-label">Ahorrado este mes</div>
+    <div class="fin-big ${goal>0&&pct>=100?'pos':''}">${fmtMoney(saved)}</div>""",
+"""    <div class="fin-label">${saved<0?'Déficit':'Ahorrado'} en ${escapeHTML(monthLabel(0))}</div>
+    <div class="fin-big ${saved<0?'neg':goal>0&&pct>=100?'pos':''}">${fmtMoney(Math.abs(saved))}</div>""")
+# --- metas sin cuenta: se llenan con un % del ahorro de cada mes (fin.js) ---
+sub("""  if(!g.account_id) return Number(g.saved_cents)||0;
+  const acc = fin.accounts.find(a=>a.id===g.account_id);""",
+"""  if(!g.account_id) return v2GoalCurrent(fin, g); // (v2) saved_cents + su % del ahorro de cada mes
+  const acc = fin.accounts.find(a=>a.id===g.account_id);""")
+assert code.count("'Progreso capturado a mano'") == 2
+code = code.replace("'Progreso capturado a mano'", "goalAllocTxt(g)")
+sub("""<option value="">Ninguna cuenta (lo capturo a mano)</option>""",
+"""<option value="">Ninguna cuenta (se llena con un % de mi ahorro)</option>""")
+sub("""      <div class="form-group"><label class="form-label" for="goalMonthly">Aportación mensual</label>""",
+"""      <div class="form-group"><label class="form-label" for="goalMonthly">Quiero juntar al mes (plan)</label>""")
+sub("""      <div class="form-group" id="goalSavedWrap"><label class="form-label" for="goalSaved">Llevo ahorrado</label>
+        <input class="form-input fin-money" id="goalSaved" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${g&&Number(g.saved_cents)?centsToInput(g.saved_cents):''}"></div>""",
+"""      <div class="form-group" id="goalSavedWrap"><label class="form-label" for="goalPct">% de mi ahorro de cada mes</label>
+        <input class="form-input" id="goalPct" inputmode="decimal" autocomplete="off" style="font-size:16px" placeholder="0" value="${g&&v2GoalPct(g)?v2GoalPct(g):''}"></div>""")
+sub("""    document.getElementById('goalHint').textContent = hasAcc ? 'El progreso es el saldo de esa cuenta.' : 'El progreso es lo que captures en "Llevo ahorrado".';""",
+"""    const free = Math.max(0, 100 - v2PctTaken(fin, g ? g.id : null));
+    document.getElementById('goalHint').textContent = hasAcc ? 'El progreso es el saldo de esa cuenta.' : `Cada mes recibe ese % de lo que ahorras (ingresos − gastos); los meses con déficit no le quitan. Libre: ${v2FmtPct(free)}.`;""")
+sub("""    const monthlyRaw = finVal('goalMonthly'), savedRaw = finVal('goalSaved');
+    const monthly = monthlyRaw==='' ? 0 : parseCents(monthlyRaw);
+    const saved = savedRaw==='' ? 0 : parseCents(savedRaw);""",
+"""    const monthlyRaw = finVal('goalMonthly'), pctRaw = finVal('goalPct').replace('%','').replace(',','.').trim();
+    const monthly = monthlyRaw==='' ? 0 : parseCents(monthlyRaw);
+    const accountId = finVal('goalAccount') || null;
+    const pct = accountId || pctRaw==='' ? 0 : Math.round(Number(pctRaw)*100)/100;
+    if(!(pct>=0 && pct<=100)){ showToast('El % va de 0 a 100','error'); return; }
+    if(pct + v2PctTaken(fin, g ? g.id : null) > 100){ showToast(`Entre todas las metas pasan de 100%: te queda ${v2FmtPct(Math.max(0, 100 - v2PctTaken(fin, g ? g.id : null)))}`,'error'); return; }
+    const saved = 0;""")
+sub("""    const payload = {name, target_cents:target, due_date: finVal('goalDue') || null, account_id: finVal('goalAccount') || null, monthly_contribution_cents:monthly, saved_cents:saved};""",
+"""    const payload = {name, target_cents:target, due_date: finVal('goalDue') || null, account_id: accountId, monthly_contribution_cents:monthly, ...v2AllocPatch(fin, g, pct, accountId)};""")
+
 # --- ingresos: los que no tienen día fijo se esperan completos; siempre hay botón para registrar ---
 sub("""    if(st && st>first && src.frequency!=='semanal') return 0; // sin día conocido y empezaste este mes: ya estaba en tus saldos
 """, "")
@@ -99,7 +140,8 @@ prelude = r'''// GENERADO por build_finclasica.py desde clasica/index.html (secc
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
 import { dbGet, dbPost, dbPatch, dbDelete } from './db.js';
 import { escapeHTML, localDate, showToast as toast } from './util.js';
-import { cardStatus as v2CardStatus } from './fin.js';
+import { cardStatus as v2CardStatus, goalCurrent as v2GoalCurrent, goalPct as v2GoalPct, fmtPct as v2FmtPct, pctTaken as v2PctTaken, allocPatch as v2AllocPatch, allocThisMonth as v2AllocThisMonth } from './fin.js';
+const goalAllocTxt = g => v2GoalPct(g) ? `${v2FmtPct(v2GoalPct(g))} de tu ahorro de cada mes · este mes +${fmtMoney(v2AllocThisMonth(fin, g))}` : 'Sin % de tu ahorro: edítala para que avance';
 
 // ── Adaptador ──
 let currentSection = 'finance', finView = 'home', currentView = 'today';

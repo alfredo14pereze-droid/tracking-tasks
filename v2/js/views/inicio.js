@@ -1,12 +1,12 @@
 // Inicio: tareas de hoy (marcables), hábitos de la semana (marcables), finanzas y Whoop.
-import { safeGet, AuthError } from '../db.js?v=202611201045';
-import * as F from '../fin.js?v=202611201045';
-import * as K from '../tareas.js?v=202611201045';
-import { toggleHabitDay } from '../habitos.js?v=202611201045';
-import { ask, withBusy, aiLabel, cache } from '../ia.js?v=202611201045';
-import * as SA from '../salud.js?v=202611201045';
-import { openTaskModal } from './tareas.js?v=202611201045';
-import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon, showToast } from '../util.js?v=202611201045';
+import { safeGet, AuthError } from '../db.js?v=202611241810';
+import * as F from '../fin.js?v=202611241810';
+import * as K from '../tareas.js?v=202611241810';
+import { toggleHabitDay } from '../habitos.js?v=202611241810';
+import { ask, withBusy, aiLabel, cache } from '../ia.js?v=202611241810';
+import * as SA from '../salud.js?v=202611241810';
+import { openTaskModal } from './tareas.js?v=202611241810';
+import { escapeHTML, todayStr, localDate, daysUntil, weekKey, todayIdx, longDate, greeting, icon, showToast } from '../util.js?v=202611241810';
 
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 const CATEGORY = { trabajo: 'Trabajo', personal: 'Personal', fitness: 'Fitness', proyectos: 'Proyectos' };

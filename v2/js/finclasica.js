@@ -1,9 +1,10 @@
 // GENERADO por build_finclasica.py desde clasica/index.html (sección FINANZAS). No editar a mano:
 // cambia la clásica o el script y vuelve a generar. Es la misma lógica de la clásica (saldos, tarjetas,
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
-import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611201045';
-import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611201045';
-import { cardStatus as v2CardStatus } from './fin.js?v=202611201045';
+import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611241810';
+import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611241810';
+import { cardStatus as v2CardStatus, goalCurrent as v2GoalCurrent, goalPct as v2GoalPct, fmtPct as v2FmtPct, pctTaken as v2PctTaken, allocPatch as v2AllocPatch, allocThisMonth as v2AllocThisMonth } from './fin.js?v=202611241810';
+const goalAllocTxt = g => v2GoalPct(g) ? `${v2FmtPct(v2GoalPct(g))} de tu ahorro de cada mes · este mes +${fmtMoney(v2AllocThisMonth(fin, g))}` : 'Sin % de tu ahorro: edítala para que avance';
 
 // ── Adaptador ──
 let currentSection = 'finance', finView = 'home', currentView = 'today';
@@ -86,17 +87,7 @@ function accBalance(id){
 // Ahorro del mes = lo que entra a cuentas de ahorro/inversión desde otras cuentas − lo que sale de ellas.
 // Movimientos entre NU y GBM no cuentan; rendimientos tampoco (no son aportación tuya).
 function isSavingsAcc(id){ const a=fin.accounts.find(x=>x.id===id); return !!a && (a.kind==='savings' || a.kind==='investment'); }
-function savedInMonth(offset=0){
-  let s = 0;
-  for(const t of fin.tx){
-    if(t.type!=='transfer' || t.is_allocation || !txInMonth(t,offset)) continue;
-    if(fin.accounts.some(a=>(a.id===t.to_account_id || a.id===t.account_id) && (a.kind==='credit' || isLoan(a)))) continue; // (v2)
-    const from = isSavingsAcc(t.account_id), to = isSavingsAcc(t.to_account_id);
-    if(to && !from) s += Number(t.amount_cents)||0;
-    else if(from && !to) s -= Number(t.amount_cents)||0;
-  }
-  return s;
-}
+function savedInMonth(offset=0){ const {inc, exp} = monthTotals(offset); return inc - exp; } // (v2) ahorro = ingresos − gastos
 function receivedInMonth(catId, offset=0){ return fin.tx.filter(t=>t.type==='income' && t.category_id===catId && (/^income:/.test(t.auto_key||'') ? t.auto_key.slice(-7)===monthStartStr(offset).slice(0,7) : txInMonth(t,offset))).reduce((s,t)=>s+(Number(t.amount_cents)||0),0); } // (v2) mensualidad de varios meses: cuenta en el mes que cubre
 function expectedIncomes(){
   const srcs = fin.incomes.filter(x=>x.active && ownedPct(fin.accounts.find(a=>a.id===x.account_id))===100); // (v2) el pago del carro no es ingreso tuyo
@@ -242,8 +233,8 @@ function savingsCardHTML(){
   if(!goal && !saved) return '';
   const pct = goal>0 ? saved*100/goal : 0;
   return `<div class="fin-card">
-    <div class="fin-label">Ahorrado este mes</div>
-    <div class="fin-big ${goal>0&&pct>=100?'pos':''}">${fmtMoney(saved)}</div>
+    <div class="fin-label">${saved<0?'Déficit':'Ahorrado'} en ${escapeHTML(monthLabel(0))}</div>
+    <div class="fin-big ${saved<0?'neg':goal>0&&pct>=100?'pos':''}">${fmtMoney(Math.abs(saved))}</div>
     ${goal>0 ? `<div class="fin-bar"><div class="${savingsClass(pct)}" style="width:${Math.max(0,Math.min(100,pct)).toFixed(1)}%"></div></div>
       <div class="fin-sub">${pct>=100?'¡Meta cumplida! ':''}Meta ${fmtMoney(goal)} (${Math.round(pct)}%)</div>` : '<div class="fin-sub">Sin meta de ahorro</div>'}
   </div>`;
@@ -700,7 +691,7 @@ function monthsUntil(due){
 // Varias metas en la misma cuenta: el saldo se reparte por fecha límite (la más cercana se llena primero).
 function goalSiblings(g){ const k=x=>x.due_date||'9999-12-31'; return fin.goals.filter(x=>x.account_id===g.account_id).sort((a,b)=>k(a)<k(b)?-1:k(a)>k(b)?1:String(a.created_at).localeCompare(String(b.created_at))); }
 function goalCurrent(g){
-  if(!g.account_id) return Number(g.saved_cents)||0;
+  if(!g.account_id) return v2GoalCurrent(fin, g); // (v2) saved_cents + su % del ahorro de cada mes
   const acc = fin.accounts.find(a=>a.id===g.account_id);
   const pool = Math.max(0, acc && acc.kind==='investment' && accPositions(acc.id).length ? accBalance(acc.id) : accountValue(g.account_id));
   const sib = goalSiblings(g);
@@ -713,11 +704,11 @@ function finGoalsHTML(){
   const cards = fin.goals.map(g=>{
     const target = Number(g.target_cents)||0;
     const cur = goalCurrent(g);
-    if(!target) return `<div class="fin-card fin-goal" data-goal="${escapeAttr(g.id)}"><div class="fin-acc-head"><div class="fin-acc-name">${escapeHTML(g.name)}</div><span class="fin-kind">Sin monto total</span></div><div class="fin-big">${fmtMoney(cur)}</div><div class="fin-sub">${g.account_id?`Vive en: ${escapeHTML(accName(g.account_id))}`:'Progreso capturado a mano'}</div></div>`;
+    if(!target) return `<div class="fin-card fin-goal" data-goal="${escapeAttr(g.id)}"><div class="fin-acc-head"><div class="fin-acc-name">${escapeHTML(g.name)}</div><span class="fin-kind">Sin monto total</span></div><div class="fin-big">${fmtMoney(cur)}</div><div class="fin-sub">${g.account_id?`Vive en: ${escapeHTML(accName(g.account_id))}`:goalAllocTxt(g)}</div></div>`;
     const pct = target>0 ? Math.min(100, cur*100/target) : 0;
     const remaining = Math.max(0, target-cur);
     const lines = [];
-    lines.push(g.account_id ? `Vive en: ${escapeHTML(accName(g.account_id))}${goalSiblings(g).length>1?' (se reparte por fecha con otras metas)':''}` : 'Progreso capturado a mano');
+    lines.push(g.account_id ? `Vive en: ${escapeHTML(accName(g.account_id))}${goalSiblings(g).length>1?' (se reparte por fecha con otras metas)':''}` : goalAllocTxt(g));
     if(g.due_date){
       const m = monthsUntil(g.due_date);
       const when = m<0 ? 'ya venció' : m===0 ? 'vence este mes' : `faltan ${m} ${m===1?'mes':'meses'}`;
@@ -990,12 +981,12 @@ function openGoalModal(id){
         <input type="date" class="form-input" id="goalDue" value="${escapeAttr(g&&g.due_date||'')}"></div>
     </div>
     <div class="form-group"><label class="form-label" for="goalAccount">¿Dónde vive el dinero?</label>
-      <select class="form-input form-select fin-field" id="goalAccount"><option value="">Ninguna cuenta (lo capturo a mano)</option>${optionList(accs, g?g.account_id:'')}</select></div>
+      <select class="form-input form-select fin-field" id="goalAccount"><option value="">Ninguna cuenta (se llena con un % de mi ahorro)</option>${optionList(accs, g?g.account_id:'')}</select></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label" for="goalMonthly">Aportación mensual</label>
+      <div class="form-group"><label class="form-label" for="goalMonthly">Quiero juntar al mes (plan)</label>
         <input class="form-input fin-money" id="goalMonthly" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${g&&Number(g.monthly_contribution_cents)?centsToInput(g.monthly_contribution_cents):''}"></div>
-      <div class="form-group" id="goalSavedWrap"><label class="form-label" for="goalSaved">Llevo ahorrado</label>
-        <input class="form-input fin-money" id="goalSaved" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${g&&Number(g.saved_cents)?centsToInput(g.saved_cents):''}"></div>
+      <div class="form-group" id="goalSavedWrap"><label class="form-label" for="goalPct">% de mi ahorro de cada mes</label>
+        <input class="form-input" id="goalPct" inputmode="decimal" autocomplete="off" style="font-size:16px" placeholder="0" value="${g&&v2GoalPct(g)?v2GoalPct(g):''}"></div>
     </div>
     <div class="fin-hint" id="goalHint"></div>`;
   const footer = `${g?'<button type="button" class="btn btn-ghost fin-modal-del" id="goalDelete">Eliminar</button>':''}<button type="button" class="btn btn-primary" id="goalSave">Guardar</button>`;
@@ -1003,20 +994,25 @@ function openGoalModal(id){
   const syncAcc = ()=>{
     const hasAcc = !!finVal('goalAccount');
     document.getElementById('goalSavedWrap').style.visibility = hasAcc ? 'hidden' : '';
-    document.getElementById('goalHint').textContent = hasAcc ? 'El progreso es el saldo de esa cuenta.' : 'El progreso es lo que captures en "Llevo ahorrado".';
+    const free = Math.max(0, 100 - v2PctTaken(fin, g ? g.id : null));
+    document.getElementById('goalHint').textContent = hasAcc ? 'El progreso es el saldo de esa cuenta.' : `Cada mes recibe ese % de lo que ahorras (ingresos − gastos); los meses con déficit no le quitan. Libre: ${v2FmtPct(free)}.`;
   };
   document.getElementById('goalAccount').onchange = syncAcc; syncAcc();
   if(!g) setTimeout(()=>document.getElementById('goalName').focus(), 50);
   document.getElementById('goalSave').onclick = async ()=>{
     const name = finVal('goalName');
     const targetRaw = finVal('goalTarget'); const target = targetRaw==='' ? null : parseCents(targetRaw);
-    const monthlyRaw = finVal('goalMonthly'), savedRaw = finVal('goalSaved');
+    const monthlyRaw = finVal('goalMonthly'), pctRaw = finVal('goalPct').replace('%','').replace(',','.').trim();
     const monthly = monthlyRaw==='' ? 0 : parseCents(monthlyRaw);
-    const saved = savedRaw==='' ? 0 : parseCents(savedRaw);
+    const accountId = finVal('goalAccount') || null;
+    const pct = accountId || pctRaw==='' ? 0 : Math.round(Number(pctRaw)*100)/100;
+    if(!(pct>=0 && pct<=100)){ showToast('El % va de 0 a 100','error'); return; }
+    if(pct + v2PctTaken(fin, g ? g.id : null) > 100){ showToast(`Entre todas las metas pasan de 100%: te queda ${v2FmtPct(Math.max(0, 100 - v2PctTaken(fin, g ? g.id : null)))}`,'error'); return; }
+    const saved = 0;
     if(!name){ showToast('Escribe un nombre','error'); return; }
     if(targetRaw!=='' && !target){ showToast('Revisa el monto objetivo','error'); return; }
     if(monthly===null || saved===null){ showToast('Revisa los montos','error'); return; }
-    const payload = {name, target_cents:target, due_date: finVal('goalDue') || null, account_id: finVal('goalAccount') || null, monthly_contribution_cents:monthly, saved_cents:saved};
+    const payload = {name, target_cents:target, due_date: finVal('goalDue') || null, account_id: accountId, monthly_contribution_cents:monthly, ...v2AllocPatch(fin, g, pct, accountId)};
     try{
       if(g){ const [row] = await dbPatch('money_goals', payload, `?id=eq.${g.id}`); Object.assign(g, row || payload); }
       else { const [row] = await dbPost('money_goals', payload); fin.goals.push(row); }

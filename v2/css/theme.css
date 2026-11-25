@@ -671,3 +671,10 @@ textarea{font-family:inherit;font-size:16px}
 .day-nav-label input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
 .meal-edit{background:none;border:none;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
 .meal-favs{margin:2px 0 6px}.meal-favs .opt{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;line-height:34px}
+/* Ahorrado en [mes] (ingresos − gastos, calculado) */
+.sav-num{font-size:32px;font-weight:600;letter-spacing:-.02em;line-height:1.1;color:var(--positive);overflow-wrap:anywhere}
+.sav-card.deficit .sav-num,.sav-card.deficit .sav-z{color:var(--alert)}
+.sav-break{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--text-2,#5E6066);min-width:0}
+.sav-break span{min-width:0}
+.sav-z{font-weight:600;color:var(--positive)}
+.sav-rate{font-weight:400}

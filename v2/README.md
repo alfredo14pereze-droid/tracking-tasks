@@ -106,7 +106,15 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
 - **Metas con aportación mensual** (`sql/2026-11-04-aportaciones-metas.sql`, tabla `goal_contributions`): cada meta sin
   cuenta es un "sobre" (`money_goals.saved_cents`); "Aparté" registra la aportación del mes y suma; "Sacar" resta.
   `monthly_contribution_cents` = cuánto apartar al mes. La tarjeta Metas muestra "Este mes: $X de $Y".
-- "Te quedó" (antes "Ahorrado") = ingresos − gastos del periodo, sin cuentas que no son 100% tuyas.
+- **Ahorro calculado (24-nov-2026):** ahorro = ingresos − gastos del periodo (`F.savingsOf`), sin cuentas que no son
+  100% tuyas; no se guarda en ninguna tabla. Transferencias entre tus cuentas (pago de tarjeta, Plata → NU/GBM) no
+  cuentan; lo comprado con crédito cuenta al comprar. Tarjeta "Ahorrado en [periodo]" en Resumen (negativo = "Déficit"
+  en `--alert`) con Ingresos · Gastos · Ahorro (% del ingreso). Finanzas avanzada usa la misma fórmula (`savedInMonth`).
+- **Metas por % del ahorro** (`sql/2026-11-24-metas-reparto.sql`, `money_goals.alloc_pct` + `alloc_from`): una meta sin
+  cuenta = `saved_cents` + su % del ahorro de cada mes desde `alloc_from` (`F.allocatedTo`; meses con déficit dan 0, no
+  restan; el mes en curso cuenta). Suma de % ≤ 100 (`F.pctTaken`). Al cambiar el %, `F.allocPatch` pasa lo repartido en
+  meses cerrados a `saved_cents` y el % nuevo cuenta desde este mes. Ya no hay "Aparté" ni "Llevo ahorrado"; solo
+  "Usé" (resta de `saved_cents`). Metas con cuenta siguen = saldo de la cuenta.
 - **Inversiones** (Resumen): por fondo valor, % del portafolio, cambio del mes / 3 meses / desde lo aportado y mini
   gráfica (`F.fundStats`); avisos factuales (`F.fundAlerts`: caída ≥3% en el mes, 3+ meses a la baja, debajo de lo
   aportado, ≥50% en un fondo, valores sin actualizar). "Actualizar valores" guarda `position_valuations` del mes y puede

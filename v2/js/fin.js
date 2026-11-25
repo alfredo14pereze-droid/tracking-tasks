@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611201045';
-import { localDate } from './util.js?v=202611201045';
+import { safeGet } from './db.js?v=202611241810';
+import { localDate } from './util.js?v=202611241810';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions, contribs] = await Promise.all([
@@ -166,18 +166,16 @@ export function totals(f, r) {
 export function spentOn(f, day) {
   return f.tx.filter(t => t.type === 'expense' && t.occurred_on === day).reduce((s, t) => s + (Number(t.amount_cents) || 0), 0);
 }
-const isSavingsAcc = (f, id) => { const a = f.accounts.find(x => x.id === id); return !!a && (a.kind === 'savings' || a.kind === 'investment'); };
-// Ahorro = transferencias hacia ahorro/inversión desde otras cuentas − las que salen (sin repartos).
-export function savedIn(f, r) {
-  let s = 0;
-  for (const t of f.tx) {
-    if (t.type !== 'transfer' || t.is_allocation || !inRange(t, r)) continue;
-    const from = isSavingsAcc(f, t.account_id), to = isSavingsAcc(f, t.to_account_id);
-    if (to && !from) s += Number(t.amount_cents) || 0;
-    else if (from && !to) s -= Number(t.amount_cents) || 0;
-  }
-  return s;
+// Ahorro del periodo = ingresos − gastos (no se guarda en ninguna tabla). Las transferencias entre tus
+// cuentas (pago de tarjeta, Plata → NU/GBM) no son ni ingreso ni gasto; lo comprado con crédito cuenta
+// como gasto el día de la compra. saved < 0 = déficit. rate = % del ingreso (null sin ingresos).
+export function savingsOf(f, r) {
+  const { inc, exp } = totals(f, r);
+  const saved = inc - exp;
+  return { inc, exp, saved, rate: inc > 0 ? saved / inc * 100 : null };
 }
+const nextMonthStr = ms => { const [y, m] = ms.split('-').map(Number); return localDate(new Date(y, m, 1)); };
+const monthRangeOf = ms => ({ from: ms, to: nextMonthStr(ms) });
 // Presupuesto vigente: el del mes actual o el último anterior (se repite). null = sin presupuesto.
 export function currentBudget(f, catId) {
   const ms = monthStartStr(0);
@@ -209,7 +207,7 @@ export function monthlySpend(f, n = 6) {
 
 // ── Metas (igual que goalCurrent de v1) ──────────────
 export function goalCurrent(f, g) {
-  if (!g.account_id) return Number(g.saved_cents) || 0;
+  if (!g.account_id) return (Number(g.saved_cents) || 0) + allocatedTo(f, g);
   const acc = f.accounts.find(a => a.id === g.account_id);
   const pool = Math.max(0, acc && acc.kind === 'investment' && accPositions(f, acc.id).length ? accBalance(f, acc.id) : accountValue(f, g.account_id));
   const k = x => x.due_date || '9999-12-31';
@@ -412,6 +410,33 @@ export function netWorthParts(f) {
   for (const l of activeAccounts(f).filter(isLoan)) { const o = loanOwed(f, l); if (o > 0) { if (l.kind === 'lent') teDeben += o; else debes += o; } }
   return { cuentas, funds, teDeben, tarjetas, debes, fuera };
 }
+// ── Metas que se llenan con un % del ahorro de cada mes ──
+// Meta sin cuenta = saved_cents (lo que ya llevaba, menos lo que sacaste) + su % del ahorro de cada mes
+// desde alloc_from. Los meses con déficit reparten 0 (no le quitan a la meta). El mes en curso cuenta y
+// va cambiando conforme registras ingresos y gastos.
+export const goalPct = g => Number(g.alloc_pct) || 0;
+export const fmtPct = p => `${(Number(p) || 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })}%`;
+export const usesAlloc = g => !g.account_id && goalPct(g) > 0;
+const share = (saved, pct) => saved > 0 ? Math.floor(saved * pct / 100) : 0;
+export function allocatedTo(f, g, until = monthStartStr(1)) {
+  if (!usesAlloc(g) || !g.alloc_from) return 0;
+  let s = 0;
+  for (let ms = g.alloc_from.slice(0, 8) + '01'; ms < until; ms = nextMonthStr(ms)) s += share(savingsOf(f, monthRangeOf(ms)).saved, goalPct(g));
+  return s;
+}
+export const allocThisMonth = (f, g) => usesAlloc(g) ? share(savingsOf(f, monthRangeOf(monthStartStr(0))).saved, goalPct(g)) : 0;
+// % que ya tienen las demás metas sin cuenta (para no pasar de 100%).
+export const pctTaken = (f, exceptId) => f.goals.filter(x => !x.archived && x.id !== exceptId && !x.account_id).reduce((s, x) => s + goalPct(x), 0);
+// Al cambiar el % (o pasar la meta a una cuenta): lo repartido en meses cerrados con el % anterior pasa a
+// saved_cents y el % nuevo cuenta desde este mes. Así cambiar el % no reescribe la historia.
+export function allocPatch(f, g, pct, accountId = null) {
+  const ms = monthStartStr(0);
+  const base = g ? (Number(g.saved_cents) || 0) + allocatedTo(f, g, ms) : 0;
+  const on = !accountId && pct > 0;
+  if (g && !g.account_id && !accountId && goalPct(g) === pct) return {};
+  return { alloc_pct: accountId ? 0 : pct, alloc_from: on ? ms : null, saved_cents: base };
+}
+
 // ── Metas con aportación mensual ─────────────────────
 export const goalMonthly = g => Number(g.monthly_contribution_cents) || 0;
 export function contributedThisMonth(f, g) {
