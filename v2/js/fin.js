@@ -1,7 +1,7 @@
 // Finanzas: carga y cálculos. Usa las MISMAS tablas y fórmulas que v1 (index.html,
 // sección "FINANZAS"), para que v1 y v2 den los mismos saldos. Montos en centavos.
-import { safeGet } from './db.js?v=202611241810';
-import { localDate } from './util.js?v=202611241810';
+import { safeGet } from './db.js?v=202611261013';
+import { localDate } from './util.js?v=202611261013';
 
 export async function loadFinance() {
   const [accounts, categories, tx, budgets, goals, positions, valuations, cards, captures, tokens, cardMap, attempts, incomes, assumptions, contribs] = await Promise.all([
@@ -154,12 +154,19 @@ export function netWorth(f) {
 // Parte que es tuya de una cuenta (B-Project 50, Carro 0). Las que no son 100% tuyas no cuentan en ingresos/gastos.
 export const ownedPct = a => (a && a.owned_pct !== undefined && a.owned_pct !== null ? Number(a.owned_pct) : 100);
 const isShared = (f, id) => ownedPct(f.accounts.find(a => a.id === id)) < 100;
+// Devolución = ingreso con categoría de GASTO (p. ej. H&M en Shopping): no es ingreso, resta del gasto.
+export const isRefund = (f, t) => t.type === 'income' && !!t.category_id && f.categories.find(c => c.id === t.category_id)?.kind === 'expense';
+// Ingresos del periodo: un pago adelantado (auto_key income:…:AAAA-MM) cuenta en el mes que cubre, no el día
+// que llegó (incomeIn). Gastos: el día de la compra, menos las devoluciones.
 export function totals(f, r) {
   let inc = 0, exp = 0;
   for (const t of f.tx) {
-    if (!inRange(t, r) || isShared(f, t.account_id)) continue;
-    if (t.type === 'income') inc += Number(t.amount_cents) || 0;
-    else if (t.type === 'expense') exp += Number(t.amount_cents) || 0;
+    if (isShared(f, t.account_id)) continue;
+    const amt = Number(t.amount_cents) || 0;
+    if (t.type === 'income') {
+      if (isRefund(f, t)) { if (inRange(t, r)) exp -= amt; }
+      else if (incomeIn(t, r.from, r.to)) inc += amt;
+    } else if (t.type === 'expense' && inRange(t, r)) exp += amt;
   }
   return { inc, exp };
 }
@@ -187,8 +194,8 @@ export function budgetRows(f, r) {
   return activeCats(f, 'expense').map(c => {
     const b = currentBudget(f, c.id);
     if (!b) return null;
-    const spent = f.tx.filter(t => t.type === 'expense' && t.category_id === c.id && inRange(t, r))
-      .reduce((s, t) => s + (Number(t.amount_cents) || 0), 0);
+    const spent = f.tx.filter(t => t.category_id === c.id && inRange(t, r) && (t.type === 'expense' || isRefund(f, t)))
+      .reduce((s, t) => s + (t.type === 'expense' ? 1 : -1) * (Number(t.amount_cents) || 0), 0);
     return { cat: c, budget: Number(b.amount_cents) * r.months, spent };
   }).filter(Boolean).sort((a, b) => b.spent / b.budget - a.spent / a.budget);
 }

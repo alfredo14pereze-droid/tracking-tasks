@@ -1,12 +1,12 @@
 // Finanzas v2: mismas tablas que v1 (accounts, transactions, budgets, money_goals…).
 // Escribe con actualización optimista + rollback + toast, como v1.
-import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611241810';
-import { syncYields, yieldAccounts, monthYield, pendingYield } from '../rendimientos.js?v=202611241810';
-import { bindDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611241810';
-import { FIN_TABS } from '../finclasica.js?v=202611241810';
-import { openStatement } from './estado.js?v=202611241810';
-import { ask, withBusy, aiLabel } from '../ia.js?v=202611241810';
-import * as F from '../fin.js?v=202611241810';
+import { dbPost, dbPatch, dbDelete, dbUpsert, SUPABASE_URL, SUPABASE_KEY } from '../db.js?v=202611261013';
+import { syncYields, yieldAccounts, monthYield, pendingYield } from '../rendimientos.js?v=202611261013';
+import { bindDictation, escapeHTML, localDate, showToast, icon, openModal, closeModal } from '../util.js?v=202611261013';
+import { FIN_TABS } from '../finclasica.js?v=202611261013';
+import { openStatement } from './estado.js?v=202611261013';
+import { ask, withBusy, aiLabel } from '../ia.js?v=202611261013';
+import * as F from '../fin.js?v=202611261013';
 
 const PERIODS = { mes: 'Mes', trimestre: 'Trimestre', anio: 'Año' };
 const ACC_KIND = { debit: 'Débito', credit: 'Crédito', savings: 'Ahorro', investment: 'Inversión', cash: 'Efectivo' };
@@ -161,7 +161,7 @@ function txRow(f, t, caps) {
     ic = '<path d="M4 8h14l-3-3M20 16H6l3 3"/>';
   } else {
     title = t.note || F.catName(f, t.category_id);
-    sub = [cap ? 'Apple Pay' : '', t.note ? F.catName(f, t.category_id) : '', F.accName(f, t.account_id)].filter(Boolean).join(' · ');
+    sub = [cap ? 'Apple Pay' : '', F.isRefund(f, t) ? 'Devolución' : '', t.note ? F.catName(f, t.category_id) : '', F.accName(f, t.account_id)].filter(Boolean).join(' · ');
     sign = t.type === 'income' ? '+' : '−';
     cls = t.type === 'income' ? ' pos' : '';
     ic = t.type === 'income' ? '<path d="M17 7L7 17M15 17H7V9"/>' : '<path d="M7 17L17 7M9 7h8v8"/>';
@@ -570,6 +570,8 @@ function openExpense() {
       </div>
       <div class="small" id="gHeard" aria-live="polite"></div>
     </section>
+    <div class="seg" role="group" aria-label="Tipo" style="margin-top:12px"><button type="button" data-gkind="expense" aria-pressed="true">Gasto</button><button type="button" data-gkind="refund" aria-pressed="false">Devolución</button></div>
+    <p class="small" id="gRefundHint" hidden style="margin:6px 0 0">Te regresaron dinero de una compra: resta del gasto de esa categoría (no cuenta como ingreso).</p>
     <label class="flabel" for="gAmt">Monto</label>
     <input class="field" id="gAmt" inputmode="decimal" autocomplete="off" placeholder="$0.00">
     <label class="flabel" for="gCat">Categoría</label>
@@ -581,6 +583,12 @@ function openExpense() {
     <label class="flabel" for="gNote">Nota (opcional)</label>
     <input class="field" id="gNote" maxlength="120" autocomplete="off" placeholder="Oxxo, café…">
   `, `<button type="button" class="btn-primary" id="gSave">Guardar gasto</button>`);
+  document.querySelectorAll('#modal [data-gkind]').forEach(b => b.onclick = () => {
+    const refund = b.dataset.gkind === 'refund';
+    document.querySelectorAll('#modal [data-gkind]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    document.getElementById('gRefundHint').hidden = !refund;
+    document.getElementById('gSave').textContent = refund ? 'Guardar devolución' : 'Guardar gasto';
+  });
   try { const last = localStorage.getItem('v2LastAcc'); if (last && accs.some(a => a.id === last)) document.getElementById('gAcc').value = last; } catch { /* sin storage */ }
   const voice = document.getElementById('gVoice');
   const fill = () => {
@@ -645,9 +653,11 @@ async function saveExpense() {
   const date = document.getElementById('gDate').value;
   if (!amount) return showToast('Escribe un monto válido', 'error');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return showToast('Elige la fecha', 'error');
+  const refund = document.querySelector('#modal [data-gkind="refund"]')?.getAttribute('aria-pressed') === 'true';
+  if (refund && !document.getElementById('gCat').value) return showToast('Elige la categoría de la compra que te devolvieron', 'error');
   try { localStorage.setItem('v2LastAcc', document.getElementById('gAcc').value); } catch { /* sin storage */ }
   const tx = {
-    type: 'expense', amount_cents: amount, occurred_on: date,
+    type: refund ? 'income' : 'expense', amount_cents: amount, occurred_on: date, // devolución = ingreso con categoría de gasto (F.isRefund)
     account_id: document.getElementById('gAcc').value,
     category_id: document.getElementById('gCat').value || null,
     note: document.getElementById('gNote').value.trim() || null
@@ -659,10 +669,10 @@ async function saveExpense() {
   try {
     const [row] = await dbPost('transactions', tx);
     Object.assign(temp, row);
-    paint(); showToast('Gasto guardado');
+    paint(); showToast(refund ? 'Devolución guardada' : 'Gasto guardado');
   } catch (e) {
     state.f.tx = state.f.tx.filter(t => t !== temp); paint();
-    showToast('No se pudo guardar el gasto', 'error');
+    showToast(refund ? 'No se pudo guardar la devolución' : 'No se pudo guardar el gasto', 'error');
   }
 }
 

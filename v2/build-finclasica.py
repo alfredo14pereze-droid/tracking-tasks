@@ -40,12 +40,15 @@ sub("""    if(accPositions(a.id).length) return; // sus fondos se listan aparte
 sub("""function monthTotals(offset=0){
   let inc=0, exp=0;
   for(const t of fin.tx){
-    if(!txInMonth(t,offset)) continue;""",
+    if(!txInMonth(t,offset)) continue;
+    if(t.type==='income') inc += Number(t.amount_cents)||0;
+    else if(t.type==='expense') exp += Number(t.amount_cents)||0;
+  }
+  return {inc, exp};
+}""",
 """function ownedPct(a){ return a && a.owned_pct!==undefined && a.owned_pct!==null ? Number(a.owned_pct) : 100; } // (v2)
-function monthTotals(offset=0){
-  let inc=0, exp=0;
-  for(const t of fin.tx){
-    if(!txInMonth(t,offset) || ownedPct(fin.accounts.find(a=>a.id===t.account_id))<100) continue;""")
+// (v2) mismo cálculo que F.totals: sin cuentas que no son 100% tuyas, adelantos en el mes que cubren, devoluciones restan del gasto
+function monthTotals(offset=0){ return v2Totals(fin, {from:monthStartStr(offset), to:monthStartStr(offset+1)}); }""")
 
 # --- tarjetas: pago para no generar intereses (corte), no la deuda total; usa cardStatus de fin.js ---
 sub("""    const debt = cardDebt(a.id); const d = nextDateForDay(c.pay_day);
@@ -140,7 +143,7 @@ prelude = r'''// GENERADO por build_finclasica.py desde clasica/index.html (secc
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
 import { dbGet, dbPost, dbPatch, dbDelete } from './db.js';
 import { escapeHTML, localDate, showToast as toast } from './util.js';
-import { cardStatus as v2CardStatus, goalCurrent as v2GoalCurrent, goalPct as v2GoalPct, fmtPct as v2FmtPct, pctTaken as v2PctTaken, allocPatch as v2AllocPatch, allocThisMonth as v2AllocThisMonth } from './fin.js';
+import { cardStatus as v2CardStatus, totals as v2Totals, goalCurrent as v2GoalCurrent, goalPct as v2GoalPct, fmtPct as v2FmtPct, pctTaken as v2PctTaken, allocPatch as v2AllocPatch, allocThisMonth as v2AllocThisMonth } from './fin.js';
 const goalAllocTxt = g => v2GoalPct(g) ? `${v2FmtPct(v2GoalPct(g))} de tu ahorro de cada mes · este mes +${fmtMoney(v2AllocThisMonth(fin, g))}` : 'Sin % de tu ahorro: edítala para que avance';
 
 // ── Adaptador ──

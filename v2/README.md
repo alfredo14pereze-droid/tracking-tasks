@@ -110,6 +110,9 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
   100% tuyas; no se guarda en ninguna tabla. Transferencias entre tus cuentas (pago de tarjeta, Plata → NU/GBM) no
   cuentan; lo comprado con crédito cuenta al comprar. Tarjeta "Ahorrado en [periodo]" en Resumen (negativo = "Déficit"
   en `--alert`) con Ingresos · Gastos · Ahorro (% del ingreso). Finanzas avanzada usa la misma fórmula (`savedInMonth`).
+  Ingresos adelantados (`auto_key income:…:AAAA-MM`) cuentan en el mes que cubren (`F.incomeIn`), no el día que llegaron.
+  **Devolución** = ingreso con categoría de GASTO (`F.isRefund`): resta del gasto de esa categoría el día que llega, no es
+  ingreso; "+ Gasto" tiene el selector Gasto/Devolución. `monthTotals` de Finanzas avanzada llama a `F.totals`.
 - **Metas por % del ahorro** (`sql/2026-11-24-metas-reparto.sql`, `money_goals.alloc_pct` + `alloc_from`): una meta sin
   cuenta = `saved_cents` + su % del ahorro de cada mes desde `alloc_from` (`F.allocatedTo`; meses con déficit dan 0, no
   restan; el mes en curso cuenta). Suma de % ≤ 100 (`F.pctTaken`). Al cambiar el %, `F.allocPatch` pasa lo repartido en

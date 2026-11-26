@@ -5,9 +5,9 @@
 //  · Día fijo (Plata, día 10): los intereses se acumulan del 10 al 9 y se abonan juntos el día 10
 //    en un solo movimiento. Mientras tanto se muestran "por cobrar" y no entran al saldo.
 // Si cambias el monto a mano (amount_cents ≠ auto_amount_cents), la app ya no lo vuelve a tocar.
-import { dbPost, dbPatch } from './db.js?v=202611241810';
-import { localDate } from './util.js?v=202611241810';
-import * as F from './fin.js?v=202611241810';
+import { dbPost, dbPatch } from './db.js?v=202611261013';
+import { localDate } from './util.js?v=202611261013';
+import * as F from './fin.js?v=202611261013';
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 export const yieldKey = (accId, ym) => `yield:${accId}:${ym}`;

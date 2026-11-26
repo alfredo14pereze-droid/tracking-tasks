@@ -1,9 +1,9 @@
 // GENERADO por build_finclasica.py desde clasica/index.html (sección FINANZAS). No editar a mano:
 // cambia la clásica o el script y vuelve a generar. Es la misma lógica de la clásica (saldos, tarjetas,
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
-import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611241810';
-import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611241810';
-import { cardStatus as v2CardStatus, goalCurrent as v2GoalCurrent, goalPct as v2GoalPct, fmtPct as v2FmtPct, pctTaken as v2PctTaken, allocPatch as v2AllocPatch, allocThisMonth as v2AllocThisMonth } from './fin.js?v=202611241810';
+import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611261013';
+import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611261013';
+import { cardStatus as v2CardStatus, totals as v2Totals, goalCurrent as v2GoalCurrent, goalPct as v2GoalPct, fmtPct as v2FmtPct, pctTaken as v2PctTaken, allocPatch as v2AllocPatch, allocThisMonth as v2AllocThisMonth } from './fin.js?v=202611261013';
 const goalAllocTxt = g => v2GoalPct(g) ? `${v2FmtPct(v2GoalPct(g))} de tu ahorro de cada mes · este mes +${fmtMoney(v2AllocThisMonth(fin, g))}` : 'Sin % de tu ahorro: edítala para que avance';
 
 // ── Adaptador ──
@@ -97,15 +97,8 @@ function expectedIncomes(){
 function savingsGoal(){ return activeCats('savings').reduce((s,c)=>{ const b=currentBudget(c.id); return s + (b ? Number(b.amount_cents)||0 : 0); }, 0); }
 function savingsClass(pct){ return pct>=100 ? 'ok' : pct>=80 ? 'warn' : 'over'; }
 function ownedPct(a){ return a && a.owned_pct!==undefined && a.owned_pct!==null ? Number(a.owned_pct) : 100; } // (v2)
-function monthTotals(offset=0){
-  let inc=0, exp=0;
-  for(const t of fin.tx){
-    if(!txInMonth(t,offset) || ownedPct(fin.accounts.find(a=>a.id===t.account_id))<100) continue;
-    if(t.type==='income') inc += Number(t.amount_cents)||0;
-    else if(t.type==='expense') exp += Number(t.amount_cents)||0;
-  }
-  return {inc, exp};
-}
+// (v2) mismo cálculo que F.totals: sin cuentas que no son 100% tuyas, adelantos en el mes que cubren, devoluciones restan del gasto
+function monthTotals(offset=0){ return v2Totals(fin, {from:monthStartStr(offset), to:monthStartStr(offset+1)}); }
 function catName(id){ const c=fin.categories.find(x=>x.id===id); return c ? c.name : 'Sin categoría'; }
 function accName(id){ const a=fin.accounts.find(x=>x.id===id); return a ? a.name : '—'; }
 function isLoan(a){ return a && (a.kind==='lent' || a.kind==='borrowed'); }
