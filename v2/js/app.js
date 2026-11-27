@@ -1,22 +1,22 @@
 try { document.documentElement.classList.toggle('privacy', localStorage.getItem('v2Privacy') === '1'); } catch { /* sin storage */ }
 // Shell de v2: sesión, router por hash y navegación (inferior en móvil, lateral en escritorio).
-import { sb, AuthError } from './db.js?v=202611261013';
-import { escapeHTML, showToast } from './util.js?v=202611261013';
-import * as inicio from './views/inicio.js?v=202611261013';
-import * as pendiente from './views/pendiente.js?v=202611261013';
-import * as finClasica from './finclasica.js?v=202611261013';
-import * as finanzas from './views/finanzas.js?v=202611261013';
-import * as salud from './views/salud.js?v=202611261013';
-import * as entreno from './views/entreno.js?v=202611261013';
-import * as rutinas from './views/rutinas.js?v=202611261013';
-import * as objetivosView from './views/objetivos.js?v=202611261013';
-import * as recordatoriosView from './views/recordatorios.js?v=202611261013';
-import * as calendarioView from './views/calendario.js?v=202611261013';
-import * as estadisticasView from './views/estadisticas.js?v=202611261013';
-import * as notifView from './views/notificaciones.js?v=202611261013';
-import * as notasView from './views/notas.js?v=202611261013';
-import * as tareasView from './views/tareas.js?v=202611261013';
-import { checkRecurring } from './tareas.js?v=202611261013';
+import { sb, AuthError } from './db.js?v=202611271017';
+import { escapeHTML, showToast } from './util.js?v=202611271017';
+import * as inicio from './views/inicio.js?v=202611271017';
+import * as pendiente from './views/pendiente.js?v=202611271017';
+import * as finClasica from './finclasica.js?v=202611271017';
+import * as finanzas from './views/finanzas.js?v=202611271017';
+import * as salud from './views/salud.js?v=202611271017';
+import * as entreno from './views/entreno.js?v=202611271017';
+import * as rutinas from './views/rutinas.js?v=202611271017';
+import * as objetivosView from './views/objetivos.js?v=202611271017';
+import * as recordatoriosView from './views/recordatorios.js?v=202611271017';
+import * as calendarioView from './views/calendario.js?v=202611271017';
+import * as estadisticasView from './views/estadisticas.js?v=202611271017';
+import * as notifView from './views/notificaciones.js?v=202611271017';
+import * as notasView from './views/notas.js?v=202611271017';
+import * as tareasView from './views/tareas.js?v=202611271017';
+import { checkRecurring } from './tareas.js?v=202611271017';
 
 const ROUTES = ['inicio', 'tareas', 'calendario', 'finanzas', 'salud', 'entreno', 'rutinas', 'rutina', 'objetivos', 'recordatorios', 'notas', 'estadisticas', 'notificaciones', 'mas'];
 // Pantallas de Salud que marcan la pestaña Salud.
@@ -215,5 +215,5 @@ sb.auth.getSession().then(({ data: { session } }) => {
   if (session) startApp(); else showLogin();
 }).catch(() => { showLogin(); showToast('No se pudo leer la sesión', 'error'); });
 
-// Service worker de la raíz (scope /tracking-tasks/): caché básico y notificaciones push.
+// Service worker de la raíz (scope = carpeta de arriba de v2/, en GitHub Pages o Vercel): caché básico y notificaciones push.
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('../service-worker.js', { scope: '../' }).catch(() => { /* sin SW */ });

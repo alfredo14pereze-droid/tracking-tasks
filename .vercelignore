@@ -1,0 +1,11 @@
+.claude
+migrations
+v2/sql
+v2/supabase
+v2/build-finclasica.py
+v2/bump-version.sh
+.env*
+.vercel
+CLAUDE.md
+README.md
+v2/README.md

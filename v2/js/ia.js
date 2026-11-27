@@ -1,6 +1,6 @@
 // Ayudante para la función "asistente" (Claude) en Supabase. Cada llamada la dispara un botón; nada corre solo.
-import { callFunction } from './db.js?v=202611261013';
-import { icon } from './util.js?v=202611261013';
+import { callFunction } from './db.js?v=202611271017';
+import { icon } from './util.js?v=202611271017';
 
 export async function ask(action, payload) {
   try { return await callFunction('asistente', { action, ...payload }); }

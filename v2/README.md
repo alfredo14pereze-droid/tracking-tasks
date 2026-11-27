@@ -74,7 +74,7 @@ Mockup aprobado: https://claude.ai/artifact/MF6JxKFjrLfreUh93XYZCz
 3. Supabase › Edge Functions › crear función **whoop** pegando `supabase/functions/whoop/index.ts`.
    En su configuración, **apagar "Verify JWT"** (Whoop llama /callback sin sesión; la función valida sola).
 4. Supabase › Edge Functions › Secrets: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`,
-   `APP_URL` = `https://alfredo14pereze-droid.github.io/tracking-tasks/v2/`. (Opcional `CRON_SECRET` para un cron.)
+   `APP_URL` = `https://tracking-tasks.vercel.app/v2/` (antes GitHub Pages; cambió el 27-nov-2026). (Opcional `CRON_SECRET` para un cron.)
 5. En v2 › Salud › Actividad › **Conectar Whoop**.
 
 Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
@@ -143,7 +143,7 @@ Las migraciones de `sql/` las corre Alfredo a mano en el SQL Editor de Supabase.
 - Edge Function `notificaciones` (Verify JWT apagado): `mode:"cron"` revisa recordatorios a su hora, tareas con hora
   (10 min antes), pago de tarjeta 3 y 1 día antes (9:00, mismo cálculo que `cardStatus`) y resumen de la mañana;
   `mode:"test"` con sesión manda una prueba. Secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, CRON_SECRET.
-- App: `service-worker.js` de la raíz (ahora lo registra v2, scope `/tracking-tasks/`) muestra el push y abre la sección.
+- App: `service-worker.js` de la raíz (ahora lo registra v2, scope = carpeta raíz de la app; en Vercel `/`) muestra el push y abre la sección.
   Pantalla Más › Notificaciones (`js/views/notificaciones.js`, llave pública VAPID). En iPhone solo desde la app instalada.
 
 ### Fotos en Notas y Recordatorios (5-nov-2026) · `sql/2026-11-05-fotos.sql`

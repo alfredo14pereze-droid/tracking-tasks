@@ -1,6 +1,6 @@
 // Cliente de Supabase para v2. Mismo proyecto y mismo login que v1:
 // supabase-js guarda la sesión en localStorage con la misma clave, y como v2
-// vive en el mismo origen (…github.io), si ya entraste en v1 aquí ya estás dentro.
+// vive en el mismo origen (Vercel o …github.io), si ya entraste en v1 aquí ya estás dentro.
 // La anon key es pública por diseño; lo que protege los datos es el RLS "own rows".
 export const SUPABASE_URL = 'https://citlxgjcshjckxybgist.supabase.co';
 export const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpdGx4Z2pjc2hqY2t4eWJnaXN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2OTIwNjgsImV4cCI6MjA5NjI2ODA2OH0.1TZuItOua2CZgbx_4UFTVC61R-luhpSFSvyhsa6u-M0';

@@ -18,7 +18,8 @@ const CORS = {
 };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 const TZ = 'America/Monterrey';
-const APP = 'https://alfredo14pereze-droid.github.io/tracking-tasks/v2/';
+// Dirección de la app (secret APP_URL, el mismo que usa whoop). Desde 27-nov-2026 vive en Vercel.
+const APP = Deno.env.get('APP_URL') || 'https://alfredo14pereze-droid.github.io/tracking-tasks/v2/';
 const WINDOW = 6; // minutos: el cron corre cada 5; push_log evita duplicados
 
 // ── Fechas en Monterrey ─────────────────────────────────

@@ -1,9 +1,9 @@
 // GENERADO por build_finclasica.py desde clasica/index.html (sección FINANZAS). No editar a mano:
 // cambia la clásica o el script y vuelve a generar. Es la misma lógica de la clásica (saldos, tarjetas,
 // préstamos, fondos, recurrentes, revisión mensual, asistente) con un adaptador mínimo para la app nueva.
-import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611261013';
-import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611261013';
-import { cardStatus as v2CardStatus, totals as v2Totals, goalCurrent as v2GoalCurrent, goalPct as v2GoalPct, fmtPct as v2FmtPct, pctTaken as v2PctTaken, allocPatch as v2AllocPatch, allocThisMonth as v2AllocThisMonth } from './fin.js?v=202611261013';
+import { dbGet, dbPost, dbPatch, dbDelete } from './db.js?v=202611271017';
+import { escapeHTML, localDate, showToast as toast } from './util.js?v=202611271017';
+import { cardStatus as v2CardStatus, totals as v2Totals, goalCurrent as v2GoalCurrent, goalPct as v2GoalPct, fmtPct as v2FmtPct, pctTaken as v2PctTaken, allocPatch as v2AllocPatch, allocThisMonth as v2AllocThisMonth } from './fin.js?v=202611271017';
 const goalAllocTxt = g => v2GoalPct(g) ? `${v2FmtPct(v2GoalPct(g))} de tu ahorro de cada mes · este mes +${fmtMoney(v2AllocThisMonth(fin, g))}` : 'Sin % de tu ahorro: edítala para que avance';
 
 // ── Adaptador ──

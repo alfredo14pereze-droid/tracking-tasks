@@ -76,7 +76,7 @@ self.addEventListener('notificationclick', event => {
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) {
-      if (c.url.includes('/tracking-tasks/')) { await c.focus(); if ('navigate' in c) return c.navigate(url); return; }
+      if (c.url.startsWith(self.registration.scope)) { await c.focus(); if ('navigate' in c) return c.navigate(url); return; }
     }
     return self.clients.openWindow(url);
   })());

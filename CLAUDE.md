@@ -1,5 +1,11 @@
 # TaskTracker — contexto del proyecto
 
+> **Hosting (27-nov-2026): la app oficial vive en Vercel → https://tracking-tasks.vercel.app/** (equipo Salper,
+> plan Hobby, proyecto `tracking-tasks`). GitHub Pages fallaba seguido desde México (github.io sin responder) y queda
+> solo como respaldo. Deploy = `git push` **y** `vercel build --prod && vercel deploy --prebuilt --prod --yes` desde la
+> raíz (`.vercelignore` deja fuera docs, `migrations/`, `v2/sql`, `v2/supabase`, `.env*`; `vercel.json` = caché).
+> Edge Functions usan el secret `APP_URL` (= `https://tracking-tasks.vercel.app/v2/`) para sus enlaces.
+>
 > **Cambio a v2 (3-nov-2026):** la página oficial ya es v2. `index.html` de la raíz solo redirige a `v2/`
 > (conserva `?…` y `#…`). La app anterior completa (todo lo descrito abajo) vive ahora en **`clasica/index.html`**
 > con sus rutas a `../manifest.json`, `../icons/` y `../service-worker.js`. El código nuevo y sus reglas están en
